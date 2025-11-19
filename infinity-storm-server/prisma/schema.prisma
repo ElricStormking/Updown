@@ -1,0 +1,101 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  wallet Wallet?
+  bets   Bet[]
+}
+
+model Wallet {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  balance   Decimal  @default(0) @db.Decimal(18, 6)
+  currency  String   @default("USDT")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model Round {
+  id          Int         @id @default(autoincrement())
+  startTime   DateTime
+  lockTime    DateTime
+  endTime     DateTime
+  oddsUp      Decimal     @default(1.95) @db.Decimal(6, 3)
+  oddsDown    Decimal     @default(1.95) @db.Decimal(6, 3)
+  lockedPrice Decimal?    @db.Decimal(18, 8)
+  finalPrice  Decimal?    @db.Decimal(18, 8)
+  winningSide BetSide?
+  status      RoundStatus @default(PENDING)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  bets           Bet[]
+  priceSnapshots PriceSnapshot[]
+
+  @@index([status, id], map: "idx_round_status_id")
+}
+
+model Bet {
+  id        String    @id @default(cuid())
+  userId    String
+  roundId   Int
+  side      BetSide
+  amount    Decimal   @db.Decimal(18, 6)
+  payout    Decimal   @default(0) @db.Decimal(18, 6)
+  odds      Decimal   @default(1.95) @db.Decimal(6, 3)
+  result    BetResult @default(PENDING)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  user  User  @relation(fields: [userId], references: [id])
+  round Round @relation(fields: [roundId], references: [id])
+
+  @@index([userId], map: "idx_bet_user")
+  @@index([roundId], map: "idx_bet_round")
+  @@index([userId, createdAt], map: "idx_bet_user_created")
+}
+
+model PriceSnapshot {
+  id        String   @id @default(cuid())
+  timestamp DateTime @default(now())
+  price     Decimal  @db.Decimal(18, 8)
+  source    String   @default("BINANCE")
+  roundId   Int?
+
+  round Round? @relation(fields: [roundId], references: [id])
+
+  @@index([timestamp], map: "idx_snapshot_time")
+}
+
+enum BetSide {
+  UP
+  DOWN
+}
+
+enum BetResult {
+  PENDING
+  WIN
+  LOSE
+  REFUND
+}
+
+enum RoundStatus {
+  PENDING
+  BETTING
+  RESULT_PENDING
+  COMPLETED
+}

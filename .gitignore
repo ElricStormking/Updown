@@ -1,0 +1,13 @@
+node_modules/
+dist/
+*/dist/
+*.log
+*.local
+*.env
+.DS_Store
+.vscode/
+hi-lo-client/node_modules/
+hi-lo-client/dist/
+infinity-storm-server/node_modules/
+infinity-storm-server/dist/
+

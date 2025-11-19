@@ -1,0 +1,42 @@
+# Server
+NODE_ENV=development
+API_PORT=4000
+FRONTEND_ORIGIN=http://localhost:3000
+
+# Supabase / Database
+DATABASE_URL=postgresql://USER:PASSWORD@HOST:5432/DATABASE
+SUPABASE_URL=https://your-project-id.supabase.co
+SUPABASE_ANON_KEY=your-anon-key
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+
+# Authentication
+JWT_SECRET=change-me
+JWT_EXPIRES_IN=1h
+PASSWORD_SALT_ROUNDS=12
+SEED_USER_EMAIL=demo@hi-lo.dev
+SEED_USER_PASSWORD=changeme
+SEED_USER_BALANCE=1000
+
+# Redis / Cache
+# Use a non-default port to avoid clashing with other local Redis instances.
+REDIS_URL=redis://localhost:6380
+CACHE_TTL_SECONDS=5
+
+# Binance
+BINANCE_WS_URL=wss://stream.binance.com:9443/ws/btcusdt@trade
+BINANCE_REST_URL=https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT
+
+# Game Loop
+ROUND_BETTING_DURATION=15000
+ROUND_RESULT_DURATION=10000
+MIN_BET_AMOUNT=1
+MAX_BET_AMOUNT=1000
+PAYOUT_MULTIPLIER_UP=1.95
+PAYOUT_MULTIPLIER_DOWN=1.95
+PRICE_SNAPSHOT_INTERVAL=5000
+BINANCE_RECONNECT_DELAY=3000
+BINANCE_HEARTBEAT_INTERVAL=2000
+ROUND_STATE_TTL=60000
+PLAYER_BET_HISTORY_LIMIT=100
+ROUND_HISTORY_LIMIT=100
+
