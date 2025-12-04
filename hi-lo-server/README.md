@@ -1,4 +1,4 @@
-# Infinity Storm Server
+# Hi-Lo Server
 
 Backend for the Hi-Lo Bitcoin Prediction prototype. The service consumes the Binance BTC/USDT feed, orchestrates 25-second rounds, and exposes REST + WebSocket APIs consumed by the Phaser client.
 
@@ -20,7 +20,7 @@ Backend for the Hi-Lo Bitcoin Prediction prototype. The service consumes the Bin
 
 ## Environment Setup
 
-1. `cd infinity-storm-server`
+1. `cd hi-lo-server`
 2. `npm install`
 3. `cp environment.sample environment.local`
 4. Fill `environment.local` **and** (optionally) a `.env` file with your Supabase + Redis credentials. The ConfigModule loads both so you can keep Cursor/CI secrets in `.env` while committing only `environment.sample`.

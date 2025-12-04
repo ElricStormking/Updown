@@ -13,9 +13,8 @@ model User {
   password  String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
-  wallet Wallet?
-  bets   Bet[]
+  bets      Bet[]
+  wallet    Wallet?
 }
 
 model Wallet {
@@ -25,24 +24,22 @@ model Wallet {
   currency  String   @default("USDT")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
-  user User @relation(fields: [userId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
 }
 
 model Round {
-  id          Int         @id @default(autoincrement())
-  startTime   DateTime
-  lockTime    DateTime
-  endTime     DateTime
-  oddsUp      Decimal     @default(1.95) @db.Decimal(6, 3)
-  oddsDown    Decimal     @default(1.95) @db.Decimal(6, 3)
-  lockedPrice Decimal?    @db.Decimal(18, 8)
-  finalPrice  Decimal?    @db.Decimal(18, 8)
-  winningSide BetSide?
-  status      RoundStatus @default(PENDING)
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-
+  id             Int             @id @default(autoincrement())
+  startTime      DateTime
+  lockTime       DateTime
+  endTime        DateTime
+  oddsUp         Decimal         @default(1.95) @db.Decimal(6, 3)
+  oddsDown       Decimal         @default(1.95) @db.Decimal(6, 3)
+  lockedPrice    Decimal?        @db.Decimal(18, 8)
+  finalPrice     Decimal?        @db.Decimal(18, 8)
+  winningSide    BetSide?
+  status         RoundStatus     @default(PENDING)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
   bets           Bet[]
   priceSnapshots PriceSnapshot[]
 
@@ -60,9 +57,8 @@ model Bet {
   result    BetResult @default(PENDING)
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
-
-  user  User  @relation(fields: [userId], references: [id])
-  round Round @relation(fields: [roundId], references: [id])
+  round     Round     @relation(fields: [roundId], references: [id])
+  user      User      @relation(fields: [userId], references: [id])
 
   @@index([userId], map: "idx_bet_user")
   @@index([roundId], map: "idx_bet_round")
@@ -75,8 +71,7 @@ model PriceSnapshot {
   price     Decimal  @db.Decimal(18, 8)
   source    String   @default("BINANCE")
   roundId   Int?
-
-  round Round? @relation(fields: [roundId], references: [id])
+  round     Round?   @relation(fields: [roundId], references: [id])
 
   @@index([timestamp], map: "idx_snapshot_time")
 }

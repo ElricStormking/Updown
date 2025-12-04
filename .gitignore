@@ -8,6 +8,9 @@ dist/
 .vscode/
 hi-lo-client/node_modules/
 hi-lo-client/dist/
-infinity-storm-server/node_modules/
-infinity-storm-server/dist/
+hi-lo-server/node_modules/
+hi-lo-server/dist/
+hi-lo-server/environment.local
+hi-lo-server/.env
+server-output.log
 

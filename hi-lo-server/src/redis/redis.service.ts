@@ -19,10 +19,12 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     this.client = new Redis(url, {
       lazyConnect: true,
       maxRetriesPerRequest: 3,
+      retryStrategy: () => null, // Disable automatic reconnection attempts
     });
 
-    this.client.on('error', (error) => {
-      this.logger.warn(`Redis error: ${error.message}`);
+    // Suppress error events - we handle connection failures in onModuleInit
+    this.client.on('error', () => {
+      // Errors are handled during connection attempt, no need to log here
     });
   }
 
@@ -30,11 +32,12 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     if (this.client.status === 'wait') {
       try {
         await this.client.connect();
+        this.logger.log('Redis connected successfully');
       } catch (error) {
         const reason = error instanceof Error ? error.message : String(error);
         this.enabled = false;
-        this.logger.warn(
-          `Redis disabled: failed to connect to server. Reason: ${reason}`,
+        this.logger.log(
+          `Redis unavailable: continuing without cache. Reason: ${reason}`,
         );
       }
     }
