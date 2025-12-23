@@ -20,7 +20,7 @@ import { HistoryModule } from './history/history.module';
     ConfigModule.forRoot({
       isGlobal: true,
       load: [configuration],
-      envFilePath: ['environment.local', '.env'],
+      envFilePath: ['.env', 'environment.local'],
       expandVariables: true,
       validate: validateEnv,
     }),

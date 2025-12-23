@@ -10,7 +10,7 @@ export interface GameState {
   token?: string;
   user?: {
     id: string;
-    email: string;
+    account: string;
   };
   walletBalance: number;
   betAmount: number;

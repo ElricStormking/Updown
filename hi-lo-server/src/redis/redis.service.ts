@@ -73,6 +73,14 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       return await this.client.set(key, value);
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
+      // If the connection is gone, disable cache to avoid repeated overhead/log spam.
+      if (
+        reason.includes('Connection is closed') ||
+        reason.includes('ECONNREFUSED') ||
+        reason.includes('ETIMEDOUT')
+      ) {
+        this.enabled = false;
+      }
       this.logger.warn(`Redis set error for key "${key}": ${reason}`);
       return null;
     }
@@ -87,6 +95,13 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       return await this.client.get(key);
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
+      if (
+        reason.includes('Connection is closed') ||
+        reason.includes('ECONNREFUSED') ||
+        reason.includes('ETIMEDOUT')
+      ) {
+        this.enabled = false;
+      }
       this.logger.warn(`Redis get error for key "${key}": ${reason}`);
       return null;
     }

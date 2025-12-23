@@ -32,6 +32,7 @@ export class HiLoScene extends Phaser.Scene {
   private arrowText!: Phaser.GameObjects.Text;
   private priceLabel!: Phaser.GameObjects.Text;
   private timerRing!: Phaser.GameObjects.Graphics;
+  private timerText!: Phaser.GameObjects.Text;
   private centerCardBg!: Phaser.GameObjects.Graphics;
 
   // -- Betting Phase UI --
@@ -188,6 +189,12 @@ export class HiLoScene extends Phaser.Scene {
 
     // Timer Ring (Behind everything)
     this.timerRing = this.add.graphics();
+    this.timerText = this.add.text(0, 70, '', {
+      fontFamily: 'Roboto Mono',
+      fontSize: '22px',
+      color: '#b2bec3',
+      fontStyle: 'bold',
+    }).setOrigin(0.5);
 
     // Price Label
     this.priceLabel = this.add.text(0, -60, 'BITCOIN PRICE', {
@@ -211,7 +218,13 @@ export class HiLoScene extends Phaser.Scene {
       color: '#ffffff'
     }).setOrigin(0.5).setAlpha(0);
 
-    this.priceContainer.add([this.timerRing, this.priceLabel, this.priceText, this.arrowText]);
+    this.priceContainer.add([
+      this.timerRing,
+      this.priceLabel,
+      this.priceText,
+      this.arrowText,
+      this.timerText,
+    ]);
   }
 
   private createBettingUI() {
@@ -356,7 +369,17 @@ export class HiLoScene extends Phaser.Scene {
     const now = Date.now();
     const isBetting = this.round.status === 'BETTING';
     const targetTime = isBetting ? new Date(this.round.lockTime).getTime() : new Date(this.round.endTime).getTime();
-    const totalDuration = isBetting ? 15000 : 10000;
+    const totalDuration = isBetting
+      ? Math.max(
+          new Date(this.round.lockTime).getTime() -
+            new Date(this.round.startTime).getTime(),
+          1,
+        )
+      : Math.max(
+          new Date(this.round.endTime).getTime() -
+            new Date(this.round.lockTime).getTime(),
+          1,
+        );
     const remaining = Math.max(targetTime - now, 0);
     const progress = remaining / totalDuration;
 
@@ -379,6 +402,11 @@ export class HiLoScene extends Phaser.Scene {
     // Start from top (-90 deg)
     this.timerRing.arc(0, 0, r, Phaser.Math.DegToRad(-90), Phaser.Math.DegToRad(-90 + (360 * progress)), false);
     this.timerRing.strokePath();
+
+    // Numeric countdown (seconds)
+    const seconds = Math.ceil(remaining / 1000);
+    this.timerText.setText(`${seconds}s`);
+    this.timerText.setColor(isBetting ? '#00b894' : '#e17055');
   }
 
   private updatePendingLogic() {

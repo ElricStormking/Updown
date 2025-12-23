@@ -4,7 +4,7 @@ API_PORT=4000
 FRONTEND_ORIGIN=http://localhost:3000
 
 # Supabase / Database
-DATABASE_URL=postgresql://USER:PASSWORD@HOST:5432/DATABASE
+DATABASE_URL=postgresql://USER:PASSWORD@HOST:5432/DATABASE?pgbouncer=true&connection_limit=1&sslmode=require
 SUPABASE_URL=https://your-project-id.supabase.co
 SUPABASE_ANON_KEY=your-anon-key
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
@@ -13,7 +13,8 @@ SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 JWT_SECRET=change-me
 JWT_EXPIRES_IN=1h
 PASSWORD_SALT_ROUNDS=12
-SEED_USER_EMAIL=demo@hi-lo.dev
+# Account identifier used as login (was email)
+SEED_USER_ACCOUNT=demo_account
 SEED_USER_PASSWORD=changeme
 SEED_USER_BALANCE=1000
 

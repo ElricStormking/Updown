@@ -4,7 +4,7 @@ import * as bcrypt from 'bcrypt';
 const prisma = new PrismaClient();
 
 async function main() {
-  const email = process.env.SEED_USER_EMAIL ?? 'demo@hi-lo.dev';
+  const account = process.env.SEED_USER_ACCOUNT ?? 'demo_account';
   const password = process.env.SEED_USER_PASSWORD ?? 'changeme';
   const saltRounds = Number(process.env.PASSWORD_SALT_ROUNDS ?? 12);
 
@@ -15,12 +15,12 @@ async function main() {
   const balanceDecimal = new Prisma.Decimal(startingBalance);
 
   const user = await prisma.user.upsert({
-    where: { email },
+    where: { email: account },
     update: {
       password: passwordHash,
     },
     create: {
-      email,
+      email: account, // store account identifier in email column
       password: passwordHash,
       wallet: {
         create: {
@@ -35,7 +35,7 @@ async function main() {
   });
 
   console.log(
-    `✅ Seeded user ${user.email} with wallet balance ${user.wallet?.balance}`,
+    `✅ Seeded user ${user.email} (account) with wallet balance ${user.wallet?.balance}`,
   );
 }
 

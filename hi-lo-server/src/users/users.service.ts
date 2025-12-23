@@ -14,7 +14,7 @@ export class UsersService {
   ): Promise<UserWithWallet> {
     return this.prisma.user.create({
       data: {
-        email: data.email,
+        email: data.account, // Using email column to store account identifier
         password: data.password,
         wallet: {
           create: {

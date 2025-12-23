@@ -18,15 +18,18 @@ export interface GameSocketCallbacks {
 }
 
 export const createGameSocket = (
-  token: string,
   callbacks: GameSocketCallbacks,
+  getToken?: () => string | undefined,
 ) => {
   const socket: Socket = io(`${WS_URL}/game`, {
     withCredentials: true,
   });
 
   socket.on('connect', () => {
-    socket.emit('client:ready', { token });
+    const token = getToken?.();
+    if (token) {
+      socket.emit('client:ready', { token });
+    }
   });
 
   socket.on('price:update', callbacks.onPrice);
@@ -39,5 +42,9 @@ export const createGameSocket = (
   socket.on('bet:placed', callbacks.onBetPlaced);
 
   return socket;
+};
+
+export const authenticateGameSocket = (socket: Socket, token: string) => {
+  socket.emit('client:ready', { token });
 };
 

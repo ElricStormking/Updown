@@ -4,8 +4,9 @@ import './style.css';
 import { HiLoScene } from './scenes/HiLoScene';
 import { initControls, setStatus } from './ui/domControls';
 import { api } from './services/api';
-import { createGameSocket } from './services/socket';
+import { authenticateGameSocket, createGameSocket } from './services/socket';
 import { state, updateState } from './state/gameState';
+import { initTradingViewWidget } from './ui/tradingViewWidget';
 
 const scene = new HiLoScene();
 
@@ -14,20 +15,53 @@ initControls({
   onPlaceBet: handlePlaceBet,
 });
 
+void initTradingViewWidget().catch((error: unknown) =>
+  console.error('TradingView widget failed to init', error),
+);
+
 const game = new Phaser.Game({
   type: Phaser.AUTO,
-  width: 960,
+  width: 750,
   height: 600,
   parent: 'game-container',
   scene: [scene],
   backgroundColor: '#020b16',
 });
 
-let socket: ReturnType<typeof createGameSocket> | null = null;
+const socket = createGameSocket(
+  {
+    onPrice: (update) => scene.setPrice(update),
+    onRoundStart: (payload) => {
+      scene.setRoundState(payload);
+      updateState({ currentRound: payload });
+    },
+    onRoundLocked: (payload) => scene.handleRoundLock(payload),
+    onRoundResult: async (payload) => {
+      scene.handleRoundResult(payload);
+      await refreshPlayerData();
 
-async function handleLogin(credentials: { email: string; password: string }) {
+      const betsForRound = state.betHistory.filter(
+        (bet) => bet.roundId === payload.roundId,
+      );
+      const totalStake = betsForRound.reduce((sum, bet) => sum + bet.amount, 0);
+      const totalPayout = betsForRound.reduce(
+        (sum, bet) => sum + bet.payout,
+        0,
+      );
+      scene.setPlayerPayout(payload.roundId, totalStake, totalPayout);
+    },
+    onBalance: (balance) => {
+      updateState({ walletBalance: balance });
+      scene.setBalance(balance);
+    },
+    onBetPlaced: () => setStatus('Bet accepted via socket!'),
+  },
+  () => state.token,
+);
+
+async function handleLogin(credentials: { account: string; password: string }) {
   const [{ data: auth }, { data: config }] = await Promise.all([
-    api.login(credentials.email, credentials.password),
+    api.login(credentials.account, credentials.password),
     api.fetchGameConfig(),
   ]);
 
@@ -38,7 +72,7 @@ async function handleLogin(credentials: { email: string; password: string }) {
   });
 
   await refreshPlayerData();
-  setupSocket(auth.accessToken);
+  authenticateGameSocket(socket, auth.accessToken);
 }
 
 async function handlePlaceBet() {
@@ -53,6 +87,9 @@ async function handlePlaceBet() {
   }
 
   const amount = clampAmount(state.betAmount);
+  if (state.walletBalance < amount) {
+    throw new Error('Insufficient balance');
+  }
   try {
     await api.placeBet(state.token, {
       roundId: state.currentRound.id,
@@ -90,40 +127,6 @@ async function refreshPlayerData() {
     roundHistory: roundsRes.data,
   });
   scene.setBalance(Number(walletRes.data.balance));
-}
-
-function setupSocket(token: string) {
-  socket?.disconnect();
-  socket = createGameSocket(token, {
-    onPrice: (update) => scene.setPrice(update),
-    onRoundStart: (payload) => {
-      scene.setRoundState(payload);
-      updateState({ currentRound: payload });
-    },
-    onRoundLocked: (payload) => scene.handleRoundLock(payload),
-    onRoundResult: async (payload) => {
-      scene.handleRoundResult(payload);
-      await refreshPlayerData();
-
-      const betsForRound = state.betHistory.filter(
-        (bet) => bet.roundId === payload.roundId,
-      );
-      const totalStake = betsForRound.reduce(
-        (sum, bet) => sum + bet.amount,
-        0,
-      );
-      const totalPayout = betsForRound.reduce(
-        (sum, bet) => sum + bet.payout,
-        0,
-      );
-      scene.setPlayerPayout(payload.roundId, totalStake, totalPayout);
-    },
-    onBalance: (balance) => {
-      updateState({ walletBalance: balance });
-      scene.setBalance(balance);
-    },
-    onBetPlaced: () => setStatus('Bet accepted via socket!'),
-  });
 }
 
 function extractBetErrorMessage(error: unknown): string {

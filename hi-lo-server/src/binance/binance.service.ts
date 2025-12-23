@@ -30,10 +30,15 @@ export class BinancePriceService implements OnModuleInit, OnModuleDestroy {
   private disposed = false;
   private lastPrice?: PriceUpdate;
   private lastSnapshotAt = 0;
+  private lastEmitAt = 0;
+  private lastPersistAt = 0;
   private readonly reconnectDelayMs: number;
   private readonly heartbeatIntervalMs: number;
   private readonly snapshotIntervalMs: number;
   private readonly priceCacheTtlMs: number;
+  // Throttle noisy trade stream so timers/DB don't get starved under load.
+  private readonly emitIntervalMs = 250;
+  private readonly persistIntervalMs = 1000;
 
   constructor(
     private readonly configService: ConfigService,
@@ -148,8 +153,17 @@ export class BinancePriceService implements OnModuleInit, OnModuleDestroy {
       };
 
       this.lastPrice = update;
-      this.priceSubject.next(update);
-      void this.persistPrice(update);
+      // Emit to subscribers at a capped rate (UI doesn't need every trade tick).
+      if (timestamp - this.lastEmitAt >= this.emitIntervalMs) {
+        this.lastEmitAt = timestamp;
+        this.priceSubject.next(update);
+      }
+
+      // Persist/cache at a capped rate (DB/redis don't need every tick).
+      if (timestamp - this.lastPersistAt >= this.persistIntervalMs) {
+        this.lastPersistAt = timestamp;
+        void this.persistPrice(update);
+      }
     } catch (error: unknown) {
       const reason = error instanceof Error ? error.message : String(error);
       this.logger.warn(`Failed to parse Binance payload: ${reason}`);

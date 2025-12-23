@@ -67,17 +67,23 @@ export class GameGateway
     });
 
     this.roundSub = this.roundEngine.events$().subscribe((event) => {
-      this.server.emit(event.type, event.payload);
-
       if (event.type === 'round:result') {
-        for (const update of event.payload.stats.balanceUpdates) {
+        const { balanceUpdates, ...publicStats } = event.payload.stats;
+        this.server.emit(event.type, {
+          ...event.payload,
+          stats: publicStats,
+        });
+        for (const update of balanceUpdates) {
           this.server
             .to(this.getUserRoom(update.userId))
             .emit('balance:update', {
               balance: update.balance,
             });
         }
+        return;
       }
+
+      this.server.emit(event.type, event.payload);
     });
   }
 
@@ -134,7 +140,7 @@ export class GameGateway
       return {
         status: 'ok',
         userId: payload.sub,
-        email: payload.email,
+        account: payload.account,
       };
     } catch (error) {
       this.logger.warn(`client:ready failed: ${error}`);

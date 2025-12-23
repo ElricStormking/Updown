@@ -22,9 +22,9 @@ export class AuthService {
   ) {}
 
   async register(dto: RegisterDto): Promise<AuthResponseDto> {
-    const existingUser = await this.usersService.findByEmail(dto.email);
+    const existingUser = await this.usersService.findByEmail(dto.account);
     if (existingUser) {
-      throw new BadRequestException('Email already registered');
+      throw new BadRequestException('Account already registered');
     }
 
     const saltRounds = Number(
@@ -32,7 +32,7 @@ export class AuthService {
     );
     const passwordHash = await bcrypt.hash(dto.password, saltRounds);
     const newUser = await this.usersService.create({
-      email: dto.email,
+      account: dto.account,
       password: passwordHash,
     });
 
@@ -40,7 +40,7 @@ export class AuthService {
   }
 
   async login(dto: LoginDto): Promise<AuthResponseDto> {
-    const user = await this.usersService.findByEmail(dto.email);
+    const user = await this.usersService.findByEmail(dto.account);
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
     }
@@ -76,7 +76,7 @@ export class AuthService {
   ): Promise<AuthResponseDto> {
     const payload: JwtPayload = {
       sub: user.id,
-      email: user.email,
+      account: user.email,
     };
 
     const expiresInRaw =
@@ -89,7 +89,10 @@ export class AuthService {
 
     return {
       accessToken,
-      user: this.usersService.toPublic(user),
+      user: {
+        id: user.id,
+        account: user.email,
+      },
     };
   }
 }
