@@ -61,6 +61,7 @@ export class HiLoScene extends Phaser.Scene {
   private resultTitleText?: Phaser.GameObjects.Text;
   private resultPayoutText?: Phaser.GameObjects.Text;
   private resultRoundId?: number;
+  private resultDisplayDurationMs = 8000;
 
   // -- State --
   private round?: RoundStatePayload;
@@ -68,6 +69,20 @@ export class HiLoScene extends Phaser.Scene {
   private playerBetSide?: BetSide;
   private playerBetLockedPrice: number | null = null;
   private playerBetAmount: number | null = null;
+
+  private ringRadius = 130;
+  private ringThickness = 6;
+  private priceFontSize = 56;
+  private timerFontSize = 22;
+  private priceLabelFontSize = 14;
+  private arrowFontSize = 32;
+  private priceLabelOffsetY = -60;
+  private timerTextOffsetY = 70;
+  private centerCardWidth = 400;
+  private centerCardHeight = 280;
+  private centerCardRadius = 24;
+  private centerCardYOffset = -40;
+  private phaseOffsetY = 100;
   
   private cx = 0;
   private cy = 0;
@@ -83,6 +98,7 @@ export class HiLoScene extends Phaser.Scene {
   create() {
     this.cx = this.scale.width / 2;
     this.cy = this.scale.height / 2;
+    this.setLayoutMetrics();
 
     // 1. Background
     this.createBackground();
@@ -114,6 +130,55 @@ export class HiLoScene extends Phaser.Scene {
     this.pendingUI.setVisible(false);
     this.bettingUI.setAlpha(0);
     this.pendingUI.setAlpha(0);
+  }
+
+  private setLayoutMetrics() {
+    const isCompact = this.scale.width <= 420;
+    if (!isCompact) {
+      return;
+    }
+
+    const isShort = this.scale.height <= 260;
+    const minDim = Math.min(this.scale.width, this.scale.height);
+    const radiusFactor = isShort ? 0.36 : 0.42;
+    const maxRadius = isShort ? 110 : 160;
+    const minRadius = isShort ? 60 : 90;
+
+    this.ringRadius = Math.round(minDim * radiusFactor);
+    this.ringRadius = Math.max(minRadius, Math.min(maxRadius, this.ringRadius));
+    this.ringThickness = isShort ? 5 : 7;
+    this.priceFontSize = Math.round(this.ringRadius * (isShort ? 0.4 : 0.45));
+    this.timerFontSize = Math.round(this.ringRadius * (isShort ? 0.2 : 0.18));
+    this.priceLabelFontSize = isShort
+      ? Math.max(10, Math.round(this.ringRadius * 0.14))
+      : 14;
+    this.arrowFontSize = Math.round(
+      this.ringRadius * (isShort ? 0.18 : 0.22),
+    );
+    this.priceLabelOffsetY = Math.round(
+      -this.ringRadius * (isShort ? 0.55 : 0.45),
+    );
+    this.timerTextOffsetY = Math.round(
+      this.ringRadius * (isShort ? 0.52 : 0.55),
+    );
+
+    this.centerCardWidth = Math.min(400, Math.round(this.scale.width - 24));
+    const desiredCardHeight = Math.round(
+      this.ringRadius * (isShort ? 2.1 : 1.7),
+    );
+    const availableHeight = Math.round(this.scale.height - 16);
+    const minCardHeight = isShort
+      ? Math.min(150, availableHeight)
+      : 240;
+    this.centerCardHeight = Math.min(
+      300,
+      Math.min(availableHeight, Math.max(minCardHeight, desiredCardHeight)),
+    );
+    this.centerCardRadius = 20;
+    this.centerCardYOffset = isShort ? -10 : -30;
+    this.phaseOffsetY = Math.round(
+      this.ringRadius * (isShort ? 0.95 : 1.05),
+    );
   }
 
   private createBackground() {
@@ -177,29 +242,44 @@ export class HiLoScene extends Phaser.Scene {
   }
 
   private createCenterCard() {
-    this.priceContainer = this.add.container(this.cx, this.cy - 40);
+    this.priceContainer = this.add.container(
+      this.cx,
+      this.cy + this.centerCardYOffset,
+    );
 
     // Card Background
     this.centerCardBg = this.add.graphics();
     this.centerCardBg.fillStyle(0x1e272e, 0.8);
-    this.centerCardBg.fillRoundedRect(-200, -140, 400, 280, 24);
+    this.centerCardBg.fillRoundedRect(
+      -this.centerCardWidth / 2,
+      -this.centerCardHeight / 2,
+      this.centerCardWidth,
+      this.centerCardHeight,
+      this.centerCardRadius,
+    );
     this.centerCardBg.lineStyle(2, 0x2d3436, 1);
-    this.centerCardBg.strokeRoundedRect(-200, -140, 400, 280, 24);
+    this.centerCardBg.strokeRoundedRect(
+      -this.centerCardWidth / 2,
+      -this.centerCardHeight / 2,
+      this.centerCardWidth,
+      this.centerCardHeight,
+      this.centerCardRadius,
+    );
     // Note: We might hide this bg or make it very subtle, focusing on the timer ring
 
     // Timer Ring (Behind everything)
     this.timerRing = this.add.graphics();
-    this.timerText = this.add.text(0, 70, '', {
+    this.timerText = this.add.text(0, this.timerTextOffsetY, '', {
       fontFamily: 'Roboto Mono',
-      fontSize: '22px',
+      fontSize: `${this.timerFontSize}px`,
       color: '#b2bec3',
       fontStyle: 'bold',
     }).setOrigin(0.5);
 
     // Price Label
-    this.priceLabel = this.add.text(0, -60, 'BITCOIN PRICE', {
+    this.priceLabel = this.add.text(0, this.priceLabelOffsetY, 'BITCOIN PRICE', {
       fontFamily: 'Rajdhani',
-      fontSize: '14px',
+      fontSize: `${this.priceLabelFontSize}px`,
       color: '#636e72',
       fontStyle: 'bold'
     }).setOrigin(0.5).setLetterSpacing(2);
@@ -207,14 +287,14 @@ export class HiLoScene extends Phaser.Scene {
     // Price Text
     this.priceText = this.add.text(0, 0, '00000.00', {
       fontFamily: 'Roboto Mono',
-      fontSize: '56px',
+      fontSize: `${this.priceFontSize}px`,
       color: '#ffffff',
       fontStyle: 'bold'
     }).setOrigin(0.5);
 
     // Arrow
-    this.arrowText = this.add.text(160, 0, '▲', {
-      fontSize: '32px',
+    this.arrowText = this.add.text(Math.round(this.ringRadius + 10), 0, '▲', {
+      fontSize: `${this.arrowFontSize}px`,
       color: '#ffffff'
     }).setOrigin(0.5).setAlpha(0);
 
@@ -228,7 +308,7 @@ export class HiLoScene extends Phaser.Scene {
   }
 
   private createBettingUI() {
-    this.bettingUI = this.add.container(this.cx, this.cy + 100);
+    this.bettingUI = this.add.container(this.cx, this.cy + this.phaseOffsetY);
 
     this.bettingLabel = this.add.text(0, -20, 'PLACE YOUR BETS', {
       fontFamily: 'Rajdhani',
@@ -282,7 +362,7 @@ export class HiLoScene extends Phaser.Scene {
   }
 
   private createPendingUI() {
-    this.pendingUI = this.add.container(this.cx, this.cy + 100);
+    this.pendingUI = this.add.container(this.cx, this.cy + this.phaseOffsetY);
 
     // Locked Price
     this.lockedPriceLabel = this.add.text(0, -40, 'LOCKED PRICE', {
@@ -386,8 +466,8 @@ export class HiLoScene extends Phaser.Scene {
     this.timerRing.clear();
     
     // Radius and Thickness
-    const r = 130;
-    const t = 6;
+    const r = this.ringRadius;
+    const t = this.ringThickness;
 
     // Background ring
     this.timerRing.lineStyle(t, 0x2d3436, 0.3);
@@ -577,6 +657,13 @@ export class HiLoScene extends Phaser.Scene {
     this.showResultOverlay(outcome, payload);
   }
 
+  setResultDisplayDuration(durationMs: number) {
+    if (!Number.isFinite(durationMs)) {
+      return;
+    }
+    this.resultDisplayDurationMs = Math.max(durationMs, 0);
+  }
+
   setPlayerPayout(roundId: number, totalStake: number, totalPayout: number) {
     if (!this.resultOverlay || this.resultRoundId !== roundId || !this.resultPayoutText || !this.resultTitleText) return;
 
@@ -681,7 +768,7 @@ export class HiLoScene extends Phaser.Scene {
     });
 
     // Auto hide
-    this.time.delayedCall(8000, () => {
+    this.time.delayedCall(this.resultDisplayDurationMs, () => {
        if (this.resultOverlay) {
          this.tweens.add({
            targets: this.resultOverlay,

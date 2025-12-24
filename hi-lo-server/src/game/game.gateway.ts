@@ -165,7 +165,10 @@ export class GameGateway
       const serializedBet = {
         id: result.bet.id,
         roundId: result.bet.roundId,
+        betType: result.bet.betType,
         side: result.bet.side,
+        digitType: result.bet.digitType,
+        selection: result.bet.selection,
         amount: Number(result.bet.amount),
         odds: Number(result.bet.odds),
         createdAt: result.bet.createdAt,

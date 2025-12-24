@@ -17,6 +17,8 @@ export type RoundEvent =
         roundId: number;
         lockedPrice: number | null;
         finalPrice: number | null;
+        digitResult: string | null;
+        digitSum: number | null;
         winningSide: BetSide | null;
         stats: SettlementStats;
       };

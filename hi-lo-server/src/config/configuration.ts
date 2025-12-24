@@ -1,3 +1,5 @@
+import { gameConfig } from './game-config';
+
 export const configuration = () => ({
   nodeEnv: process.env.NODE_ENV ?? 'development',
   api: {
@@ -33,15 +35,7 @@ export const configuration = () => ({
     reconnectDelayMs: Number(process.env.BINANCE_RECONNECT_DELAY ?? 3000),
     heartbeatIntervalMs: Number(process.env.BINANCE_HEARTBEAT_INTERVAL ?? 2000),
   },
-  game: {
-    bettingDurationMs: Number(process.env.ROUND_BETTING_DURATION ?? 15000),
-    resultDurationMs: Number(process.env.ROUND_RESULT_DURATION ?? 10000),
-    minBetAmount: Number(process.env.MIN_BET_AMOUNT ?? 1),
-    maxBetAmount: Number(process.env.MAX_BET_AMOUNT ?? 1000),
-    payoutMultiplierUp: Number(process.env.PAYOUT_MULTIPLIER_UP ?? 1.95),
-    payoutMultiplierDown: Number(process.env.PAYOUT_MULTIPLIER_DOWN ?? 1.95),
-    priceSnapshotInterval: Number(process.env.PRICE_SNAPSHOT_INTERVAL ?? 5000),
-  },
+  game: gameConfig,
   roundState: {
     ttlMs: Number(process.env.ROUND_STATE_TTL ?? 60000),
   },

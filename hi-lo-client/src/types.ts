@@ -1,4 +1,15 @@
 export type BetSide = 'UP' | 'DOWN';
+export type BetType = 'HILO' | 'DIGIT';
+export type DigitBetType =
+  | 'SMALL'
+  | 'BIG'
+  | 'ODD'
+  | 'EVEN'
+  | 'ANY_TRIPLE'
+  | 'DOUBLE'
+  | 'TRIPLE'
+  | 'SUM'
+  | 'SINGLE';
 
 export interface PriceUpdate {
   price: number;
@@ -27,6 +38,8 @@ export interface RoundResultPayload {
   roundId: number;
   lockedPrice: number | null;
   finalPrice: number | null;
+  digitResult: string | null;
+  digitSum: number | null;
   winningSide: BetSide | null;
   stats: {
     totalBets: number;
@@ -53,6 +66,7 @@ export interface WalletResponse {
 export interface GameConfig {
   bettingDurationMs: number;
   resultDurationMs: number;
+  resultDisplayDurationMs: number;
   minBetAmount: number;
   maxBetAmount: number;
   payoutMultiplierUp: number;
@@ -61,12 +75,33 @@ export interface GameConfig {
     player: number;
     rounds: number;
   };
+  digitPayouts: {
+    smallBigOddEven: number;
+    anyTriple: number;
+    double: number;
+    triple: number;
+    single: {
+      single: number;
+      double: number;
+      triple: number;
+    };
+    sum: Record<number, number>;
+    ranges: {
+      small: { min: number; max: number };
+      big: { min: number; max: number };
+      sumMin: number;
+      sumMax: number;
+    };
+  };
 }
 
 export interface BetHistoryItem {
   id: string;
   roundId: number;
-  side: BetSide;
+  betType: BetType;
+  side: BetSide | null;
+  digitType: DigitBetType | null;
+  selection: string | null;
   amount: number;
   odds: number;
   result: 'PENDING' | 'WIN' | 'LOSE' | 'REFUND';
@@ -75,6 +110,8 @@ export interface BetHistoryItem {
   lockedPrice: number | null;
   finalPrice: number | null;
   winningSide: BetSide | null;
+  digitResult: string | null;
+  digitSum: number | null;
 }
 
 export interface RoundHistoryItem {
@@ -86,7 +123,8 @@ export interface RoundHistoryItem {
   lockedPrice: number | null;
   finalPrice: number | null;
   winningSide: BetSide | null;
+  digitResult: string | null;
+  digitSum: number | null;
   oddsUp: number;
   oddsDown: number;
 }
-

@@ -35,8 +35,7 @@ Backend for the Hi-Lo Bitcoin Prediction prototype. The service consumes the Bin
 | `DATABASE_URL` | Supabase Postgres URI | `postgresql://...` |
 | `REDIS_URL` | Redis connection string | `redis://localhost:6380` |
 | `BINANCE_WS_URL` | BTC price stream | `wss://stream.binance.com:9443/ws/btcusdt@trade` |
-| `ROUND_BETTING_DURATION` | Betting window in ms | `15000` |
-| `SEED_USER_EMAIL` | Seed user login | `demo@hi-lo.dev` |
+| `SEED_USER_ACCOUNT` | Seed user login | `demo_account` |
 | `SEED_USER_PASSWORD` | Seed user password | `changeme` |
 | `SEED_USER_BALANCE` | Seed wallet balance | `1000` |
 | `PLAYER_BET_HISTORY_LIMIT` | Bets returned from `/history/bets` | `100` |
@@ -44,6 +43,8 @@ Backend for the Hi-Lo Bitcoin Prediction prototype. The service consumes the Bin
 | `BINANCE_RECONNECT_DELAY` | WS reconnect backoff (ms) | `3000` |
 | `BINANCE_HEARTBEAT_INTERVAL` | Price heartbeat guard (ms) | `2000` |
 | `ROUND_STATE_TTL` | Round cache TTL in Redis (ms) | `60000` |
+
+Game tuning (round timing, bet limits, payouts, snapshots) now lives in `hi-lo-server/src/config/game-config.ts`.
 
 > Tip: store Supabase service role + anon keys as secrets in Cursor’s Supabase MCP so DTO/codegen stays schema-aware.
 

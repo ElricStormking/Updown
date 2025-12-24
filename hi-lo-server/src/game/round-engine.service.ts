@@ -15,6 +15,7 @@ import { RoundState } from './interfaces/round-state.interface';
 import { RoundEvent } from './interfaces/round-event.interface';
 import { BetsService } from '../bets/bets.service';
 import { AppConfig } from '../config/configuration';
+import { getDigitOutcome } from './digit-bet.utils';
 
 @Injectable()
 export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
@@ -22,10 +23,12 @@ export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
   private readonly eventsSubject = new Subject<RoundEvent>();
   private readonly bettingDurationMs: number;
   private readonly resultDurationMs: number;
+  private readonly resultDisplayDurationMs: number;
   private readonly roundStateTtlMs: number;
 
   private lockTimer?: NodeJS.Timeout;
   private resultTimer?: NodeJS.Timeout;
+  private nextRoundTimer?: NodeJS.Timeout;
   private currentRound?: RoundState;
   private disposed = false;
 
@@ -42,6 +45,10 @@ export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
     );
     this.resultDurationMs = this.configService.getOrThrow<number>(
       'game.resultDurationMs',
+      { infer: true },
+    );
+    this.resultDisplayDurationMs = this.configService.getOrThrow<number>(
+      'game.resultDisplayDurationMs',
       { infer: true },
     );
     this.roundStateTtlMs = this.configService.getOrThrow<number>(
@@ -65,6 +72,9 @@ export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
     }
     if (this.resultTimer) {
       clearTimeout(this.resultTimer);
+    }
+    if (this.nextRoundTimer) {
+      clearTimeout(this.nextRoundTimer);
     }
   }
 
@@ -221,6 +231,9 @@ export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
 
     const finalPrice = await this.fetchLatestPrice();
     const locked = this.currentRound.lockedPrice ?? finalPrice;
+    const digitOutcome = finalPrice !== null ? getDigitOutcome(finalPrice) : null;
+    const digitResult = digitOutcome?.digits ?? null;
+    const digitSum = digitOutcome?.sum ?? null;
     let winningSide: BetSide | null = null;
     if (locked !== null && finalPrice !== null) {
       if (finalPrice > locked) {
@@ -235,6 +248,7 @@ export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
       stats = await this.betsService.settleRound(
         this.currentRound.id,
         winningSide,
+        digitOutcome,
       );
       await this.prisma.round.update({
         where: { id: this.currentRound.id },
@@ -243,6 +257,8 @@ export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
           finalPrice:
             finalPrice !== null ? new Prisma.Decimal(finalPrice) : null,
           winningSide,
+          digitResult,
+          digitSum,
         },
       });
     } catch (error) {
@@ -268,6 +284,8 @@ export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
         roundId: this.currentRound.id,
         lockedPrice: this.currentRound.lockedPrice ?? null,
         finalPrice,
+        digitResult,
+        digitSum,
         winningSide,
         stats,
       },
@@ -276,7 +294,12 @@ export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
     this.currentRound = undefined;
     await this.redis.del(CacheKeys.activeRoundState);
 
-    await this.startNewRound();
+    if (this.nextRoundTimer) {
+      clearTimeout(this.nextRoundTimer);
+    }
+    this.nextRoundTimer = setTimeout(() => {
+      void this.startNewRound();
+    }, Math.max(this.resultDisplayDurationMs, 0));
   }
 
   private async fetchLatestPrice(): Promise<number | null> {

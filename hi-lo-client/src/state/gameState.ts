@@ -1,10 +1,17 @@
 import type {
   BetHistoryItem,
   BetSide,
+  DigitBetType,
   GameConfig,
   RoundHistoryItem,
   RoundStatePayload,
 } from '../types';
+
+export interface DigitSelection {
+  roundId: number;
+  digitType: DigitBetType;
+  selection: string | null;
+}
 
 export interface GameState {
   token?: string;
@@ -19,6 +26,9 @@ export interface GameState {
   betHistory: BetHistoryItem[];
   roundHistory: RoundHistoryItem[];
   currentRound?: RoundStatePayload;
+  digitSelections: DigitSelection[];
+  lastDigitResult: string | null;
+  lastDigitSum: number | null;
 }
 
 const listeners = new Set<(state: GameState) => void>();
@@ -29,6 +39,9 @@ export const state: GameState = {
   selectedSide: 'UP',
   betHistory: [],
   roundHistory: [],
+  digitSelections: [],
+  lastDigitResult: null,
+  lastDigitSum: null,
 };
 
 export const subscribe = (listener: (state: GameState) => void) => {
@@ -44,4 +57,3 @@ export const updateState = (partial: Partial<GameState>) => {
   Object.assign(state, partial);
   notify();
 };
-

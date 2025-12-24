@@ -44,7 +44,13 @@ export const api = {
 
   placeBet: (
     token: string,
-    payload: { roundId: number; side: 'UP' | 'DOWN'; amount: number },
+    payload: {
+      roundId: number;
+      amount: number;
+      side?: 'UP' | 'DOWN';
+      betType?: 'HILO' | 'DIGIT';
+      digitType?: string;
+      selection?: string;
+    },
   ) => client.post('/bets', payload, authHeader(token)),
 };
-

@@ -38,7 +38,10 @@ export class HistoryService {
         bets.map((bet) => ({
           id: bet.id,
           roundId: bet.roundId,
+          betType: bet.betType,
           side: bet.side,
+          digitType: bet.digitType,
+          selection: bet.selection,
           amount: Number(bet.amount),
           odds: Number(bet.odds),
           result: bet.result,
@@ -51,6 +54,8 @@ export class HistoryService {
             ? Number(bet.round.finalPrice)
             : null,
           winningSide: bet.round.winningSide,
+          digitResult: bet.round.digitResult ?? null,
+          digitSum: bet.round.digitSum ?? null,
         })),
       );
   }
@@ -74,6 +79,8 @@ export class HistoryService {
           lockedPrice: round.lockedPrice ? Number(round.lockedPrice) : null,
           finalPrice: round.finalPrice ? Number(round.finalPrice) : null,
           winningSide: round.winningSide,
+          digitResult: round.digitResult ?? null,
+          digitSum: round.digitSum ?? null,
           oddsUp: Number(round.oddsUp),
           oddsDown: Number(round.oddsDown),
         })),

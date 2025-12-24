@@ -45,6 +45,7 @@ export async function initTradingViewWidget() {
     throw new Error(`Missing #${CONTAINER_ID} container`);
   }
   container.innerHTML = '';
+  const isCompact = window.innerWidth <= 720;
 
   // eslint-disable-next-line new-cap
   new window.TradingView.widget({
@@ -56,7 +57,7 @@ export async function initTradingViewWidget() {
     locale: 'en',
     toolbar_bg: '#0b1b2a',
     enable_publishing: false,
-    hide_side_toolbar: false,
+    hide_side_toolbar: isCompact,
     allow_symbol_change: false,
     container_id: CONTAINER_ID,
     autosize: true,

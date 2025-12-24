@@ -1,0 +1,40 @@
+export const DIGIT_PAYOUTS = {
+  smallBigOddEven: 0.96,
+  anyTriple: 85,
+  double: 23,
+  triple: 700,
+  single: {
+    single: 2,
+    double: 8,
+    triple: 12,
+  },
+  sum: {
+    4: 55,
+    5: 40,
+    6: 30,
+    7: 22,
+    8: 18,
+    9: 15,
+    10: 13,
+    11: 11,
+    12: 10,
+    13: 10,
+    14: 10,
+    15: 10,
+    16: 11,
+    17: 13,
+    18: 15,
+    19: 18,
+    20: 22,
+    21: 30,
+    22: 40,
+    23: 55,
+  },
+} as const;
+
+export const DIGIT_SUM_RANGES = {
+  small: { min: 0, max: 13 },
+  big: { min: 14, max: 27 },
+  sumMin: 4,
+  sumMax: 23,
+} as const;

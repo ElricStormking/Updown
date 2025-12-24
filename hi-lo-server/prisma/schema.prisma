@@ -36,6 +36,8 @@ model Round {
   oddsDown       Decimal         @default(1.95) @db.Decimal(6, 3)
   lockedPrice    Decimal?        @db.Decimal(18, 8)
   finalPrice     Decimal?        @db.Decimal(18, 8)
+  digitResult    String?
+  digitSum       Int?
   winningSide    BetSide?
   status         RoundStatus     @default(PENDING)
   createdAt      DateTime        @default(now())
@@ -50,7 +52,10 @@ model Bet {
   id        String    @id @default(cuid())
   userId    String
   roundId   Int
-  side      BetSide
+  betType   BetType   @default(HILO)
+  side      BetSide?
+  digitType DigitBetType?
+  selection String?
   amount    Decimal   @db.Decimal(18, 6)
   payout    Decimal   @default(0) @db.Decimal(18, 6)
   odds      Decimal   @default(1.95) @db.Decimal(6, 3)
@@ -79,6 +84,23 @@ model PriceSnapshot {
 enum BetSide {
   UP
   DOWN
+}
+
+enum BetType {
+  HILO
+  DIGIT
+}
+
+enum DigitBetType {
+  SMALL
+  BIG
+  ODD
+  EVEN
+  ANY_TRIPLE
+  DOUBLE
+  TRIPLE
+  SUM
+  SINGLE
 }
 
 enum BetResult {

@@ -10,8 +10,7 @@ async function main() {
 
   const passwordHash = await bcrypt.hash(password, saltRounds);
 
-  const startingBalance =
-    process.env.SEED_USER_BALANCE ?? process.env.MIN_BET_AMOUNT ?? '1000';
+  const startingBalance = process.env.SEED_USER_BALANCE ?? '1000';
   const balanceDecimal = new Prisma.Decimal(startingBalance);
 
   const user = await prisma.user.upsert({
@@ -48,4 +47,3 @@ main()
     await prisma.$disconnect();
     process.exit(1);
   });
-
