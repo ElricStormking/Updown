@@ -3,11 +3,9 @@ NODE_ENV=development
 API_PORT=4000
 FRONTEND_ORIGIN=http://localhost:3000
 
-# Supabase / Database
-DATABASE_URL=postgresql://USER:PASSWORD@HOST:5432/DATABASE?pgbouncer=true&connection_limit=1&sslmode=require
-SUPABASE_URL=https://your-project-id.supabase.co
-SUPABASE_ANON_KEY=your-anon-key
-SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+# Database (local PostgreSQL)
+# Example format: postgresql://<host>:<port>/<db>?schema=public
+DATABASE_URL=postgresql://localhost:5433/hi_lo_game?schema=public
 
 # Authentication
 JWT_SECRET=change-me

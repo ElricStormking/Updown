@@ -120,9 +120,19 @@ export class BinancePriceService implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
-    this.ws.removeAllListeners();
-    this.ws.terminate();
+    const ws = this.ws;
     this.ws = undefined;
+
+    ws.removeAllListeners();
+    // Terminating a socket before it is fully connected can emit an 'error' event.
+    // Ensure we don't crash due to an unhandled error during teardown.
+    ws.on('error', () => undefined);
+    try {
+      ws.terminate();
+    } catch (error: unknown) {
+      const reason = error instanceof Error ? error.message : String(error);
+      this.logger.debug(`Binance WS teardown error: ${reason}`);
+    }
   }
 
   private scheduleReconnect() {
