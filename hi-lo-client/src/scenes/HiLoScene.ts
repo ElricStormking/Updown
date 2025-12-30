@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import type {
   BetSide,
+  DigitBetType,
   PriceUpdate,
   RoundLockPayload,
   RoundResultPayload,
@@ -60,6 +61,8 @@ export class HiLoScene extends Phaser.Scene {
   // -- Result Overlay --
   private resultTitleText?: Phaser.GameObjects.Text;
   private resultPayoutText?: Phaser.GameObjects.Text;
+  private resultWinnersText?: Phaser.GameObjects.Text;
+  private resultPlayerWinsText?: Phaser.GameObjects.Text;
   private resultRoundId?: number;
   private resultDisplayDurationMs = 8000;
 
@@ -69,6 +72,10 @@ export class HiLoScene extends Phaser.Scene {
   private playerBetSide?: BetSide;
   private playerBetLockedPrice: number | null = null;
   private playerBetAmount: number | null = null;
+  private playerDigitSelections: Array<{
+    digitType: DigitBetType;
+    selection: string | null;
+  }> = [];
 
   private ringRadius = 130;
   private ringThickness = 6;
@@ -185,7 +192,7 @@ export class HiLoScene extends Phaser.Scene {
     this.backgroundContainer = this.add.container(0, 0);
 
     // Grid
-    const gridGraphics = this.make.graphics({ x: 0, y: 0, add: false });
+    const gridGraphics = this.make.graphics({ x: 0, y: 0, add: false } as any);
     gridGraphics.lineStyle(1, 0x1a2639, 1.0);
     gridGraphics.strokeRect(0, 0, 60, 60);
     gridGraphics.generateTexture('gridTexture', 60, 60);
@@ -562,6 +569,7 @@ export class HiLoScene extends Phaser.Scene {
       this.playerBetSide = undefined;
       this.playerBetLockedPrice = null;
       this.playerBetAmount = null;
+      this.playerDigitSelections = [];
       this.playerBetCard.setAlpha(0);
       this.comparisonLine.setVisible(false);
 
@@ -630,8 +638,22 @@ export class HiLoScene extends Phaser.Scene {
     }
   }
 
-  handleRoundResult(payload: RoundResultPayload) {
+  handleRoundResult(
+    payload: RoundResultPayload,
+    digitSelections: Array<{
+      digitType: DigitBetType;
+      selection: string | null;
+      roundId?: number;
+    }> = [],
+  ) {
     if (!this.round || this.round.id !== payload.roundId) return;
+
+    this.playerDigitSelections = digitSelections
+      .filter((item) => item.roundId === undefined || item.roundId === payload.roundId)
+      .map((item) => ({
+        digitType: item.digitType,
+        selection: item.selection ?? null,
+      }));
     
     this.round = {
       ...this.round,
@@ -679,12 +701,151 @@ export class HiLoScene extends Phaser.Scene {
     }
   }
 
+  private buildDigitWinnerSummary(payload: RoundResultPayload) {
+    const digitResult = payload.digitResult;
+    if (!digitResult || !/^\d{3}$/.test(digitResult)) {
+      return null;
+    }
+
+    const digits = digitResult.split('');
+    const sum =
+      typeof payload.digitSum === 'number'
+        ? payload.digitSum
+        : digits.reduce((total, digit) => total + Number(digit), 0);
+    const isTriple = digits[0] === digits[1] && digits[1] === digits[2];
+    const counts: Record<string, number> = {};
+    digits.forEach((digit) => {
+      counts[digit] = (counts[digit] ?? 0) + 1;
+    });
+    const uniqueDigits = Array.from(new Set(digits));
+
+    const winners: string[] = [];
+    if (isTriple) {
+      winners.push('ANY TRIPLE');
+      winners.push(`TRIPLE ${digitResult}`);
+      winners.push(`DOUBLE ${digits[0]}${digits[0]}`);
+    } else {
+      winners.push(sum <= 13 ? 'SMALL' : 'BIG');
+      winners.push(sum % 2 === 0 ? 'EVEN' : 'ODD');
+      const doubleDigit = uniqueDigits.find((digit) => (counts[digit] ?? 0) >= 2);
+      if (doubleDigit) {
+        winners.push(`DOUBLE ${doubleDigit}${doubleDigit}`);
+      }
+    }
+
+    if (sum >= 4 && sum <= 23) {
+      winners.push(`SUM ${sum}`);
+    }
+
+    return `DIGITS: ${digitResult}  SUM: ${sum}\nWINNERS: ${winners.join(
+      ' • ',
+    )}\nSINGLE: ${uniqueDigits.join(', ')}`;
+  }
+
+  private buildPlayerWinningDigitBets(payload: RoundResultPayload) {
+    if (this.playerDigitSelections.length === 0) {
+      return null;
+    }
+
+    const digitResult = payload.digitResult;
+    if (!digitResult || !/^\d{3}$/.test(digitResult)) {
+      return null;
+    }
+
+    const digits = digitResult.split('');
+    const sum =
+      typeof payload.digitSum === 'number'
+        ? payload.digitSum
+        : digits.reduce((total, digit) => total + Number(digit), 0);
+    const isTriple = digits[0] === digits[1] && digits[1] === digits[2];
+    const counts: Record<string, number> = {};
+    digits.forEach((digit) => {
+      counts[digit] = (counts[digit] ?? 0) + 1;
+    });
+
+    const winning: string[] = [];
+    const add = (label: string) => {
+      if (!winning.includes(label)) {
+        winning.push(label);
+      }
+    };
+
+    this.playerDigitSelections.forEach((bet) => {
+      const selection = bet.selection ?? '';
+      switch (bet.digitType) {
+        case 'SMALL':
+          if (!isTriple && sum >= 0 && sum <= 13) {
+            add('SMALL');
+          }
+          break;
+        case 'BIG':
+          if (!isTriple && sum >= 14 && sum <= 27) {
+            add('BIG');
+          }
+          break;
+        case 'ODD':
+          if (!isTriple && sum % 2 === 1) {
+            add('ODD');
+          }
+          break;
+        case 'EVEN':
+          if (!isTriple && sum % 2 === 0) {
+            add('EVEN');
+          }
+          break;
+        case 'ANY_TRIPLE':
+          if (isTriple) {
+            add('ANY TRIPLE');
+          }
+          break;
+        case 'DOUBLE': {
+          const digit = selection[0];
+          if (digit && (counts[digit] ?? 0) >= 2) {
+            add(`DOUBLE ${digit}${digit}`);
+          }
+          break;
+        }
+        case 'TRIPLE':
+          if (isTriple && selection === digitResult) {
+            add(`TRIPLE ${digitResult}`);
+          }
+          break;
+        case 'SUM': {
+          const target = Number(selection);
+          if (Number.isFinite(target) && target === sum) {
+            add(`SUM ${sum}`);
+          }
+          break;
+        }
+        case 'SINGLE': {
+          const digit = selection[0];
+          if (digit && (counts[digit] ?? 0) >= 1) {
+            add(`SINGLE ${digit}`);
+          }
+          break;
+        }
+        default:
+          break;
+      }
+    });
+
+    if (winning.length === 0) {
+      return null;
+    }
+
+    return `YOUR WINNING BETS: ${winning.join(' • ')}`;
+  }
+
   private showResultOverlay(outcome: 'WIN' | 'LOSE' | 'PUSH' | 'SKIPPED', payload: RoundResultPayload) {
     const width = this.scale.width;
     const height = this.scale.height;
 
     this.resultOverlay?.destroy();
     this.resultOverlay = undefined;
+    this.resultTitleText = undefined;
+    this.resultPayoutText = undefined;
+    this.resultWinnersText = undefined;
+    this.resultPlayerWinsText = undefined;
     
     // Color Determination
     let color = 0xb2bec3; // default/skipped/push
@@ -731,21 +892,58 @@ export class HiLoScene extends Phaser.Scene {
     const locked = payload.lockedPrice?.toFixed(2) ?? '--';
     const final = payload.finalPrice?.toFixed(2) ?? '--';
     
-    const statsText = this.add.text(0, 0, `LOCKED: ${locked}\nFINAL:  ${final}`, {
+    const statsText = this.add.text(0, -25, `LOCKED: ${locked}\nFINAL:  ${final}`, {
       fontFamily: 'Roboto Mono',
       fontSize: '24px',
       color: '#dfe6e9',
       align: 'center'
     }).setOrigin(0.5).setLineSpacing(10);
 
+    const winnersSummary = this.buildDigitWinnerSummary(payload);
+    if (winnersSummary) {
+      this.resultWinnersText = this.add
+        .text(0, 50, winnersSummary, {
+          fontFamily: 'Rajdhani',
+          fontSize: '16px',
+          color: '#dfe6e9',
+          align: 'center',
+          wordWrap: { width: 420, useAdvancedWrap: true },
+        })
+        .setOrigin(0.5)
+        .setLineSpacing(6);
+    }
+
+    const playerWins = this.buildPlayerWinningDigitBets(payload);
+    if (playerWins) {
+      this.resultPlayerWinsText = this.add
+        .text(0, 95, playerWins, {
+          fontFamily: 'Rajdhani',
+          fontSize: '20px',
+          color: '#00ffb2',
+          align: 'center',
+          wordWrap: { width: 440, useAdvancedWrap: true },
+        })
+        .setOrigin(0.5)
+        .setLineSpacing(6);
+    }
+
+    const payoutY = this.resultPlayerWinsText ? 130 : 110;
+
     // Payout Placeholder
-    this.resultPayoutText = this.add.text(0, 80, 'CALCULATING...', {
+    this.resultPayoutText = this.add.text(0, payoutY, 'CALCULATING...', {
       fontFamily: 'Rajdhani',
       fontSize: '32px',
       color: '#fdcb6e'
     }).setOrigin(0.5);
 
-    modal.add([cardBg, this.resultTitleText, statsText, this.resultPayoutText]);
+    modal.add([cardBg, this.resultTitleText, statsText]);
+    if (this.resultWinnersText) {
+      modal.add(this.resultWinnersText);
+    }
+    if (this.resultPlayerWinsText) {
+      modal.add(this.resultPlayerWinsText);
+    }
+    modal.add(this.resultPayoutText);
     
     this.resultOverlay = this.add.container(0, 0, [bg, modal]);
     this.resultOverlay.setDepth(100);

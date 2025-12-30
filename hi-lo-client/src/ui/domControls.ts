@@ -22,6 +22,10 @@ let digitTableEl: HTMLDivElement | null = null;
 let digitResultEl: HTMLDivElement | null = null;
 let digitResultDigits: HTMLSpanElement[] = [];
 let digitResultSumEl: HTMLSpanElement | null = null;
+let roundSummaryMetaEl: HTMLElement | null = null;
+let roundSummaryHiLoEl: HTMLElement | null = null;
+let roundSummaryDigitsEl: HTMLElement | null = null;
+let roundSummaryTotalEl: HTMLElement | null = null;
 let authScreenEl: HTMLDivElement | null = null;
 let appShellEl: HTMLDivElement | null = null;
 let authStatusEl: HTMLElement | null = null;
@@ -115,6 +119,21 @@ export const initControls = (handlers: ControlHandlers) => {
               <div>Single digit: 2:1 single, 8:1 double, 12:1 triple</div>
             </div>
           </section>
+          <section class="round-summary">
+            <h2>Round Summary</h2>
+            <div class="round-summary-meta" id="round-summary-meta">
+              Waiting for the first round result...
+            </div>
+            <div class="round-summary-section">
+              <div class="round-summary-heading">Hi-Lo</div>
+              <div class="round-summary-rows" id="round-summary-hilo"></div>
+            </div>
+            <div class="round-summary-section">
+              <div class="round-summary-heading">Digit winners</div>
+              <div class="round-summary-chips" id="round-summary-digits"></div>
+            </div>
+            <div class="round-summary-total" id="round-summary-total"></div>
+          </section>
           <section class="history-section history-section--bets">
             <h2>My Bets</h2>
             <ul id="bet-history"></ul>
@@ -145,6 +164,10 @@ export const initControls = (handlers: ControlHandlers) => {
     root.querySelectorAll('#digit-result .digit-result-digit'),
   );
   digitResultSumEl = root.querySelector('#digit-result .digit-result-sum');
+  roundSummaryMetaEl = root.querySelector('#round-summary-meta');
+  roundSummaryHiLoEl = root.querySelector('#round-summary-hilo');
+  roundSummaryDigitsEl = root.querySelector('#round-summary-digits');
+  roundSummaryTotalEl = root.querySelector('#round-summary-total');
 
   const authForm = root.querySelector<HTMLFormElement>('#auth-form');
   authForm?.addEventListener('submit', async (event) => {
@@ -269,7 +292,204 @@ const render = (nextState: typeof state) => {
   refreshSideButtons();
   refreshDigitHighlights(nextState);
   renderDigitResult(nextState);
+  renderRoundSummary(nextState);
   refreshAuthScreen(nextState);
+};
+
+const renderRoundSummary = (nextState: typeof state) => {
+  if (
+    !roundSummaryMetaEl ||
+    !roundSummaryHiLoEl ||
+    !roundSummaryDigitsEl ||
+    !roundSummaryTotalEl
+  ) {
+    return;
+  }
+
+  const lastResult = nextState.lastRoundResult;
+  if (!lastResult) {
+    roundSummaryMetaEl.textContent = 'Waiting for the first round result...';
+    roundSummaryHiLoEl.innerHTML = '';
+    roundSummaryDigitsEl.innerHTML = '';
+    roundSummaryTotalEl.textContent = '';
+    return;
+  }
+
+  const roundId = lastResult.roundId;
+  const winningSide = lastResult.winningSide;
+  const digitResult = lastResult.digitResult;
+  const digitSum = lastResult.digitSum;
+
+  const roundDetails = nextState.roundHistory.find((round) => round.id === roundId);
+  const oddsUp = roundDetails?.oddsUp;
+  const oddsDown = roundDetails?.oddsDown;
+
+  const winnerLabel = winningSide ? `Hi-Lo: ${winningSide}` : 'Hi-Lo: PUSH';
+  const digitLabel = digitResult ? `Digits: ${digitResult}` : 'Digits: ---';
+  const sumLabel = typeof digitSum === 'number' ? `Sum: ${digitSum}` : 'Sum: --';
+  roundSummaryMetaEl.textContent = `Round #${roundId} • ${winnerLabel} • ${digitLabel} • ${sumLabel}`;
+
+  const betsForRound = nextState.betHistory.filter((bet) => bet.roundId === roundId);
+  const hiloBets = betsForRound.filter((bet) => bet.betType === 'HILO');
+
+  const sum = (items: number[]) => items.reduce((acc, value) => acc + value, 0);
+  const sumStake = (side: BetSide) =>
+    sum(hiloBets.filter((bet) => bet.side === side).map((bet) => bet.amount));
+  const sumPayout = (side: BetSide) =>
+    sum(hiloBets.filter((bet) => bet.side === side).map((bet) => bet.payout));
+
+  const formatNet = (stake: number, payout: number) => {
+    const net = payout - stake;
+    const sign = net >= 0 ? '+' : '-';
+    return `${sign}${Math.abs(net).toFixed(2)}`;
+  };
+
+  const upStake = sumStake('UP');
+  const upPayout = sumPayout('UP');
+  const downStake = sumStake('DOWN');
+  const downPayout = sumPayout('DOWN');
+
+  const renderSideRow = (side: BetSide, stake: number, payout: number, odds?: number) => {
+    const isWinner = winningSide === side;
+    const oddsLabel = typeof odds === 'number' ? `x${odds.toFixed(2)}` : 'x--';
+    const details = stake > 0 || payout > 0
+      ? `stake ${stake.toFixed(2)} → payout ${payout.toFixed(2)} (${formatNet(stake, payout)})`
+      : 'no bet';
+    return `
+      <div class="round-summary-row${isWinner ? ' is-winner' : ''}">
+        <span class="round-summary-side">${side} <span class="round-summary-odds">${oddsLabel}</span></span>
+        <span class="round-summary-values">${details}</span>
+      </div>
+    `;
+  };
+
+  roundSummaryHiLoEl.innerHTML =
+    renderSideRow('UP', upStake, upPayout, oddsUp) +
+    renderSideRow('DOWN', downStake, downPayout, oddsDown);
+
+  const digitWinners = getWinningDigitSummaries(
+    digitResult,
+    nextState.config?.digitPayouts,
+  );
+  roundSummaryDigitsEl.innerHTML = digitWinners.length
+    ? digitWinners
+        .map(
+          (winner) =>
+            `<span class="round-chip">${winner.label}<span class="round-chip-odds">${winner.odds}:1</span></span>`,
+        )
+        .join('')
+    : '<span class="round-summary-muted">No digit result yet.</span>';
+
+  const totalStake = nextState.lastRoundStake;
+  const totalPayout = nextState.lastRoundPayout;
+  const totalNet = totalPayout - totalStake;
+  if (totalStake <= 0) {
+    roundSummaryTotalEl.textContent = 'Your round: no bets placed';
+  } else {
+    const sign = totalNet >= 0 ? '+' : '-';
+    roundSummaryTotalEl.textContent = `Your round: stake ${totalStake.toFixed(2)} payout ${totalPayout.toFixed(2)} (${sign}${Math.abs(totalNet).toFixed(2)})`;
+  }
+};
+
+const getWinningDigitSummaries = (
+  digitResult: string | null,
+  payouts: typeof state.config extends { digitPayouts: infer P } ? P : any,
+) => {
+  const winners: Array<{ label: string; odds: number }> = [];
+  if (!digitResult || !/^\d{3}$/.test(digitResult)) {
+    return winners;
+  }
+
+  const resolvedPayouts = payouts ?? {
+    smallBigOddEven: 0.96,
+    anyTriple: 85,
+    double: 23,
+    triple: 700,
+    single: {
+      single: 2,
+      double: 8,
+      triple: 12,
+    },
+    sum: sumPayouts,
+    ranges: {
+      small: { min: 0, max: 13 },
+      big: { min: 14, max: 27 },
+      sumMin: 4,
+      sumMax: 23,
+    },
+  };
+
+  const digits = digitResult.split('');
+  const counts: Record<string, number> = {
+    '0': 0,
+    '1': 0,
+    '2': 0,
+    '3': 0,
+    '4': 0,
+    '5': 0,
+    '6': 0,
+    '7': 0,
+    '8': 0,
+    '9': 0,
+  };
+  let sum = 0;
+  for (const digit of digits) {
+    counts[digit] += 1;
+    sum += Number(digit);
+  }
+
+  const isTriple = digits[0] === digits[1] && digits[1] === digits[2];
+  const uniqueDigits = Array.from(new Set(digits));
+
+  if (isTriple) {
+    winners.push({ label: 'ANY TRIPLE', odds: resolvedPayouts.anyTriple });
+    winners.push({
+      label: `TRIPLE ${digitResult}`,
+      odds: resolvedPayouts.triple,
+    });
+    winners.push({
+      label: `DOUBLE ${digits[0]}${digits[0]}`,
+      odds: resolvedPayouts.double,
+    });
+    winners.push({
+      label: `SINGLE ${digits[0]}`,
+      odds: resolvedPayouts.single.triple,
+    });
+  } else {
+    if (sum <= resolvedPayouts.ranges.small.max) {
+      winners.push({ label: 'SMALL', odds: resolvedPayouts.smallBigOddEven });
+    } else {
+      winners.push({ label: 'BIG', odds: resolvedPayouts.smallBigOddEven });
+    }
+
+    winners.push({
+      label: sum % 2 === 0 ? 'EVEN' : 'ODD',
+      odds: resolvedPayouts.smallBigOddEven,
+    });
+
+    const doubleDigit = Object.keys(counts).find((digit) => counts[digit] >= 2);
+    if (doubleDigit) {
+      winners.push({
+        label: `DOUBLE ${doubleDigit}${doubleDigit}`,
+        odds: resolvedPayouts.double,
+      });
+    }
+
+    uniqueDigits.forEach((digit) => {
+      const count = counts[digit];
+      const odds = count >= 2 ? resolvedPayouts.single.double : resolvedPayouts.single.single;
+      winners.push({ label: `SINGLE ${digit}`, odds });
+    });
+  }
+
+  if (sum >= resolvedPayouts.ranges.sumMin && sum <= resolvedPayouts.ranges.sumMax) {
+    const sumOdds = resolvedPayouts.sum[sum];
+    if (typeof sumOdds === 'number') {
+      winners.push({ label: `SUM ${sum}`, odds: sumOdds });
+    }
+  }
+
+  return winners;
 };
 
 const renderHistoryLists = (nextState: typeof state) => {

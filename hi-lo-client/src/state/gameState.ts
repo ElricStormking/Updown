@@ -3,6 +3,7 @@ import type {
   BetSide,
   DigitBetType,
   GameConfig,
+  RoundResultPayload,
   RoundHistoryItem,
   RoundStatePayload,
 } from '../types';
@@ -27,6 +28,9 @@ export interface GameState {
   roundHistory: RoundHistoryItem[];
   currentRound?: RoundStatePayload;
   digitSelections: DigitSelection[];
+  lastRoundResult: RoundResultPayload | null;
+  lastRoundStake: number;
+  lastRoundPayout: number;
   lastDigitResult: string | null;
   lastDigitSum: number | null;
 }
@@ -40,6 +44,9 @@ export const state: GameState = {
   betHistory: [],
   roundHistory: [],
   digitSelections: [],
+  lastRoundResult: null,
+  lastRoundStake: 0,
+  lastRoundPayout: 0,
   lastDigitResult: null,
   lastDigitSum: null,
 };

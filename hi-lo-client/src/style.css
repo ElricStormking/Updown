@@ -244,6 +244,103 @@ html {
   gap: 0.5rem;
 }
 
+.round-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.round-summary-meta {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.round-summary-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.round-summary-heading {
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent-warm);
+}
+
+.round-summary-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.round-summary-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  padding: 0.3rem 0.45rem;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.round-summary-row.is-winner {
+  border-color: rgba(0, 255, 178, 0.35);
+  background: rgba(0, 255, 178, 0.08);
+}
+
+.round-summary-side {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.round-summary-odds {
+  color: #ffd166;
+  font-weight: 700;
+  margin-left: 0.25rem;
+}
+
+.round-summary-values {
+  color: #b2bec3;
+  text-align: right;
+}
+
+.round-summary-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.round-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(255, 209, 102, 0.12);
+  border: 1px solid rgba(255, 209, 102, 0.25);
+  font-size: 0.7rem;
+  line-height: 1;
+}
+
+.round-chip-odds {
+  color: #ffd166;
+  font-weight: 700;
+}
+
+.round-summary-total {
+  font-size: 0.8rem;
+  padding-top: 0.35rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  color: #dfe6e9;
+}
+
+.round-summary-muted {
+  font-size: 0.75rem;
+  color: #b2bec3;
+}
+
 .digit-result {
   display: grid;
   grid-template-columns: auto 1fr auto;
@@ -509,7 +606,8 @@ li {
   }
 
   .bet-controls,
-  .digit-bets {
+  .digit-bets,
+  .round-summary {
     background: rgba(9, 16, 24, 0.9);
     border: 1px solid rgba(255, 255, 255, 0.06);
     border-radius: 16px;

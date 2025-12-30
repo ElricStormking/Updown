@@ -77,14 +77,13 @@ const socket = createGameSocket(
       updateState({
         currentRound: payload,
         digitSelections: [],
-        lastDigitResult: null,
-        lastDigitSum: null,
       });
     },
     onRoundLocked: (payload) => scene.handleRoundLock(payload),
     onRoundResult: async (payload) => {
-      scene.handleRoundResult(payload);
+      scene.handleRoundResult(payload, state.digitSelections);
       updateState({
+        lastRoundResult: payload,
         lastDigitResult: payload.digitResult ?? null,
         lastDigitSum: payload.digitSum ?? null,
       });
@@ -98,6 +97,10 @@ const socket = createGameSocket(
         (sum, bet) => sum + bet.payout,
         0,
       );
+      updateState({
+        lastRoundStake: totalStake,
+        lastRoundPayout: totalPayout,
+      });
       scene.setPlayerPayout(payload.roundId, totalStake, totalPayout);
     },
     onBalance: (balance) => {
@@ -232,13 +235,54 @@ async function refreshPlayerData() {
     api.fetchRoundHistory(10),
   ]);
 
-  const latestRound = roundsRes.data[0];
+  const latestCompletedRound =
+    roundsRes.data.find((round) => Boolean(round.digitResult)) ?? null;
+  const latestDigitResult =
+    latestCompletedRound?.digitResult ?? state.lastDigitResult;
+  const latestDigitSum = latestCompletedRound?.digitSum ?? state.lastDigitSum;
+
+  const inferredLastRoundResult = latestCompletedRound
+    ? {
+        roundId: latestCompletedRound.id,
+        lockedPrice: latestCompletedRound.lockedPrice,
+        finalPrice: latestCompletedRound.finalPrice,
+        digitResult: latestCompletedRound.digitResult,
+        digitSum: latestCompletedRound.digitSum,
+        winningSide: latestCompletedRound.winningSide,
+        stats: {
+          totalBets: 0,
+          winners: 0,
+          refunded: 0,
+          totalVolume: 0,
+        },
+      }
+    : null;
+  const lastRoundResult =
+    inferredLastRoundResult &&
+    (state.lastRoundResult === null ||
+      inferredLastRoundResult.roundId >= state.lastRoundResult.roundId)
+      ? inferredLastRoundResult
+      : state.lastRoundResult;
+
+  const summaryRoundId = lastRoundResult?.roundId;
+  const summaryBets = summaryRoundId
+    ? betsRes.data.filter((bet) => bet.roundId === summaryRoundId)
+    : [];
+  const lastRoundStake = summaryBets.reduce((sum, bet) => sum + bet.amount, 0);
+  const lastRoundPayout = summaryBets.reduce(
+    (sum, bet) => sum + bet.payout,
+    0,
+  );
+
   updateState({
     walletBalance: Number(walletRes.data.balance),
     betHistory: betsRes.data,
     roundHistory: roundsRes.data,
-    lastDigitResult: latestRound?.digitResult ?? null,
-    lastDigitSum: latestRound?.digitSum ?? null,
+    lastRoundResult,
+    lastRoundStake,
+    lastRoundPayout,
+    lastDigitResult: latestDigitResult,
+    lastDigitSum: latestDigitSum,
   });
   scene.setBalance(Number(walletRes.data.balance));
 }
