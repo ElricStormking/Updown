@@ -14,6 +14,11 @@ export interface DigitSelection {
   selection: string | null;
 }
 
+export interface TokenPlacement {
+  value: number;
+  count: number;
+}
+
 export interface GameState {
   token?: string;
   user?: {
@@ -21,8 +26,9 @@ export interface GameState {
     account: string;
   };
   walletBalance: number;
-  betAmount: number;
+  selectedTokenValue: number;
   selectedSide: BetSide;
+  tokenPlacements: Record<string, TokenPlacement>;
   config?: GameConfig;
   betHistory: BetHistoryItem[];
   roundHistory: RoundHistoryItem[];
@@ -39,8 +45,9 @@ const listeners = new Set<(state: GameState) => void>();
 
 export const state: GameState = {
   walletBalance: 0,
-  betAmount: 10,
+  selectedTokenValue: 10,
   selectedSide: 'UP',
+  tokenPlacements: {},
   betHistory: [],
   roundHistory: [],
   digitSelections: [],

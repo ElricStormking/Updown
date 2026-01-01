@@ -662,18 +662,26 @@ export class HiLoScene extends Phaser.Scene {
       winningSide: payload.winningSide
     };
 
-    // Determine Player Outcome
-    let outcome: 'WIN' | 'LOSE' | 'PUSH' | 'SKIPPED' = 'SKIPPED';
+    const hasHiLoBet = Boolean(this.playerBetSide);
+    const hasDigitBet = this.playerDigitSelections.length > 0;
+    const hasAnyBet = hasHiLoBet || hasDigitBet;
+    const hasHiLoWin = Boolean(
+      this.playerBetSide &&
+        payload.winningSide &&
+        this.playerBetSide === payload.winningSide,
+    );
+    const hasDigitWin = Boolean(this.buildPlayerWinningDigitBets(payload));
+    const hiLoPush = hasHiLoBet && !payload.winningSide;
 
-    if (this.playerBetSide) {
-      // If market pushed
-      if (!payload.winningSide) {
-        outcome = 'PUSH';
-      } else if (this.playerBetSide === payload.winningSide) {
-        outcome = 'WIN';
-      } else {
-        outcome = 'LOSE';
-      }
+    let outcome: 'WIN' | 'LOSE' | 'PUSH' | 'SKIPPED' = 'SKIPPED';
+    if (!hasAnyBet) {
+      outcome = 'SKIPPED';
+    } else if (hasHiLoWin || hasDigitWin) {
+      outcome = 'WIN';
+    } else if (hiLoPush && !hasDigitBet) {
+      outcome = 'PUSH';
+    } else {
+      outcome = 'LOSE';
     }
 
     this.showResultOverlay(outcome, payload);
@@ -840,12 +848,7 @@ export class HiLoScene extends Phaser.Scene {
     const width = this.scale.width;
     const height = this.scale.height;
 
-    this.resultOverlay?.destroy();
-    this.resultOverlay = undefined;
-    this.resultTitleText = undefined;
-    this.resultPayoutText = undefined;
-    this.resultWinnersText = undefined;
-    this.resultPlayerWinsText = undefined;
+    this.clearResultOverlay();
     
     // Color Determination
     let color = 0xb2bec3; // default/skipped/push
@@ -855,8 +858,8 @@ export class HiLoScene extends Phaser.Scene {
       color = 0x00b894;
       titleStr = 'YOU WIN!';
     } else if (outcome === 'LOSE') {
-      color = 0xd63031;
-      titleStr = 'YOU LOSE!';
+      color = 0xb2bec3;
+      titleStr = 'ROUND RESULT';
     } else if (outcome === 'PUSH') {
       color = 0xb2bec3;
       titleStr = 'PUSH';
@@ -885,7 +888,6 @@ export class HiLoScene extends Phaser.Scene {
     }).setOrigin(0.5);
     
     if (outcome === 'WIN') this.resultTitleText.setColor('#00b894');
-    else if (outcome === 'LOSE') this.resultTitleText.setColor('#d63031');
     else this.resultTitleText.setColor('#b2bec3');
 
     // Stats
@@ -979,5 +981,15 @@ export class HiLoScene extends Phaser.Scene {
          });
        }
     });
+  }
+
+  private clearResultOverlay() {
+    this.resultOverlay?.destroy();
+    this.resultOverlay = undefined;
+    this.resultTitleText = undefined;
+    this.resultPayoutText = undefined;
+    this.resultWinnersText = undefined;
+    this.resultPlayerWinsText = undefined;
+    this.resultRoundId = undefined;
   }
 }

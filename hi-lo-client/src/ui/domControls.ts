@@ -3,7 +3,7 @@ import type { BetSide, DigitBetType } from '../types';
 
 interface ControlHandlers {
   onLogin(credentials: { account: string; password: string }): Promise<void>;
-  onPlaceBet(): Promise<void>;
+  onPlaceHiLoBet(side: BetSide): Promise<void>;
   onPlaceDigitBet(selection: {
     digitType: DigitBetType;
     selection?: string;
@@ -15,7 +15,6 @@ let phaseEl: HTMLElement | null = null;
 let walletEl: HTMLElement | null = null;
 let betListEl: HTMLElement | null = null;
 let roundListEl: HTMLElement | null = null;
-let amountInput: HTMLInputElement | null = null;
 let upBtn: HTMLButtonElement | null = null;
 let downBtn: HTMLButtonElement | null = null;
 let digitTableEl: HTMLDivElement | null = null;
@@ -29,6 +28,11 @@ let roundSummaryTotalEl: HTMLElement | null = null;
 let authScreenEl: HTMLDivElement | null = null;
 let appShellEl: HTMLDivElement | null = null;
 let authStatusEl: HTMLElement | null = null;
+let tokenOptionsEl: HTMLDivElement | null = null;
+let tokenOptionButtons: HTMLButtonElement[] = [];
+
+const tokenStackByKey = new Map<string, HTMLElement>();
+const TOKEN_VALUES = [10, 50, 100, 150, 200, 300, 500];
 
 const sumPayouts: Record<number, number> = {
   4: 55,
@@ -90,15 +94,29 @@ export const initControls = (handlers: ControlHandlers) => {
           </div>
           <div class="status" id="status-text">Login to start betting.</div>
           <div class="bet-controls">
-            <label>
-              Bet Amount
-              <input type="number" id="bet-amount" min="1" step="1" value="10" />
-            </label>
-            <div class="side-buttons">
-              <button type="button" data-side="UP" class="side active">UP</button>
-              <button type="button" data-side="DOWN" class="side">DOWN</button>
+            <div class="token-bar">
+              <div class="token-bar-label">Token Bar</div>
+              <div class="token-options" id="token-options">
+                ${TOKEN_VALUES.map(
+                  (value) => `
+                    <button type="button" class="token-option" data-token="${value}">
+                      <span class="token-chip token-chip--${value}">${value}</span>
+                    </button>
+                  `,
+                ).join('')}
+              </div>
             </div>
-            <button type="button" id="place-bet">Place Bet</button>
+            <div class="side-buttons">
+              <button type="button" data-side="UP" data-bet-key="HILO|UP" class="side bet-space active">
+                <span class="bet-label">UP</span>
+                <span class="token-stack"></span>
+              </button>
+              <button type="button" data-side="DOWN" data-bet-key="HILO|DOWN" class="side bet-space">
+                <span class="bet-label">DOWN</span>
+                <span class="token-stack"></span>
+              </button>
+            </div>
+            <div class="bet-hint">Tap a bet space to place a token.</div>
           </div>
           <section class="digit-bets">
             <h2>Digit Bets</h2>
@@ -155,9 +173,9 @@ export const initControls = (handlers: ControlHandlers) => {
   walletEl = root.querySelector('#wallet-balance');
   betListEl = root.querySelector('#bet-history');
   roundListEl = root.querySelector('#round-history');
-  amountInput = root.querySelector('#bet-amount');
   upBtn = root.querySelector('button[data-side="UP"]');
   downBtn = root.querySelector('button[data-side="DOWN"]');
+  tokenOptionsEl = root.querySelector('#token-options');
   digitTableEl = root.querySelector('#digit-bet-table');
   digitResultEl = root.querySelector('#digit-result');
   digitResultDigits = Array.from(
@@ -187,41 +205,45 @@ export const initControls = (handlers: ControlHandlers) => {
     }
   });
 
-  const betButton = root.querySelector<HTMLButtonElement>('#place-bet');
-  betButton?.addEventListener('click', async () => {
-    if (!state.token) {
-      setStatus('Login before placing bets', true);
-      return;
-    }
-    try {
-      setStatus('Sending bet...');
-      await handlers.onPlaceBet();
-      setStatus('Bet placed!');
-    } catch (error) {
-      setStatus(
-        error instanceof Error ? error.message : 'Bet rejected',
-        true,
-      );
-    }
-  });
-
-  amountInput?.addEventListener('input', () => {
-    const nextValue = Number(amountInput?.value ?? 0);
-    updateState({
-      betAmount: Number.isFinite(nextValue) ? nextValue : state.betAmount,
+  tokenOptionButtons = Array.from(
+    tokenOptionsEl?.querySelectorAll<HTMLButtonElement>('.token-option') ?? [],
+  );
+  tokenOptionButtons.forEach((button) => {
+    button.addEventListener('click', () => {
+      const value = Number(button.dataset.token ?? 0);
+      if (!Number.isFinite(value) || value <= 0) {
+        return;
+      }
+      updateState({ selectedTokenValue: value });
     });
   });
 
   [upBtn, downBtn].forEach((button) => {
-    button?.addEventListener('click', () => {
+    button?.addEventListener('click', async () => {
       const side = button.dataset.side as BetSide;
       updateState({ selectedSide: side });
-      refreshSideButtons();
+      if (!state.token) {
+        setStatus('Login before placing bets', true);
+        return;
+      }
+      try {
+        button.classList.add('bet-space--flash');
+        setTimeout(() => button.classList.remove('bet-space--flash'), 250);
+        setStatus('Sending bet...');
+        await handlers.onPlaceHiLoBet(side);
+        setStatus('Bet placed!');
+      } catch (error) {
+        setStatus(
+          error instanceof Error ? error.message : 'Bet rejected',
+          true,
+        );
+      }
     });
   });
 
   if (digitTableEl) {
     digitTableEl.innerHTML = buildDigitBetTable();
+    registerTokenStacks(root);
     digitTableEl.addEventListener('click', async (event) => {
       const target = (event.target as HTMLElement).closest<HTMLButtonElement>(
         '.digit-cell',
@@ -284,13 +306,11 @@ const render = (nextState: typeof state) => {
     }
   }
 
-  if (amountInput && document.activeElement !== amountInput) {
-    amountInput.value = nextState.betAmount.toString();
-  }
-
   renderHistoryLists(nextState);
+  refreshTokenSelection(nextState);
   refreshSideButtons();
   refreshDigitHighlights(nextState);
+  renderTokenPlacements(nextState);
   renderDigitResult(nextState);
   renderRoundSummary(nextState);
   refreshAuthScreen(nextState);
@@ -528,6 +548,14 @@ const refreshSideButtons = () => {
   });
 };
 
+const refreshTokenSelection = (nextState: typeof state) => {
+  if (!tokenOptionButtons.length) return;
+  tokenOptionButtons.forEach((button) => {
+    const value = Number(button.dataset.token ?? 0);
+    button.classList.toggle('is-selected', value === nextState.selectedTokenValue);
+  });
+};
+
 const refreshDigitHighlights = (nextState: typeof state) => {
   if (!digitTableEl) return;
   const roundId = nextState.currentRound?.id;
@@ -547,6 +575,45 @@ const refreshDigitHighlights = (nextState: typeof state) => {
     const key = `${digitType}|${selection}`;
     cell.classList.toggle('digit-cell--active', activeKeys.has(key));
     cell.classList.toggle('digit-cell--winner', winningKeys.has(key));
+  });
+};
+
+const renderTokenPlacements = (nextState: typeof state) => {
+  if (!tokenStackByKey.size) return;
+  tokenStackByKey.forEach((stackEl, key) => {
+    const placement = nextState.tokenPlacements?.[key];
+    renderTokenStack(stackEl, placement);
+  });
+};
+
+const renderTokenStack = (
+  stackEl: HTMLElement,
+  placement?: { value: number; count: number },
+) => {
+  if (!placement) {
+    stackEl.innerHTML = '';
+    stackEl.classList.remove('has-tokens');
+    return;
+  }
+  const totalAmount = placement.value * placement.count;
+  const amountLabel = String(totalAmount);
+  const compactClass = amountLabel.length >= 4 ? ' token-chip--compact' : '';
+  stackEl.innerHTML = `
+    <span class="token-chip token-chip--${placement.value}${compactClass}">
+      ${amountLabel}
+    </span>
+  `;
+  stackEl.classList.add('has-tokens');
+};
+
+const registerTokenStacks = (root: HTMLElement) => {
+  tokenStackByKey.clear();
+  root.querySelectorAll<HTMLElement>('[data-bet-key]').forEach((betEl) => {
+    const key = betEl.dataset.betKey;
+    if (!key) return;
+    const stackEl = betEl.querySelector<HTMLElement>('.token-stack');
+    if (!stackEl) return;
+    tokenStackByKey.set(key, stackEl);
   });
 };
 
@@ -714,6 +781,8 @@ const buildDigitBetTable = () => {
           const selectionAttr = cell.selection
             ? ` data-selection="${cell.selection}"`
             : '';
+          const selectionKey = cell.selection ?? '';
+          const betKeyAttr = ` data-bet-key="DIGIT|${cell.digitType}|${selectionKey}"`;
           const subLabel = cell.subLabel
             ? `<span class="digit-sub">${cell.subLabel}</span>`
             : '';
@@ -721,10 +790,11 @@ const buildDigitBetTable = () => {
             ? `<span class="digit-odds">${cell.odds}:1</span>`
             : '';
           return `
-            <button type="button" class="digit-cell" data-digit-type="${cell.digitType}"${selectionAttr}>
+            <button type="button" class="digit-cell bet-space" data-digit-type="${cell.digitType}"${selectionAttr}${betKeyAttr}>
               <span class="digit-label">${cell.label}</span>
               ${subLabel}
               ${odds}
+              <span class="token-stack"></span>
             </button>
           `;
         })

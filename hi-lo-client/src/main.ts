@@ -3,7 +3,7 @@ import axios from 'axios';
 import './style.css';
 import { HiLoScene } from './scenes/HiLoScene';
 import { initControls, setStatus } from './ui/domControls';
-import type { DigitBetType } from './types';
+import type { BetSide, DigitBetType } from './types';
 import { api } from './services/api';
 import { authenticateGameSocket, createGameSocket } from './services/socket';
 import { state, updateState } from './state/gameState';
@@ -13,7 +13,7 @@ const scene = new HiLoScene();
 
 initControls({
   onLogin: handleLogin,
-  onPlaceBet: handlePlaceBet,
+  onPlaceHiLoBet: handlePlaceHiLoBet,
   onPlaceDigitBet: handlePlaceDigitBet,
 });
 
@@ -77,6 +77,7 @@ const socket = createGameSocket(
       updateState({
         currentRound: payload,
         digitSelections: [],
+        tokenPlacements: {},
       });
     },
     onRoundLocked: (payload) => scene.handleRoundLock(payload),
@@ -112,6 +113,25 @@ const socket = createGameSocket(
   () => state.token,
 );
 
+const buildHiLoBetKey = (side: BetSide) => `HILO|${side}`;
+const buildDigitBetKey = (digitType: DigitBetType, selection?: string) =>
+  `DIGIT|${digitType}|${selection ?? ''}`;
+
+const addTokenPlacement = (key: string, tokenValue: number) => {
+  const nextPlacements = { ...(state.tokenPlacements ?? {}) };
+  const existing = nextPlacements[key];
+  const nextPlacement =
+    existing && existing.value === tokenValue
+      ? { value: existing.value, count: existing.count + 1 }
+      : { value: tokenValue, count: 1 };
+  nextPlacements[key] = nextPlacement;
+  updateState({ tokenPlacements: nextPlacements });
+  return nextPlacement;
+};
+
+const getPlacementTotal = (placement?: { value: number; count: number }) =>
+  placement ? placement.value * placement.count : 0;
+
 async function handleLogin(credentials: { account: string; password: string }) {
   const [{ data: auth }, { data: config }] = await Promise.all([
     api.login(credentials.account, credentials.password),
@@ -122,6 +142,7 @@ async function handleLogin(credentials: { account: string; password: string }) {
     token: auth.accessToken,
     user: auth.user,
     config,
+    tokenPlacements: {},
   });
   scene.setResultDisplayDuration(
     config.resultDisplayDurationMs ?? 8000,
@@ -131,7 +152,7 @@ async function handleLogin(credentials: { account: string; password: string }) {
   authenticateGameSocket(socket, auth.accessToken);
 }
 
-async function handlePlaceBet() {
+async function handlePlaceHiLoBet(side: BetSide) {
   if (!state.token) {
     throw new Error('You must login first.');
   }
@@ -145,17 +166,29 @@ async function handlePlaceBet() {
     throw new Error('Not Betting Phase');
   }
 
-  const amount = clampAmount(state.betAmount);
+  const tokenValue = state.selectedTokenValue;
+  const amount = clampAmount(tokenValue);
+  if (amount !== tokenValue) {
+    throw new Error('Token value outside betting limits');
+  }
   if (state.walletBalance < amount) {
     throw new Error('Insufficient balance');
   }
   try {
     await api.placeBet(state.token, {
       roundId: state.currentRound.id,
-      side: state.selectedSide,
+      side,
       amount,
     });
-    scene.setPlayerBet(state.selectedSide, amount);
+    const nextPlacement = addTokenPlacement(
+      buildHiLoBetKey(side),
+      tokenValue,
+    );
+    updateState({ selectedSide: side });
+    scene.setPlayerBet(
+      side,
+      getPlacementTotal(nextPlacement),
+    );
   } catch (error) {
     throw new Error(extractBetErrorMessage(error));
   }
@@ -179,7 +212,11 @@ async function handlePlaceDigitBet(selection: {
     throw new Error('Not Betting Phase');
   }
 
-  const amount = clampAmount(state.betAmount);
+  const tokenValue = state.selectedTokenValue;
+  const amount = clampAmount(tokenValue);
+  if (amount !== tokenValue) {
+    throw new Error('Token value outside betting limits');
+  }
   if (state.walletBalance < amount) {
     throw new Error('Insufficient balance');
   }
@@ -210,6 +247,10 @@ async function handlePlaceDigitBet(selection: {
         updateState({ digitSelections: next });
       }
     }
+    addTokenPlacement(
+      buildDigitBetKey(selection.digitType, selection.selection),
+      tokenValue,
+    );
   } catch (error) {
     throw new Error(extractBetErrorMessage(error));
   }
