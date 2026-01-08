@@ -49,6 +49,7 @@ const game = new Phaser.Game({
   parent: 'game-container',
   scene: [scene],
   backgroundColor: '#020b16',
+  banner: false,
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,

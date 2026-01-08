@@ -99,6 +99,52 @@ export const initControls = (handlers: ControlHandlers) => {
     throw new Error('Missing #app root');
   }
 
+  let lastFocusBeforeModal: HTMLElement | null = null;
+
+  const focusIfPossible = (el: HTMLElement | null | undefined) => {
+    if (!el) return;
+    if (!document.contains(el)) return;
+    el.focus();
+  };
+
+  const moveFocusOutIfInside = (container: HTMLElement | null | undefined) => {
+    if (!container) return;
+    const active = document.activeElement;
+    if (!(active instanceof HTMLElement)) return;
+    if (!container.contains(active)) return;
+
+    // Blur first to avoid Chrome warning when toggling aria-hidden.
+    active.blur();
+
+    // Restore focus to where the user was before opening the modal, or fall back to the gear button.
+    focusIfPossible(lastFocusBeforeModal);
+    if (document.activeElement === document.body) {
+      focusIfPossible(tokenBarMenuBtn ?? null);
+    }
+  };
+
+  const openModal = (
+    backdropEl: HTMLDivElement | null,
+    open: boolean,
+    focusOnOpen?: HTMLElement | null,
+  ) => {
+    if (!backdropEl) return;
+
+    if (open) {
+      const active = document.activeElement;
+      lastFocusBeforeModal = active instanceof HTMLElement ? active : null;
+    } else {
+      moveFocusOutIfInside(backdropEl);
+    }
+
+    backdropEl.classList.toggle('is-open', open);
+    backdropEl.setAttribute('aria-hidden', open ? 'false' : 'true');
+
+    if (open) {
+      requestAnimationFrame(() => focusIfPossible(focusOnOpen ?? null));
+    }
+  };
+
   root.innerHTML = `
     <div class="auth-screen" id="auth-screen">
       <div class="auth-card">
@@ -452,33 +498,27 @@ export const initControls = (handlers: ControlHandlers) => {
   });
 
   const setStatsModalOpen = (open: boolean) => {
-    if (!statsModalBackdropEl) return;
-    statsModalBackdropEl.classList.toggle('is-open', open);
-    statsModalBackdropEl.setAttribute('aria-hidden', open ? 'false' : 'true');
+    openModal(statsModalBackdropEl, open, statsModalCloseBtn);
   };
 
   const setMenuModalOpen = (open: boolean) => {
-    if (!menuModalBackdropEl) return;
-    menuModalBackdropEl.classList.toggle('is-open', open);
-    menuModalBackdropEl.setAttribute('aria-hidden', open ? 'false' : 'true');
+    openModal(menuModalBackdropEl, open, menuModalCloseBtn);
   };
 
   const setSettingsModalOpen = (open: boolean) => {
-    if (!settingsModalBackdropEl) return;
-    settingsModalBackdropEl.classList.toggle('is-open', open);
-    settingsModalBackdropEl.setAttribute('aria-hidden', open ? 'false' : 'true');
+    openModal(settingsModalBackdropEl, open, settingsModalCloseBtn);
   };
 
   const setChartModalOpen = (open: boolean) => {
-    if (!chartModalBackdropEl) return;
-    chartModalBackdropEl.classList.toggle('is-open', open);
-    chartModalBackdropEl.setAttribute('aria-hidden', open ? 'false' : 'true');
+    openModal(chartModalBackdropEl, open, chartModalCloseBtn);
   };
 
   const setBettingHistoryModalOpen = (open: boolean) => {
-    if (!bettingHistoryModalBackdropEl) return;
-    bettingHistoryModalBackdropEl.classList.toggle('is-open', open);
-    bettingHistoryModalBackdropEl.setAttribute('aria-hidden', open ? 'false' : 'true');
+    openModal(
+      bettingHistoryModalBackdropEl,
+      open,
+      bettingHistoryModalCloseBtn,
+    );
   };
 
   const loadBettingHistoryPage = async (page: number) => {
