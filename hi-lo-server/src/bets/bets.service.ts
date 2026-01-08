@@ -33,6 +33,7 @@ export interface SettlementStats {
   winners: number;
   refunded: number;
   totalVolume: number;
+  participants: string[];
   balanceUpdates: Array<{ userId: string; balance: number }>;
 }
 
@@ -170,8 +171,26 @@ export class BetsService {
         winners: 0,
         refunded: 0,
         totalVolume: 0,
+        participants: [],
         balanceUpdates: [],
       };
+    }
+
+    const participants = Array.from(new Set(bets.map((bet) => bet.userId)));
+
+    // Check if a triple occurred and identify users who have triple bets
+    const isTriple = digitOutcome?.isTriple ?? false;
+    const usersWithTripleBets = new Set<string>();
+    if (isTriple) {
+      for (const bet of bets) {
+        if (
+          bet.betType === BetType.DIGIT &&
+          (bet.digitType === DigitBetType.ANY_TRIPLE ||
+            bet.digitType === DigitBetType.TRIPLE)
+        ) {
+          usersWithTripleBets.add(bet.userId);
+        }
+      }
     }
 
     let winners = 0;
@@ -187,6 +206,16 @@ export class BetsService {
           if (!digitOutcome) {
             await this.processRefund(tx, bet, balanceUpdates);
             refunded += 1;
+            continue;
+          }
+          // If triple occurred and player has no triple bets, all non-triple bets lose
+          if (
+            isTriple &&
+            !usersWithTripleBets.has(bet.userId) &&
+            bet.digitType !== DigitBetType.ANY_TRIPLE &&
+            bet.digitType !== DigitBetType.TRIPLE
+          ) {
+            await this.markLoss(tx, bet.id);
             continue;
           }
           const payoutMultiplier = this.resolveDigitPayout(
@@ -237,6 +266,7 @@ export class BetsService {
       winners,
       refunded,
       totalVolume: Number(totalVolume),
+      participants,
       balanceUpdates,
     };
   }

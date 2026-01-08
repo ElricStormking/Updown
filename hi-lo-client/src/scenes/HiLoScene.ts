@@ -7,8 +7,11 @@ import type {
   RoundResultPayload,
   RoundStatePayload,
 } from '../types';
+import { getInitialLanguage, t, type LanguageCode } from '../i18n';
 
 export class HiLoScene extends Phaser.Scene {
+  private language: LanguageCode = getInitialLanguage();
+  private uiReady = false;
   // -- Containers --
   private mainContainer!: Phaser.GameObjects.Container;
   private phaseContainer!: Phaser.GameObjects.Container; // Groups betting/pending/result UI
@@ -55,6 +58,7 @@ export class HiLoScene extends Phaser.Scene {
 
   // -- Footer (History) --
   private footerContainer!: Phaser.GameObjects.Container;
+  private balanceLabelText!: Phaser.GameObjects.Text;
   private balanceText!: Phaser.GameObjects.Text;
   // We'll implement a simple placeholder for history or remove if not fed data yet.
 
@@ -137,6 +141,10 @@ export class HiLoScene extends Phaser.Scene {
     this.pendingUI.setVisible(false);
     this.bettingUI.setAlpha(0);
     this.pendingUI.setAlpha(0);
+
+    // UI is now constructed; allow live language updates and apply current language.
+    this.uiReady = true;
+    this.setLanguage(this.language);
   }
 
   private setLayoutMetrics() {
@@ -211,12 +219,17 @@ export class HiLoScene extends Phaser.Scene {
 
   private createTopBar() {
     // Round ID
-    this.roundIdText = this.add.text(30, 30, 'ROUND #--', {
+    this.roundIdText = this.add.text(
+      30,
+      30,
+      `${t(this.language, 'scene.roundPrefix')} #--`,
+      {
       fontFamily: 'Rajdhani',
       fontSize: '24px',
       color: '#dfe6e9',
       fontStyle: 'bold'
-    }).setOrigin(0, 0.5);
+      },
+    ).setOrigin(0, 0.5);
 
     // Status Badge (Top Right)
     this.statusBadge = this.add.container(this.scale.width - 130, 30);
@@ -224,7 +237,7 @@ export class HiLoScene extends Phaser.Scene {
     
     this.connectionDot = this.add.circle(-45, 0, 4, 0xffffff);
     
-    this.statusText = this.add.text(0, 0, 'CONNECTING', {
+    this.statusText = this.add.text(0, 0, t(this.language, 'scene.connecting'), {
       fontFamily: 'Rajdhani',
       fontSize: '16px',
       color: '#ffffff',
@@ -232,7 +245,7 @@ export class HiLoScene extends Phaser.Scene {
     }).setOrigin(0.5);
 
     this.statusBadge.add([this.statusBg, this.connectionDot, this.statusText]);
-    this.drawStatusBadge(0x636e72, 'CONNECTING');
+    this.drawStatusBadge(0x636e72, t(this.language, 'scene.connecting'));
   }
 
   private drawStatusBadge(color: number, text: string) {
@@ -284,7 +297,7 @@ export class HiLoScene extends Phaser.Scene {
     }).setOrigin(0.5);
 
     // Price Label
-    this.priceLabel = this.add.text(0, this.priceLabelOffsetY, 'BITCOIN PRICE', {
+    this.priceLabel = this.add.text(0, this.priceLabelOffsetY, t(this.language, 'scene.bitcoinPrice'), {
       fontFamily: 'Rajdhani',
       fontSize: `${this.priceLabelFontSize}px`,
       color: '#636e72',
@@ -317,7 +330,7 @@ export class HiLoScene extends Phaser.Scene {
   private createBettingUI() {
     this.bettingUI = this.add.container(this.cx, this.cy + this.phaseOffsetY);
 
-    this.bettingLabel = this.add.text(0, -20, 'PLACE YOUR BETS', {
+    this.bettingLabel = this.add.text(0, -20, t(this.language, 'scene.placeBets'), {
       fontFamily: 'Rajdhani',
       fontSize: '20px',
       color: '#00b894',
@@ -334,7 +347,7 @@ export class HiLoScene extends Phaser.Scene {
     upBg.lineStyle(1, 0x00b894, 0.5);
     upBg.strokeRoundedRect(-140, -20, 120, 40, 8);
     
-    this.oddsUpText = this.add.text(-80, 0, 'UP 1.95x', {
+    this.oddsUpText = this.add.text(-80, 0, `${t(this.language, 'hilo.up')} 1.95x`, {
       fontFamily: 'Rajdhani',
       fontSize: '18px',
       color: '#00b894',
@@ -348,7 +361,7 @@ export class HiLoScene extends Phaser.Scene {
     downBg.lineStyle(1, 0xd63031, 0.5);
     downBg.strokeRoundedRect(20, -20, 120, 40, 8);
 
-    this.oddsDownText = this.add.text(80, 0, 'DOWN 1.95x', {
+    this.oddsDownText = this.add.text(80, 0, `${t(this.language, 'hilo.down')} 1.95x`, {
       fontFamily: 'Rajdhani',
       fontSize: '18px',
       color: '#d63031',
@@ -372,7 +385,7 @@ export class HiLoScene extends Phaser.Scene {
     this.pendingUI = this.add.container(this.cx, this.cy + this.phaseOffsetY);
 
     // Locked Price
-    this.lockedPriceLabel = this.add.text(0, -40, 'LOCKED PRICE', {
+    this.lockedPriceLabel = this.add.text(0, -40, t(this.language, 'scene.lockedPrice'), {
       fontFamily: 'Rajdhani',
       fontSize: '12px',
       color: '#636e72',
@@ -420,7 +433,7 @@ export class HiLoScene extends Phaser.Scene {
     const x = this.scale.width - 30;
     const y = this.scale.height - 30;
 
-    const label = this.add.text(x, y - 30, 'WALLET BALANCE', {
+    this.balanceLabelText = this.add.text(x, y - 30, t(this.language, 'scene.walletBalance'), {
       fontFamily: 'Rajdhani',
       fontSize: '12px',
       color: '#636e72',
@@ -523,6 +536,32 @@ export class HiLoScene extends Phaser.Scene {
 
   // -- Public API (Called by main.ts) --
 
+  setLanguage(lang: LanguageCode) {
+    this.language = lang;
+    if (!this.uiReady) return;
+
+    // Static labels
+    if (this.priceLabel) this.priceLabel.setText(t(this.language, 'scene.bitcoinPrice'));
+    if (this.bettingLabel) this.bettingLabel.setText(t(this.language, 'scene.placeBets'));
+    if (this.lockedPriceLabel) this.lockedPriceLabel.setText(t(this.language, 'scene.lockedPrice'));
+    if (this.balanceLabelText) this.balanceLabelText.setText(t(this.language, 'scene.walletBalance'));
+
+    // Round-dependent labels
+    if (this.round) {
+      this.roundIdText.setText(`${t(this.language, 'scene.roundPrefix')} #${this.round.id}`);
+      if (this.round.status === 'BETTING') {
+        this.drawStatusBadge(0x00b894, t(this.language, 'scene.betsOpen'));
+        this.oddsUpText.setText(`${t(this.language, 'hilo.up')} ${this.round.oddsUp.toFixed(2)}x`);
+        this.oddsDownText.setText(`${t(this.language, 'hilo.down')} ${this.round.oddsDown.toFixed(2)}x`);
+      } else if (this.round.status === 'RESULT_PENDING') {
+        this.drawStatusBadge(0xe17055, t(this.language, 'scene.locked'));
+      }
+    } else {
+      this.roundIdText.setText(`${t(this.language, 'scene.roundPrefix')} #--`);
+      this.drawStatusBadge(0x636e72, t(this.language, 'scene.connecting'));
+    }
+  }
+
   setPrice(update: PriceUpdate) {
     const previous = this.lastPrice?.price;
     this.lastPrice = update;
@@ -554,16 +593,16 @@ export class HiLoScene extends Phaser.Scene {
 
   setRoundState(state: RoundStatePayload) {
     this.round = state;
-    this.roundIdText.setText(`ROUND #${state.id}`);
+    this.roundIdText.setText(`${t(this.language, 'scene.roundPrefix')} #${state.id}`);
     
     // Determine visuals based on phase
     if (state.status === 'BETTING') {
-      this.drawStatusBadge(0x00b894, 'BETS OPEN');
+      this.drawStatusBadge(0x00b894, t(this.language, 'scene.betsOpen'));
       this.transitionToPhase('betting');
       
       // Update Odds
-      this.oddsUpText.setText(`UP ${state.oddsUp.toFixed(2)}x`);
-      this.oddsDownText.setText(`DOWN ${state.oddsDown.toFixed(2)}x`);
+      this.oddsUpText.setText(`${t(this.language, 'hilo.up')} ${state.oddsUp.toFixed(2)}x`);
+      this.oddsDownText.setText(`${t(this.language, 'hilo.down')} ${state.oddsDown.toFixed(2)}x`);
 
       // Reset Player Data
       this.playerBetSide = undefined;
@@ -574,7 +613,7 @@ export class HiLoScene extends Phaser.Scene {
       this.comparisonLine.setVisible(false);
 
     } else if (state.status === 'RESULT_PENDING') {
-      this.drawStatusBadge(0xe17055, 'LOCKED');
+      this.drawStatusBadge(0xe17055, t(this.language, 'scene.locked'));
       this.transitionToPhase('pending');
       
       if (state.lockedPrice) {
@@ -621,7 +660,11 @@ export class HiLoScene extends Phaser.Scene {
     this.playerBetLockedPrice = payload.lockedPrice;
     
     if (this.playerBetSide && this.playerBetAmount) {
-      this.playerBetDetailsText.setText(`${this.playerBetSide} ${this.playerBetAmount.toFixed(2)} USDT`);
+      const sideLabel =
+        this.playerBetSide === 'UP'
+          ? t(this.language, 'hilo.up')
+          : t(this.language, 'hilo.down');
+      this.playerBetDetailsText.setText(`${sideLabel} ${this.playerBetAmount.toFixed(2)} USDT`);
       this.playerBetCard.setAlpha(1);
       this.comparisonLine.setVisible(true);
     }
@@ -638,22 +681,11 @@ export class HiLoScene extends Phaser.Scene {
     }
   }
 
-  handleRoundResult(
-    payload: RoundResultPayload,
-    digitSelections: Array<{
-      digitType: DigitBetType;
-      selection: string | null;
-      roundId?: number;
-    }> = [],
-  ) {
+  handleRoundResult(payload: RoundResultPayload) {
     if (!this.round || this.round.id !== payload.roundId) return;
 
-    this.playerDigitSelections = digitSelections
-      .filter((item) => item.roundId === undefined || item.roundId === payload.roundId)
-      .map((item) => ({
-        digitType: item.digitType,
-        selection: item.selection ?? null,
-      }));
+    // Client does NOT decide winners. We wait for server-settled results (round:user-settlement)
+    this.playerDigitSelections = [];
     
     this.round = {
       ...this.round,
@@ -662,29 +694,8 @@ export class HiLoScene extends Phaser.Scene {
       winningSide: payload.winningSide
     };
 
-    const hasHiLoBet = Boolean(this.playerBetSide);
-    const hasDigitBet = this.playerDigitSelections.length > 0;
-    const hasAnyBet = hasHiLoBet || hasDigitBet;
-    const hasHiLoWin = Boolean(
-      this.playerBetSide &&
-        payload.winningSide &&
-        this.playerBetSide === payload.winningSide,
-    );
-    const hasDigitWin = Boolean(this.buildPlayerWinningDigitBets(payload));
-    const hiLoPush = hasHiLoBet && !payload.winningSide;
-
-    let outcome: 'WIN' | 'LOSE' | 'PUSH' | 'SKIPPED' = 'SKIPPED';
-    if (!hasAnyBet) {
-      outcome = 'SKIPPED';
-    } else if (hasHiLoWin || hasDigitWin) {
-      outcome = 'WIN';
-    } else if (hiLoPush && !hasDigitBet) {
-      outcome = 'PUSH';
-    } else {
-      outcome = 'LOSE';
-    }
-
-    this.showResultOverlay(outcome, payload);
+    // Show a neutral overlay; outcome/payout/winning-bets are updated from server totals afterwards.
+    this.showResultOverlay('SKIPPED', payload);
   }
 
   setResultDisplayDuration(durationMs: number) {
@@ -700,148 +711,96 @@ export class HiLoScene extends Phaser.Scene {
     const net = totalPayout - totalStake;
     
     if (totalStake === 0) {
-      this.resultTitleText.setText('SKIPPED ROUND').setColor('#636e72');
-      this.resultPayoutText.setText('No Bets Placed').setColor('#b2bec3');
+      this.resultTitleText.setText(t(this.language, 'scene.skippedRound')).setColor('#636e72');
+      this.resultPayoutText.setText(t(this.language, 'scene.noBetsPlaced')).setColor('#b2bec3');
     } else {
       const sign = net >= 0 ? '+' : '-';
-      this.resultPayoutText.setText(`PAYOUT: ${totalPayout.toFixed(2)} (${sign}${Math.abs(net).toFixed(2)})`);
+      this.resultPayoutText.setText(
+        `${t(this.language, 'scene.payout')}: ${totalPayout.toFixed(2)} (${sign}${Math.abs(net).toFixed(2)})`,
+      );
       this.resultPayoutText.setColor(net >= 0 ? '#00b894' : '#d63031');
     }
   }
 
-  private buildDigitWinnerSummary(payload: RoundResultPayload) {
-    const digitResult = payload.digitResult;
-    if (!digitResult || !/^\d{3}$/.test(digitResult)) {
-      return null;
-    }
+  setRoundOutcome(roundId: number, outcome: 'WIN' | 'LOSE' | 'PUSH' | 'SKIPPED') {
+    if (!this.resultOverlay || this.resultRoundId !== roundId || !this.resultTitleText) return;
 
-    const digits = digitResult.split('');
-    const sum =
-      typeof payload.digitSum === 'number'
-        ? payload.digitSum
-        : digits.reduce((total, digit) => total + Number(digit), 0);
-    const isTriple = digits[0] === digits[1] && digits[1] === digits[2];
-    const counts: Record<string, number> = {};
-    digits.forEach((digit) => {
-      counts[digit] = (counts[digit] ?? 0) + 1;
-    });
-    const uniqueDigits = Array.from(new Set(digits));
-
-    const winners: string[] = [];
-    if (isTriple) {
-      winners.push('ANY TRIPLE');
-      winners.push(`TRIPLE ${digitResult}`);
-      winners.push(`DOUBLE ${digits[0]}${digits[0]}`);
+    let titleStr = t(this.language, 'scene.roundResult');
+    let color = '#b2bec3';
+    if (outcome === 'WIN') {
+      titleStr = t(this.language, 'scene.youWin');
+      color = '#00b894';
+    } else if (outcome === 'PUSH') {
+      titleStr = t(this.language, 'scene.push');
+      color = '#b2bec3';
+    } else if (outcome === 'SKIPPED') {
+      titleStr = t(this.language, 'scene.skippedRound');
+      color = '#636e72';
     } else {
-      winners.push(sum <= 13 ? 'SMALL' : 'BIG');
-      winners.push(sum % 2 === 0 ? 'EVEN' : 'ODD');
-      const doubleDigit = uniqueDigits.find((digit) => (counts[digit] ?? 0) >= 2);
-      if (doubleDigit) {
-        winners.push(`DOUBLE ${doubleDigit}${doubleDigit}`);
-      }
+      titleStr = t(this.language, 'scene.roundResult');
+      color = '#b2bec3';
     }
 
-    if (sum >= 4 && sum <= 23) {
-      winners.push(`SUM ${sum}`);
-    }
-
-    return `DIGITS: ${digitResult}  SUM: ${sum}\nWINNERS: ${winners.join(
-      ' • ',
-    )}\nSINGLE: ${uniqueDigits.join(', ')}`;
+    this.resultTitleText.setText(titleStr).setColor(color);
   }
 
-  private buildPlayerWinningDigitBets(payload: RoundResultPayload) {
-    if (this.playerDigitSelections.length === 0) {
-      return null;
-    }
+  setWinningBets(roundId: number, bets: Array<{ betType: string; side: string | null; digitType: string | null; selection: string | null; result: string }>) {
+    if (!this.resultOverlay || this.resultRoundId !== roundId) return;
 
-    const digitResult = payload.digitResult;
-    if (!digitResult || !/^\d{3}$/.test(digitResult)) {
-      return null;
-    }
-
-    const digits = digitResult.split('');
-    const sum =
-      typeof payload.digitSum === 'number'
-        ? payload.digitSum
-        : digits.reduce((total, digit) => total + Number(digit), 0);
-    const isTriple = digits[0] === digits[1] && digits[1] === digits[2];
-    const counts: Record<string, number> = {};
-    digits.forEach((digit) => {
-      counts[digit] = (counts[digit] ?? 0) + 1;
-    });
-
-    const winning: string[] = [];
-    const add = (label: string) => {
-      if (!winning.includes(label)) {
-        winning.push(label);
+    const wins = bets.filter((b) => b.result === 'WIN');
+    const labels = wins.map((b) => {
+      if (b.betType === 'HILO') {
+        return b.side ? `HILO ${b.side}` : 'HILO';
       }
-    };
-
-    this.playerDigitSelections.forEach((bet) => {
-      const selection = bet.selection ?? '';
-      switch (bet.digitType) {
-        case 'SMALL':
-          if (!isTriple && sum >= 0 && sum <= 13) {
-            add('SMALL');
-          }
-          break;
-        case 'BIG':
-          if (!isTriple && sum >= 14 && sum <= 27) {
-            add('BIG');
-          }
-          break;
-        case 'ODD':
-          if (!isTriple && sum % 2 === 1) {
-            add('ODD');
-          }
-          break;
-        case 'EVEN':
-          if (!isTriple && sum % 2 === 0) {
-            add('EVEN');
-          }
-          break;
+      if (!b.digitType) return 'DIGIT';
+      const sel = b.selection ?? '';
+      switch (b.digitType) {
         case 'ANY_TRIPLE':
-          if (isTriple) {
-            add('ANY TRIPLE');
-          }
-          break;
-        case 'DOUBLE': {
-          const digit = selection[0];
-          if (digit && (counts[digit] ?? 0) >= 2) {
-            add(`DOUBLE ${digit}${digit}`);
-          }
-          break;
-        }
+          return 'ANY TRIPLE';
+        case 'SMALL':
+        case 'BIG':
+        case 'ODD':
+        case 'EVEN':
+          return b.digitType;
+        case 'SUM':
+          return `SUM ${sel}`;
+        case 'SINGLE':
+          return `SINGLE ${sel}`;
+        case 'DOUBLE':
+          return `DOUBLE ${sel}`;
         case 'TRIPLE':
-          if (isTriple && selection === digitResult) {
-            add(`TRIPLE ${digitResult}`);
-          }
-          break;
-        case 'SUM': {
-          const target = Number(selection);
-          if (Number.isFinite(target) && target === sum) {
-            add(`SUM ${sum}`);
-          }
-          break;
-        }
-        case 'SINGLE': {
-          const digit = selection[0];
-          if (digit && (counts[digit] ?? 0) >= 1) {
-            add(`SINGLE ${digit}`);
-          }
-          break;
-        }
+          return `TRIPLE ${sel}`;
         default:
-          break;
+          return `${b.digitType}${sel ? ` ${sel}` : ''}`;
       }
     });
 
-    if (winning.length === 0) {
-      return null;
+    const text = labels.length ? `YOUR WINNING BETS: ${labels.join(' • ')}` : '';
+
+    if (!this.resultPlayerWinsText) {
+      this.resultPlayerWinsText = this.add
+        .text(0, 95, text, {
+          fontFamily: 'Rajdhani',
+          fontSize: '20px',
+          color: '#00ffb2',
+          align: 'center',
+          wordWrap: { width: 440, useAdvancedWrap: true },
+        })
+        .setOrigin(0.5)
+        .setLineSpacing(6);
+      const modal = this.resultOverlay.getAt(1) as Phaser.GameObjects.Container;
+      modal.add(this.resultPlayerWinsText);
+      if (this.resultPayoutText) {
+        this.resultPayoutText.setY(text ? 130 : 110);
+      }
+      return;
     }
 
-    return `YOUR WINNING BETS: ${winning.join(' • ')}`;
+    this.resultPlayerWinsText.setText(text);
+
+    if (this.resultPayoutText) {
+      this.resultPayoutText.setY(text ? 130 : 110);
+    }
   }
 
   private showResultOverlay(outcome: 'WIN' | 'LOSE' | 'PUSH' | 'SKIPPED', payload: RoundResultPayload) {
@@ -850,19 +809,16 @@ export class HiLoScene extends Phaser.Scene {
 
     this.clearResultOverlay();
     
-    // Color Determination
-    let color = 0xb2bec3; // default/skipped/push
-    let titleStr = 'SKIPPED ROUND';
+    // Color Determination (neutral until server-settled totals arrive)
+    let color = 0xb2bec3;
+    let titleStr = t(this.language, 'scene.roundResult');
 
     if (outcome === 'WIN') {
       color = 0x00b894;
-      titleStr = 'YOU WIN!';
-    } else if (outcome === 'LOSE') {
-      color = 0xb2bec3;
-      titleStr = 'ROUND RESULT';
+      titleStr = t(this.language, 'scene.youWin');
     } else if (outcome === 'PUSH') {
       color = 0xb2bec3;
-      titleStr = 'PUSH';
+      titleStr = t(this.language, 'scene.push');
     }
 
     // Modal Card
@@ -894,17 +850,36 @@ export class HiLoScene extends Phaser.Scene {
     const locked = payload.lockedPrice?.toFixed(2) ?? '--';
     const final = payload.finalPrice?.toFixed(2) ?? '--';
     
-    const statsText = this.add.text(0, -25, `LOCKED: ${locked}\nFINAL:  ${final}`, {
+    const statsText = this.add.text(
+      0,
+      -25,
+      `${t(this.language, 'scene.lockedLabel')}: ${locked}\n${t(this.language, 'scene.finalLabel')}:  ${final}`,
+      {
       fontFamily: 'Roboto Mono',
       fontSize: '24px',
       color: '#dfe6e9',
       align: 'center'
-    }).setOrigin(0.5).setLineSpacing(10);
+      },
+    ).setOrigin(0.5).setLineSpacing(10);
 
-    const winnersSummary = this.buildDigitWinnerSummary(payload);
-    if (winnersSummary) {
+    const digitResult =
+      payload.digitResult && /^\d{3}$/.test(payload.digitResult)
+        ? payload.digitResult
+        : null;
+    const digitSum = typeof payload.digitSum === 'number' ? payload.digitSum : null;
+    const extraLines: string[] = [];
+    if (digitResult) {
+      extraLines.push(
+        `DIGITS: ${digitResult}${digitSum !== null ? `  SUM: ${digitSum}` : ''}`,
+      );
+    }
+    if (payload.winningSide) {
+      extraLines.push(`HILO WINNER: ${payload.winningSide}`);
+    }
+
+    if (extraLines.length) {
       this.resultWinnersText = this.add
-        .text(0, 50, winnersSummary, {
+        .text(0, 50, extraLines.join('\n'), {
           fontFamily: 'Rajdhani',
           fontSize: '16px',
           color: '#dfe6e9',
@@ -915,24 +890,10 @@ export class HiLoScene extends Phaser.Scene {
         .setLineSpacing(6);
     }
 
-    const playerWins = this.buildPlayerWinningDigitBets(payload);
-    if (playerWins) {
-      this.resultPlayerWinsText = this.add
-        .text(0, 95, playerWins, {
-          fontFamily: 'Rajdhani',
-          fontSize: '20px',
-          color: '#00ffb2',
-          align: 'center',
-          wordWrap: { width: 440, useAdvancedWrap: true },
-        })
-        .setOrigin(0.5)
-        .setLineSpacing(6);
-    }
-
-    const payoutY = this.resultPlayerWinsText ? 130 : 110;
+    const payoutY = 110;
 
     // Payout Placeholder
-    this.resultPayoutText = this.add.text(0, payoutY, 'CALCULATING...', {
+    this.resultPayoutText = this.add.text(0, payoutY, t(this.language, 'scene.calculating'), {
       fontFamily: 'Rajdhani',
       fontSize: '32px',
       color: '#fdcb6e'

@@ -2,6 +2,7 @@ import axios from 'axios';
 import type {
   AuthResponse,
   BetHistoryItem,
+  BetHistoryPageResponse,
   GameConfig,
   RoundHistoryItem,
   WalletResponse,
@@ -35,6 +36,20 @@ export const api = {
       Object.assign(authHeader(token), {
         params: { limit },
       }),
+    ),
+
+  fetchPlayerHistoryPaged: (token: string, page: number, limit?: number) =>
+    client.get<BetHistoryPageResponse>(
+      '/history/bets/paged',
+      Object.assign(authHeader(token), {
+        params: { page, limit },
+      }),
+    ),
+
+  fetchPlayerBetsForRound: (token: string, roundId: number) =>
+    client.get<BetHistoryItem[]>(
+      `/history/bets/round/${roundId}`,
+      authHeader(token),
     ),
 
   fetchRoundHistory: (limit?: number) =>

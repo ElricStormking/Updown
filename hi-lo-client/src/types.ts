@@ -114,6 +114,13 @@ export interface BetHistoryItem {
   digitSum: number | null;
 }
 
+export interface BetHistoryPageResponse {
+  page: number;
+  limit: number;
+  hasNext: boolean;
+  items: BetHistoryItem[];
+}
+
 export interface RoundHistoryItem {
   id: number;
   status: 'BETTING' | 'RESULT_PENDING' | 'COMPLETED' | 'PENDING';
@@ -127,4 +134,14 @@ export interface RoundHistoryItem {
   digitSum: number | null;
   oddsUp: number;
   oddsDown: number;
+}
+
+export interface RoundUserSettlementPayload {
+  roundId: number;
+  totals: {
+    stake: number;
+    payout: number;
+    net: number;
+  };
+  bets: BetHistoryItem[];
 }

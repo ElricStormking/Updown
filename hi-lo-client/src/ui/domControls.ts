@@ -1,5 +1,8 @@
 import { state, subscribe, updateState } from '../state/gameState';
 import type { BetSide, DigitBetType } from '../types';
+import { ensureCandlestickTradingViewWidget } from './candlestickTradingView';
+import { LANGUAGES, setLanguage, t, type LanguageCode } from '../i18n';
+import { api } from '../services/api';
 
 interface ControlHandlers {
   onLogin(credentials: { account: string; password: string }): Promise<void>;
@@ -30,6 +33,39 @@ let appShellEl: HTMLDivElement | null = null;
 let authStatusEl: HTMLElement | null = null;
 let tokenOptionsEl: HTMLDivElement | null = null;
 let tokenOptionButtons: HTMLButtonElement[] = [];
+let tokenBarMenuBtn: HTMLButtonElement | null = null;
+let hiLoTrendEl: HTMLDivElement | null = null;
+let hiLoTrendUpEl: HTMLSpanElement | null = null;
+let hiLoTrendDownEl: HTMLSpanElement | null = null;
+let statsModalBackdropEl: HTMLDivElement | null = null;
+let statsModalCloseBtn: HTMLButtonElement | null = null;
+let statsLast9El: HTMLDivElement | null = null;
+let statsLast16El: HTMLDivElement | null = null;
+let statsSmallLabelEl: HTMLSpanElement | null = null;
+let statsTripleLabelEl: HTMLSpanElement | null = null;
+let statsBigLabelEl: HTMLSpanElement | null = null;
+let statsSbtSmallEl: HTMLSpanElement | null = null;
+let statsSbtTripleEl: HTMLSpanElement | null = null;
+let statsSbtBigEl: HTMLSpanElement | null = null;
+let menuModalBackdropEl: HTMLDivElement | null = null;
+let menuModalCloseBtn: HTMLButtonElement | null = null;
+let menuOpenStatsBtn: HTMLButtonElement | null = null;
+let menuOpenSettingsBtn: HTMLButtonElement | null = null;
+let menuOpenChartBtn: HTMLButtonElement | null = null;
+let menuOpenBettingHistoryBtn: HTMLButtonElement | null = null;
+let settingsModalBackdropEl: HTMLDivElement | null = null;
+let settingsModalCloseBtn: HTMLButtonElement | null = null;
+let settingsMusicToggleEl: HTMLInputElement | null = null;
+let settingsSfxToggleEl: HTMLInputElement | null = null;
+let settingsLanguageSelectEl: HTMLSelectElement | null = null;
+let chartModalBackdropEl: HTMLDivElement | null = null;
+let chartModalCloseBtn: HTMLButtonElement | null = null;
+let bettingHistoryModalBackdropEl: HTMLDivElement | null = null;
+let bettingHistoryModalCloseBtn: HTMLButtonElement | null = null;
+let bettingHistoryPrevBtn: HTMLButtonElement | null = null;
+let bettingHistoryNextBtn: HTMLButtonElement | null = null;
+let bettingHistoryPageLabelEl: HTMLSpanElement | null = null;
+let bettingHistoryListEl: HTMLDivElement | null = null;
 
 const tokenStackByKey = new Map<string, HTMLElement>();
 const TOKEN_VALUES = [10, 50, 100, 150, 200, 300, 500];
@@ -68,13 +104,13 @@ export const initControls = (handlers: ControlHandlers) => {
       <div class="auth-card">
         <div class="auth-brand">
           <span class="auth-chip">Hi-Lo BTC</span>
-          <h1>Guess The Digits</h1>
-          <p>Predict the last 3 digits and ride the next round.</p>
+          <h1 data-i18n="auth.title"></h1>
+          <p data-i18n="auth.subtitle"></p>
         </div>
         <form id="auth-form" class="auth-form">
-          <label>Account <input type="text" name="account" required /></label>
-          <label>Password <input type="password" name="password" required /></label>
-          <button type="submit">Enter Arena</button>
+          <label><span data-i18n="auth.account"></span> <input type="text" name="account" required /></label>
+          <label><span data-i18n="auth.password"></span> <input type="password" name="password" required /></label>
+          <button type="submit"><span data-i18n="auth.enter"></span></button>
         </form>
         <div class="status auth-status" id="auth-status">
           Enter demo credentials to start.
@@ -95,7 +131,18 @@ export const initControls = (handlers: ControlHandlers) => {
           <div class="status" id="status-text">Login to start betting.</div>
           <div class="bet-controls">
             <div class="token-bar">
-              <div class="token-bar-label">Token Bar</div>
+              <div class="token-bar-header">
+                <div class="token-bar-label" data-i18n="ui.tokenBar"></div>
+                <button
+                  type="button"
+                  class="token-bar-menu"
+                  id="token-bar-menu"
+                  aria-label="Menu"
+                  title="Menu"
+                >
+                  <span aria-hidden="true">⚙</span>
+                </button>
+              </div>
               <div class="token-options" id="token-options">
                 ${TOKEN_VALUES.map(
                   (value) => `
@@ -106,20 +153,25 @@ export const initControls = (handlers: ControlHandlers) => {
                 ).join('')}
               </div>
             </div>
+            <div class="hilo-trend" id="hilo-trend" style="--up-pct: 50%;">
+              <span class="hilo-trend-label hilo-trend-label--up" id="hilo-trend-up">--% Up</span>
+              <div class="hilo-trend-track" aria-label="Last 10 rounds up/down percentage"></div>
+              <span class="hilo-trend-label hilo-trend-label--down" id="hilo-trend-down">--% Down</span>
+            </div>
             <div class="side-buttons">
               <button type="button" data-side="UP" data-bet-key="HILO|UP" class="side bet-space active">
-                <span class="bet-label">UP</span>
+                <span class="bet-label" data-i18n="hilo.up"></span>
                 <span class="token-stack"></span>
               </button>
               <button type="button" data-side="DOWN" data-bet-key="HILO|DOWN" class="side bet-space">
-                <span class="bet-label">DOWN</span>
+                <span class="bet-label" data-i18n="hilo.down"></span>
                 <span class="token-stack"></span>
               </button>
             </div>
-            <div class="bet-hint">Tap a bet space to place a token.</div>
+            <div class="bet-hint" data-i18n="ui.tapToPlace"></div>
           </div>
           <section class="digit-bets">
-            <h2>Digit Bets</h2>
+            <h2 data-i18n="ui.digitBets"></h2>
             <div class="digit-result" id="digit-result">
               <span class="digit-result-label">Result</span>
               <div class="digit-result-digits">
@@ -138,28 +190,176 @@ export const initControls = (handlers: ControlHandlers) => {
             </div>
           </section>
           <section class="round-summary">
-            <h2>Round Summary</h2>
+            <h2 data-i18n="ui.roundSummary"></h2>
             <div class="round-summary-meta" id="round-summary-meta">
               Waiting for the first round result...
             </div>
             <div class="round-summary-section">
-              <div class="round-summary-heading">Hi-Lo</div>
+              <div class="round-summary-heading" data-i18n="ui.hilo"></div>
               <div class="round-summary-rows" id="round-summary-hilo"></div>
             </div>
             <div class="round-summary-section">
-              <div class="round-summary-heading">Digit winners</div>
+              <div class="round-summary-heading" data-i18n="ui.digitWinners"></div>
               <div class="round-summary-chips" id="round-summary-digits"></div>
             </div>
             <div class="round-summary-total" id="round-summary-total"></div>
           </section>
           <section class="history-section history-section--bets">
-            <h2>My Bets</h2>
+            <h2 data-i18n="ui.myBets"></h2>
             <ul id="bet-history"></ul>
           </section>
           <section class="history-section history-section--rounds">
-            <h2>Recent Rounds</h2>
+            <h2 data-i18n="ui.recentRounds"></h2>
             <ul id="round-history"></ul>
           </section>
+        </div>
+      </div>
+    </div>
+    <div class="stats-modal-backdrop" id="stats-modal-backdrop" aria-hidden="true">
+      <div class="stats-modal" role="dialog" aria-modal="true" aria-label="Statistics">
+        <div class="stats-modal-header">
+          <div class="stats-modal-title" data-i18n="stats.title"></div>
+          <button
+            type="button"
+            class="stats-modal-close"
+            id="stats-modal-close"
+            aria-label="Close statistics"
+            title="Close"
+          >
+            ✕
+          </button>
+        </div>
+        <div class="stats-modal-body">
+          <div class="stats-section">
+            <div class="stats-section-title" data-i18n="stats.last9"></div>
+            <div class="stats-last9" id="stats-last9"></div>
+          </div>
+          <div class="stats-section">
+            <div class="stats-section-title" data-i18n="stats.last16"></div>
+            <div class="stats-last16" id="stats-last16"></div>
+          </div>
+          <div class="stats-section">
+            <div class="stats-section-title" data-i18n="stats.dist"></div>
+            <div class="stats-sbt-row">
+              <span class="stats-sbt-label stats-sbt-label--small" id="stats-small-label">SMALL --%</span>
+              <span class="stats-sbt-label stats-sbt-label--triple" id="stats-triple-label">TRIPLE --%</span>
+              <span class="stats-sbt-label stats-sbt-label--big" id="stats-big-label">BIG --%</span>
+            </div>
+            <div class="stats-sbt-bar" aria-label="Small/Triple/Big percentage bar">
+              <span class="stats-sbt-seg stats-sbt-seg--small" id="stats-sbt-small"></span>
+              <span class="stats-sbt-seg stats-sbt-seg--triple" id="stats-sbt-triple"></span>
+              <span class="stats-sbt-seg stats-sbt-seg--big" id="stats-sbt-big"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="menu-modal-backdrop" id="menu-modal-backdrop" aria-hidden="true">
+      <div class="menu-modal" role="dialog" aria-modal="true" aria-label="Menu">
+        <div class="menu-modal-header">
+          <div class="menu-modal-title" data-i18n="menu.title"></div>
+          <button
+            type="button"
+            class="menu-modal-close"
+            id="menu-modal-close"
+            aria-label="Close menu"
+            title="Close"
+          >
+            ✕
+          </button>
+        </div>
+        <div class="menu-modal-body">
+          <button type="button" class="menu-modal-item" id="menu-open-statistics">
+            <span data-i18n="menu.statistics"></span>
+          </button>
+          <button type="button" class="menu-modal-item" id="menu-open-settings">
+            <span data-i18n="menu.settings"></span>
+          </button>
+          <button type="button" class="menu-modal-item" id="menu-open-chart">
+            <span data-i18n="menu.chart"></span>
+          </button>
+          <button type="button" class="menu-modal-item" id="menu-open-betting-history">
+            <span data-i18n="menu.bettingHistory"></span>
+          </button>
+        </div>
+      </div>
+    </div>
+    <div class="settings-modal-backdrop" id="settings-modal-backdrop" aria-hidden="true">
+      <div class="settings-modal" role="dialog" aria-modal="true" aria-label="Settings">
+        <div class="settings-modal-header">
+          <div class="settings-modal-title" data-i18n="settings.title"></div>
+          <button
+            type="button"
+            class="settings-modal-close"
+            id="settings-modal-close"
+            aria-label="Close settings"
+            title="Close"
+          >
+            ✕
+          </button>
+        </div>
+        <div class="settings-modal-body">
+          <label class="settings-row">
+            <span class="settings-label" data-i18n="settings.music"></span>
+            <input type="checkbox" class="settings-toggle" id="settings-music-toggle" checked />
+          </label>
+          <label class="settings-row">
+            <span class="settings-label" data-i18n="settings.sounds"></span>
+            <input type="checkbox" class="settings-toggle" id="settings-sfx-toggle" checked />
+          </label>
+          <label class="settings-row">
+            <span class="settings-label" data-i18n="settings.language"></span>
+            <select class="settings-select" id="settings-language-select">
+              ${LANGUAGES.map((l) => `<option value="${l.code}">${l.label}</option>`).join('')}
+            </select>
+          </label>
+        </div>
+      </div>
+    </div>
+    <div class="chart-modal-backdrop" id="chart-modal-backdrop" aria-hidden="true">
+      <div class="chart-modal" role="dialog" aria-modal="true" aria-label="Chart">
+        <div class="chart-modal-header">
+          <div class="chart-modal-title" data-i18n="chart.title"></div>
+          <button
+            type="button"
+            class="chart-modal-close"
+            id="chart-modal-close"
+            aria-label="Close chart"
+            title="Close"
+          >
+            ✕
+          </button>
+        </div>
+        <div class="chart-modal-body">
+          <div class="chart-tv" id="chart-tv"></div>
+        </div>
+      </div>
+    </div>
+    <div class="betting-history-modal-backdrop" id="betting-history-modal-backdrop" aria-hidden="true">
+      <div class="betting-history-modal" role="dialog" aria-modal="true" aria-label="Betting History">
+        <div class="betting-history-modal-header">
+          <div class="betting-history-modal-title" data-i18n="history.title"></div>
+          <button
+            type="button"
+            class="betting-history-modal-close"
+            id="betting-history-modal-close"
+            aria-label="Close betting history"
+            title="Close"
+          >
+            ✕
+          </button>
+        </div>
+        <div class="betting-history-modal-body">
+          <div class="betting-history-list" id="betting-history-list"></div>
+          <div class="betting-history-pager">
+            <button type="button" class="betting-history-page-btn" id="betting-history-prev" aria-label="Prev page">
+              ◀
+            </button>
+            <span class="betting-history-page-label" id="betting-history-page-label">1</span>
+            <button type="button" class="betting-history-page-btn" id="betting-history-next" aria-label="Next page">
+              ▶
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -176,6 +376,39 @@ export const initControls = (handlers: ControlHandlers) => {
   upBtn = root.querySelector('button[data-side="UP"]');
   downBtn = root.querySelector('button[data-side="DOWN"]');
   tokenOptionsEl = root.querySelector('#token-options');
+  tokenBarMenuBtn = root.querySelector('#token-bar-menu');
+  hiLoTrendEl = root.querySelector('#hilo-trend');
+  hiLoTrendUpEl = root.querySelector('#hilo-trend-up');
+  hiLoTrendDownEl = root.querySelector('#hilo-trend-down');
+  statsModalBackdropEl = root.querySelector('#stats-modal-backdrop');
+  statsModalCloseBtn = root.querySelector('#stats-modal-close');
+  statsLast9El = root.querySelector('#stats-last9');
+  statsLast16El = root.querySelector('#stats-last16');
+  statsSmallLabelEl = root.querySelector('#stats-small-label');
+  statsTripleLabelEl = root.querySelector('#stats-triple-label');
+  statsBigLabelEl = root.querySelector('#stats-big-label');
+  statsSbtSmallEl = root.querySelector('#stats-sbt-small');
+  statsSbtTripleEl = root.querySelector('#stats-sbt-triple');
+  statsSbtBigEl = root.querySelector('#stats-sbt-big');
+  menuModalBackdropEl = root.querySelector('#menu-modal-backdrop');
+  menuModalCloseBtn = root.querySelector('#menu-modal-close');
+  menuOpenStatsBtn = root.querySelector('#menu-open-statistics');
+  menuOpenSettingsBtn = root.querySelector('#menu-open-settings');
+  menuOpenChartBtn = root.querySelector('#menu-open-chart');
+  menuOpenBettingHistoryBtn = root.querySelector('#menu-open-betting-history');
+  settingsModalBackdropEl = root.querySelector('#settings-modal-backdrop');
+  settingsModalCloseBtn = root.querySelector('#settings-modal-close');
+  settingsMusicToggleEl = root.querySelector('#settings-music-toggle');
+  settingsSfxToggleEl = root.querySelector('#settings-sfx-toggle');
+  settingsLanguageSelectEl = root.querySelector('#settings-language-select');
+  chartModalBackdropEl = root.querySelector('#chart-modal-backdrop');
+  chartModalCloseBtn = root.querySelector('#chart-modal-close');
+  bettingHistoryModalBackdropEl = root.querySelector('#betting-history-modal-backdrop');
+  bettingHistoryModalCloseBtn = root.querySelector('#betting-history-modal-close');
+  bettingHistoryPrevBtn = root.querySelector('#betting-history-prev');
+  bettingHistoryNextBtn = root.querySelector('#betting-history-next');
+  bettingHistoryPageLabelEl = root.querySelector('#betting-history-page-label');
+  bettingHistoryListEl = root.querySelector('#betting-history-list');
   digitTableEl = root.querySelector('#digit-bet-table');
   digitResultEl = root.querySelector('#digit-result');
   digitResultDigits = Array.from(
@@ -217,6 +450,256 @@ export const initControls = (handlers: ControlHandlers) => {
       updateState({ selectedTokenValue: value });
     });
   });
+
+  const setStatsModalOpen = (open: boolean) => {
+    if (!statsModalBackdropEl) return;
+    statsModalBackdropEl.classList.toggle('is-open', open);
+    statsModalBackdropEl.setAttribute('aria-hidden', open ? 'false' : 'true');
+  };
+
+  const setMenuModalOpen = (open: boolean) => {
+    if (!menuModalBackdropEl) return;
+    menuModalBackdropEl.classList.toggle('is-open', open);
+    menuModalBackdropEl.setAttribute('aria-hidden', open ? 'false' : 'true');
+  };
+
+  const setSettingsModalOpen = (open: boolean) => {
+    if (!settingsModalBackdropEl) return;
+    settingsModalBackdropEl.classList.toggle('is-open', open);
+    settingsModalBackdropEl.setAttribute('aria-hidden', open ? 'false' : 'true');
+  };
+
+  const setChartModalOpen = (open: boolean) => {
+    if (!chartModalBackdropEl) return;
+    chartModalBackdropEl.classList.toggle('is-open', open);
+    chartModalBackdropEl.setAttribute('aria-hidden', open ? 'false' : 'true');
+  };
+
+  const setBettingHistoryModalOpen = (open: boolean) => {
+    if (!bettingHistoryModalBackdropEl) return;
+    bettingHistoryModalBackdropEl.classList.toggle('is-open', open);
+    bettingHistoryModalBackdropEl.setAttribute('aria-hidden', open ? 'false' : 'true');
+  };
+
+  const loadBettingHistoryPage = async (page: number) => {
+    if (!state.token) {
+      setStatus('Login before viewing history', true);
+      return;
+    }
+    const res = await api.fetchPlayerHistoryPaged(
+      state.token,
+      page,
+      state.betHistoryPageSize,
+    );
+    updateState({
+      betHistoryPage: res.data.page,
+      betHistoryPageHasNext: res.data.hasNext,
+      betHistoryPageItems: res.data.items,
+    });
+  };
+
+  const toggleMenuModal = () => {
+    if (!menuModalBackdropEl) return;
+    setMenuModalOpen(!menuModalBackdropEl.classList.contains('is-open'));
+  };
+
+  type AudioSettings = { musicEnabled: boolean; sfxEnabled: boolean };
+  const AUDIO_SETTINGS_KEY = 'audioSettings';
+  const loadAudioSettings = (): AudioSettings => {
+    if (typeof window === 'undefined') return { musicEnabled: true, sfxEnabled: true };
+    try {
+      const raw = window.localStorage.getItem(AUDIO_SETTINGS_KEY);
+      if (!raw) return { musicEnabled: true, sfxEnabled: true };
+      const parsed = JSON.parse(raw) as Partial<AudioSettings>;
+      return {
+        musicEnabled: parsed.musicEnabled !== false,
+        sfxEnabled: parsed.sfxEnabled !== false,
+      };
+    } catch {
+      return { musicEnabled: true, sfxEnabled: true };
+    }
+  };
+
+  const saveAudioSettings = (next: AudioSettings) => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(AUDIO_SETTINGS_KEY, JSON.stringify(next));
+    window.dispatchEvent(
+      new CustomEvent('app:audio-settings', { detail: next }),
+    );
+  };
+
+  const syncAudioTogglesFromStorage = () => {
+    const current = loadAudioSettings();
+    if (settingsMusicToggleEl) settingsMusicToggleEl.checked = current.musicEnabled;
+    if (settingsSfxToggleEl) settingsSfxToggleEl.checked = current.sfxEnabled;
+  };
+
+  const syncLanguageSelectFromState = () => {
+    if (settingsLanguageSelectEl) {
+      settingsLanguageSelectEl.value = state.language;
+    }
+  };
+
+  tokenBarMenuBtn?.addEventListener('click', () => {
+    toggleMenuModal();
+  });
+
+  // Menu modal wiring
+  menuModalCloseBtn?.addEventListener('click', () => setMenuModalOpen(false));
+  menuModalBackdropEl?.addEventListener('click', (event) => {
+    if (event.target === menuModalBackdropEl) {
+      setMenuModalOpen(false);
+    }
+  });
+  menuOpenStatsBtn?.addEventListener('click', () => {
+    setMenuModalOpen(false);
+    setStatsModalOpen(true);
+  });
+  menuOpenSettingsBtn?.addEventListener('click', () => {
+    setMenuModalOpen(false);
+    syncAudioTogglesFromStorage();
+    syncLanguageSelectFromState();
+    setSettingsModalOpen(true);
+  });
+  menuOpenChartBtn?.addEventListener('click', () => {
+    setMenuModalOpen(false);
+    setChartModalOpen(true);
+
+    // Lazy-load TradingView widget only when Chart is opened.
+    setTimeout(() => {
+      void ensureCandlestickTradingViewWidget('chart-tv').catch((error: unknown) =>
+        console.error('TradingView chart failed to init', error),
+      );
+    }, 0);
+  });
+  menuOpenBettingHistoryBtn?.addEventListener('click', async () => {
+    setMenuModalOpen(false);
+    setBettingHistoryModalOpen(true);
+    try {
+      await loadBettingHistoryPage(0);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'Failed to load history', true);
+    }
+  });
+
+  // Stats modal wiring
+  statsModalCloseBtn?.addEventListener('click', () => setStatsModalOpen(false));
+  statsModalBackdropEl?.addEventListener('click', (event) => {
+    if (event.target === statsModalBackdropEl) {
+      setStatsModalOpen(false);
+    }
+  });
+
+  // Settings modal wiring
+  settingsModalCloseBtn?.addEventListener('click', () => setSettingsModalOpen(false));
+  settingsModalBackdropEl?.addEventListener('click', (event) => {
+    if (event.target === settingsModalBackdropEl) {
+      setSettingsModalOpen(false);
+    }
+  });
+  syncAudioTogglesFromStorage();
+  settingsMusicToggleEl?.addEventListener('change', () => {
+    const current = loadAudioSettings();
+    saveAudioSettings({
+      ...current,
+      musicEnabled: Boolean(settingsMusicToggleEl?.checked),
+    });
+  });
+  settingsSfxToggleEl?.addEventListener('change', () => {
+    const current = loadAudioSettings();
+    saveAudioSettings({
+      ...current,
+      sfxEnabled: Boolean(settingsSfxToggleEl?.checked),
+    });
+  });
+
+  syncLanguageSelectFromState();
+  settingsLanguageSelectEl?.addEventListener('change', () => {
+    const next = (settingsLanguageSelectEl?.value ?? 'en') as LanguageCode;
+    updateState({ language: next });
+    setLanguage(next);
+  });
+
+  // Chart modal wiring
+  chartModalCloseBtn?.addEventListener('click', () => setChartModalOpen(false));
+  chartModalBackdropEl?.addEventListener('click', (event) => {
+    if (event.target === chartModalBackdropEl) {
+      setChartModalOpen(false);
+    }
+  });
+
+  // Betting history modal wiring
+  bettingHistoryModalCloseBtn?.addEventListener('click', () =>
+    setBettingHistoryModalOpen(false),
+  );
+  bettingHistoryModalBackdropEl?.addEventListener('click', (event) => {
+    if (event.target === bettingHistoryModalBackdropEl) {
+      setBettingHistoryModalOpen(false);
+    }
+  });
+  bettingHistoryPrevBtn?.addEventListener('click', async () => {
+    const nextPage = Math.max(0, state.betHistoryPage - 1);
+    if (nextPage === state.betHistoryPage) return;
+    try {
+      await loadBettingHistoryPage(nextPage);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'Failed to load history', true);
+    }
+  });
+  bettingHistoryNextBtn?.addEventListener('click', async () => {
+    if (!state.betHistoryPageHasNext) return;
+    try {
+      await loadBettingHistoryPage(state.betHistoryPage + 1);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'Failed to load history', true);
+    }
+  });
+
+  const repositionGameContainer = () => {
+    const gameContainer = root.querySelector<HTMLDivElement>('#game-container');
+    const layout = root.querySelector<HTMLDivElement>('.layout');
+    const controlPanel = root.querySelector<HTMLDivElement>('.control-panel');
+    const sideButtons = root.querySelector<HTMLDivElement>('.side-buttons');
+    const betControls = root.querySelector<HTMLDivElement>('.bet-controls');
+    const betHint = root.querySelector<HTMLDivElement>('.bet-hint');
+    if (!gameContainer || !layout || !controlPanel || !sideButtons) {
+      return;
+    }
+
+    const isMobile = typeof window !== 'undefined' && window.innerWidth <= 720;
+
+    if (isMobile) {
+      // Move the Phaser canvas BELOW the UP/DOWN buttons but ABOVE the "Tap a bet space..." hint.
+      const isAlreadyInPlace =
+        !!betControls &&
+        !!betHint &&
+        gameContainer.parentElement === betControls &&
+        betHint.parentElement === betControls &&
+        betHint.previousElementSibling === gameContainer;
+
+      if (!isAlreadyInPlace) {
+        if (betHint && betControls) {
+          betHint.insertAdjacentElement('beforebegin', gameContainer);
+        } else {
+          // Fallback: keep it below the buttons inside whatever parent we have.
+          sideButtons.insertAdjacentElement('afterend', gameContainer);
+        }
+        window.dispatchEvent(new Event('app:layout:shown'));
+      }
+      return;
+    }
+
+    // Desktop/tablet: restore original layout (game left, panel right).
+    if (gameContainer.parentElement !== layout) {
+      layout.insertBefore(gameContainer, controlPanel);
+      window.dispatchEvent(new Event('app:layout:shown'));
+    }
+  };
+
+  repositionGameContainer();
+  if (typeof window !== 'undefined') {
+    window.addEventListener('resize', repositionGameContainer);
+  }
 
   [upBtn, downBtn].forEach((button) => {
     button?.addEventListener('click', async () => {
@@ -289,6 +772,7 @@ export const setStatus = (message: string, isError = false) => {
 };
 
 const render = (nextState: typeof state) => {
+  applyI18n(nextState.language);
   if (walletEl) {
     walletEl.textContent = nextState.walletBalance.toFixed(2);
   }
@@ -307,6 +791,9 @@ const render = (nextState: typeof state) => {
   }
 
   renderHistoryLists(nextState);
+  renderHiLoTrend(nextState);
+  renderStatistics(nextState);
+  renderBettingHistory(nextState);
   refreshTokenSelection(nextState);
   refreshSideButtons();
   refreshDigitHighlights(nextState);
@@ -314,6 +801,287 @@ const render = (nextState: typeof state) => {
   renderDigitResult(nextState);
   renderRoundSummary(nextState);
   refreshAuthScreen(nextState);
+};
+
+let lastAppliedLanguage: LanguageCode | null = null;
+
+const applyI18n = (lang: LanguageCode) => {
+  if (lastAppliedLanguage === lang) return;
+  lastAppliedLanguage = lang;
+
+  document.querySelectorAll<HTMLElement>('[data-i18n]').forEach((el) => {
+    const key = el.dataset.i18n;
+    if (!key) return;
+    el.textContent = t(lang, key);
+  });
+
+  if (settingsLanguageSelectEl) {
+    settingsLanguageSelectEl.value = lang;
+  }
+
+  // Keep the ⚙ a11y label in sync
+  tokenBarMenuBtn?.setAttribute('aria-label', t(lang, 'ui.menu'));
+  tokenBarMenuBtn?.setAttribute('title', t(lang, 'ui.menu'));
+
+  // History modal title is data-i18n; but keep empty state localized too by rerender.
+};
+
+const renderHiLoTrend = (nextState: typeof state) => {
+  if (!hiLoTrendEl || !hiLoTrendUpEl || !hiLoTrendDownEl) return;
+
+  const last10 = nextState.roundHistory
+    .filter((round) => round.winningSide === 'UP' || round.winningSide === 'DOWN')
+    .slice(0, 10);
+
+  const upCount = last10.filter((r) => r.winningSide === 'UP').length;
+  const downCount = last10.filter((r) => r.winningSide === 'DOWN').length;
+  const total = upCount + downCount;
+
+  const upPct = total > 0 ? Math.round((upCount / total) * 100) : 50;
+  const downPct = 100 - upPct;
+
+  hiLoTrendEl.style.setProperty('--up-pct', `${upPct}%`);
+  hiLoTrendUpEl.textContent = `${upPct}% ${t(nextState.language, 'hilo.up')}`;
+  hiLoTrendDownEl.textContent = `${downPct}% ${t(nextState.language, 'hilo.down')}`;
+};
+
+type SumBucket = 'SMALL' | 'BIG' | 'TRIPLE';
+
+const isTripleDigits = (digitResult: string) =>
+  digitResult.length === 3 &&
+  digitResult[0] === digitResult[1] &&
+  digitResult[1] === digitResult[2];
+
+const classifySumBucket = (digitResult: string | null, digitSum: number | null): SumBucket | null => {
+  if (!digitResult) return null;
+  const trimmed = digitResult.trim();
+  if (!trimmed) return null;
+
+  if (isTripleDigits(trimmed)) return 'TRIPLE';
+
+  let sum = digitSum;
+  if (typeof sum !== 'number') {
+    const parts = trimmed.split('').map((c) => Number(c));
+    if (parts.some((n) => !Number.isFinite(n))) return null;
+    sum = parts.reduce((acc, n) => acc + n, 0);
+  }
+
+  return sum <= 13 ? 'SMALL' : 'BIG';
+};
+
+const renderStatistics = (nextState: typeof state) => {
+  if (
+    !statsLast9El ||
+    !statsLast16El ||
+    !statsSmallLabelEl ||
+    !statsTripleLabelEl ||
+    !statsBigLabelEl ||
+    !statsSbtSmallEl ||
+    !statsSbtTripleEl ||
+    !statsSbtBigEl
+  ) {
+    return;
+  }
+
+  const completed = nextState.roundHistory.filter((r) => Boolean(r.digitResult));
+
+  // 1) Last 9 rounds: sum on top, digits stacked under it.
+  const last9 = completed.slice(0, 9).reverse();
+  statsLast9El.classList.toggle('stats-last9--empty', !last9.length);
+  statsLast9El.innerHTML = last9.length
+    ? last9
+        .map((round) => {
+          const digits = (round.digitResult ?? '---').trim();
+          const d0 = digits[0] ?? '-';
+          const d1 = digits[1] ?? '-';
+          const d2 = digits[2] ?? '-';
+          const sumLabel =
+            typeof round.digitSum === 'number' ? String(round.digitSum) : '--';
+          return `
+            <div class="stats-col" title="Round #${round.id}">
+              <div class="stats-sum">${sumLabel}</div>
+              <div class="stats-digit">${d0}</div>
+              <div class="stats-digit">${d1}</div>
+              <div class="stats-digit">${d2}</div>
+            </div>
+          `;
+        })
+        .join('')
+    : '<div class="stats-empty">No digit results yet.</div>';
+
+  // 2) Last 16 rounds: Sic-bo style "road" for Small / Big / Triple.
+  const last16 = completed.slice(0, 16).reverse();
+  const seq = last16
+    .map((round) => ({
+      roundId: round.id,
+      bucket: classifySumBucket(round.digitResult, round.digitSum),
+    }))
+    .filter((item): item is { roundId: number; bucket: SumBucket } => Boolean(item.bucket));
+
+  const buckets = seq.map((s) => s.bucket);
+
+  const maxRows = 6;
+  const occupied = new Set<string>();
+  const placed = new Map<string, { bucket: SumBucket; roundId: number }>();
+  let col = -1;
+  let row = 0;
+  let prev: SumBucket | null = null;
+  let maxCol = 0;
+
+  for (const item of seq) {
+    if (prev === null || item.bucket !== prev) {
+      col += 1;
+      row = 0;
+    } else {
+      const downKey = `${row + 1},${col}`;
+      const canGoDown = row + 1 < maxRows && !occupied.has(downKey);
+      if (canGoDown) {
+        row += 1;
+      } else {
+        col += 1;
+        while (occupied.has(`${row},${col}`)) {
+          col += 1;
+        }
+      }
+    }
+
+    const key = `${row},${col}`;
+    occupied.add(key);
+    placed.set(key, { bucket: item.bucket, roundId: item.roundId });
+    prev = item.bucket;
+    if (col > maxCol) maxCol = col;
+  }
+
+  const cols = Math.max(maxCol + 1, 1);
+  if (!seq.length) {
+    statsLast16El.classList.add('stats-last16--empty');
+    statsLast16El.innerHTML = '<div class="stats-empty">No digit results yet.</div>';
+  } else {
+    statsLast16El.classList.remove('stats-last16--empty');
+    const cells: string[] = [];
+    for (let c = 0; c < cols; c += 1) {
+      for (let r = 0; r < maxRows; r += 1) {
+        const key = `${r},${c}`;
+        const item = placed.get(key);
+        if (!item) {
+          cells.push('<div class="stats-road-cell stats-road-cell--empty"></div>');
+          continue;
+        }
+        const letter =
+          item.bucket === 'SMALL' ? 'S' : item.bucket === 'BIG' ? 'B' : 'T';
+        const cls =
+          item.bucket === 'SMALL'
+            ? 'stats-bead--small'
+            : item.bucket === 'BIG'
+              ? 'stats-bead--big'
+              : 'stats-bead--triple';
+        cells.push(`
+          <div class="stats-road-cell" title="Round #${item.roundId}">
+            <div class="stats-bead ${cls}">${letter}</div>
+          </div>
+        `);
+      }
+    }
+    statsLast16El.innerHTML = cells.join('');
+  }
+
+  // 3) Percent bar from last 16 buckets.
+  const total = buckets.length;
+  const small = buckets.filter((b) => b === 'SMALL').length;
+  const big = buckets.filter((b) => b === 'BIG').length;
+  const triple = buckets.filter((b) => b === 'TRIPLE').length;
+
+  const pct = (n: number) => (total > 0 ? Math.round((n / total) * 100) : 0);
+  const smallPct = pct(small);
+  const triplePct = pct(triple);
+  const bigPct = Math.max(0, 100 - smallPct - triplePct); // keep sum at 100
+
+  statsSmallLabelEl.textContent = `${t(nextState.language, 'stats.small')} ${smallPct}%`;
+  statsTripleLabelEl.textContent = `${t(nextState.language, 'stats.triple')} ${triplePct}%`;
+  statsBigLabelEl.textContent = `${t(nextState.language, 'stats.big')} ${bigPct}%`;
+
+  statsSbtSmallEl.style.width = `${smallPct}%`;
+  statsSbtTripleEl.style.width = `${triplePct}%`;
+  statsSbtBigEl.style.width = `${bigPct}%`;
+};
+
+const getLocaleForLang = (lang: LanguageCode) => {
+  switch (lang) {
+    case 'zh':
+      return 'zh-CN';
+    case 'ms':
+      return 'ms-MY';
+    default:
+      return 'en-US';
+  }
+};
+
+const formatBetLabel = (nextState: typeof state, bet: { betType: string; side: string | null; digitType: string | null; selection: string | null }) => {
+  if (bet.betType === 'HILO') {
+    const side = bet.side === 'UP' ? t(nextState.language, 'hilo.up') : t(nextState.language, 'hilo.down');
+    return `HILO ${side}`;
+  }
+  if (bet.betType === 'DIGIT') {
+    const type = bet.digitType ?? 'DIGIT';
+    const sel = bet.selection ? ` ${bet.selection}` : '';
+    return `${type}${sel}`;
+  }
+  return bet.betType;
+};
+
+const renderBettingHistory = (nextState: typeof state) => {
+  if (
+    !bettingHistoryListEl ||
+    !bettingHistoryPrevBtn ||
+    !bettingHistoryNextBtn ||
+    !bettingHistoryPageLabelEl
+  ) {
+    return;
+  }
+
+  bettingHistoryPrevBtn.disabled = nextState.betHistoryPage <= 0;
+  bettingHistoryNextBtn.disabled = !nextState.betHistoryPageHasNext;
+  bettingHistoryPageLabelEl.textContent = String(nextState.betHistoryPage + 1);
+
+  const locale = getLocaleForLang(nextState.language);
+  const rows = nextState.betHistoryPageItems;
+  if (!rows.length) {
+    bettingHistoryListEl.innerHTML = `<div class="betting-history-empty">No history yet.</div>`;
+    return;
+  }
+
+  bettingHistoryListEl.innerHTML = rows
+    .map((bet) => {
+      const date = new Date(bet.createdAt).toLocaleString(locale, {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+      const label = formatBetLabel(nextState, bet);
+      const amount = bet.amount.toFixed(2);
+      const payout = bet.payout.toFixed(2);
+      const result = bet.result;
+
+      return `
+        <div class="betting-history-row">
+          <div class="betting-history-top">
+            <span class="betting-history-round">#${bet.roundId}</span>
+            <span class="betting-history-date">${date}</span>
+          </div>
+          <div class="betting-history-mid">
+            <span class="betting-history-type">${label}</span>
+            <span class="betting-history-result betting-history-result--${result.toLowerCase()}">${result}</span>
+          </div>
+          <div class="betting-history-bottom">
+            <span class="betting-history-amount">Bet: ${amount}</span>
+            <span class="betting-history-payout">Payout: ${payout}</span>
+          </div>
+        </div>
+      `;
+    })
+    .join('');
 };
 
 const renderRoundSummary = (nextState: typeof state) => {
@@ -349,7 +1117,10 @@ const renderRoundSummary = (nextState: typeof state) => {
   const sumLabel = typeof digitSum === 'number' ? `Sum: ${digitSum}` : 'Sum: --';
   roundSummaryMetaEl.textContent = `Round #${roundId} • ${winnerLabel} • ${digitLabel} • ${sumLabel}`;
 
-  const betsForRound = nextState.betHistory.filter((bet) => bet.roundId === roundId);
+  const betsForRound =
+    nextState.lastRoundBets.length && nextState.lastRoundBets[0]?.roundId === roundId
+      ? nextState.lastRoundBets
+      : nextState.betHistory.filter((bet) => bet.roundId === roundId);
   const hiloBets = betsForRound.filter((bet) => bet.betType === 'HILO');
 
   const sum = (items: number[]) => items.reduce((acc, value) => acc + value, 0);
@@ -387,17 +1158,41 @@ const renderRoundSummary = (nextState: typeof state) => {
     renderSideRow('UP', upStake, upPayout, oddsUp) +
     renderSideRow('DOWN', downStake, downPayout, oddsDown);
 
-  const digitWinners = getWinningDigitSummaries(
-    digitResult,
-    nextState.config?.digitPayouts,
+  const digitWins = betsForRound.filter(
+    (bet) => bet.betType === 'DIGIT' && bet.result === 'WIN' && bet.digitType,
   );
-  roundSummaryDigitsEl.innerHTML = digitWinners.length
-    ? digitWinners
-        .map(
-          (winner) =>
-            `<span class="round-chip">${winner.label}<span class="round-chip-odds">${winner.odds}:1</span></span>`,
-        )
-        .join('')
+  const formatDigitWin = (bet: (typeof digitWins)[number]) => {
+    const type = bet.digitType!;
+    const sel = bet.selection ?? '';
+    switch (type) {
+      case 'ANY_TRIPLE':
+        return 'ANY TRIPLE';
+      case 'SMALL':
+      case 'BIG':
+      case 'ODD':
+      case 'EVEN':
+        return type;
+      case 'SUM':
+        return `SUM ${sel}`;
+      case 'SINGLE':
+        return `SINGLE ${sel}`;
+      case 'DOUBLE':
+        return `DOUBLE ${sel}`;
+      case 'TRIPLE':
+        return `TRIPLE ${sel}`;
+      default:
+        return `${type}${sel ? ` ${sel}` : ''}`;
+    }
+  };
+  roundSummaryDigitsEl.innerHTML = digitResult
+    ? digitWins.length
+      ? digitWins
+          .map(
+            (bet) =>
+              `<span class="round-chip">${formatDigitWin(bet)}<span class="round-chip-odds">${bet.odds}:1</span></span>`,
+          )
+          .join('')
+      : '<span class="round-summary-muted">No winning digit bets.</span>'
     : '<span class="round-summary-muted">No digit result yet.</span>';
 
   const totalStake = nextState.lastRoundStake;
@@ -409,107 +1204,6 @@ const renderRoundSummary = (nextState: typeof state) => {
     const sign = totalNet >= 0 ? '+' : '-';
     roundSummaryTotalEl.textContent = `Your round: stake ${totalStake.toFixed(2)} payout ${totalPayout.toFixed(2)} (${sign}${Math.abs(totalNet).toFixed(2)})`;
   }
-};
-
-const getWinningDigitSummaries = (
-  digitResult: string | null,
-  payouts: typeof state.config extends { digitPayouts: infer P } ? P : any,
-) => {
-  const winners: Array<{ label: string; odds: number }> = [];
-  if (!digitResult || !/^\d{3}$/.test(digitResult)) {
-    return winners;
-  }
-
-  const resolvedPayouts = payouts ?? {
-    smallBigOddEven: 0.96,
-    anyTriple: 85,
-    double: 23,
-    triple: 700,
-    single: {
-      single: 2,
-      double: 8,
-      triple: 12,
-    },
-    sum: sumPayouts,
-    ranges: {
-      small: { min: 0, max: 13 },
-      big: { min: 14, max: 27 },
-      sumMin: 4,
-      sumMax: 23,
-    },
-  };
-
-  const digits = digitResult.split('');
-  const counts: Record<string, number> = {
-    '0': 0,
-    '1': 0,
-    '2': 0,
-    '3': 0,
-    '4': 0,
-    '5': 0,
-    '6': 0,
-    '7': 0,
-    '8': 0,
-    '9': 0,
-  };
-  let sum = 0;
-  for (const digit of digits) {
-    counts[digit] += 1;
-    sum += Number(digit);
-  }
-
-  const isTriple = digits[0] === digits[1] && digits[1] === digits[2];
-  const uniqueDigits = Array.from(new Set(digits));
-
-  if (isTriple) {
-    winners.push({ label: 'ANY TRIPLE', odds: resolvedPayouts.anyTriple });
-    winners.push({
-      label: `TRIPLE ${digitResult}`,
-      odds: resolvedPayouts.triple,
-    });
-    winners.push({
-      label: `DOUBLE ${digits[0]}${digits[0]}`,
-      odds: resolvedPayouts.double,
-    });
-    winners.push({
-      label: `SINGLE ${digits[0]}`,
-      odds: resolvedPayouts.single.triple,
-    });
-  } else {
-    if (sum <= resolvedPayouts.ranges.small.max) {
-      winners.push({ label: 'SMALL', odds: resolvedPayouts.smallBigOddEven });
-    } else {
-      winners.push({ label: 'BIG', odds: resolvedPayouts.smallBigOddEven });
-    }
-
-    winners.push({
-      label: sum % 2 === 0 ? 'EVEN' : 'ODD',
-      odds: resolvedPayouts.smallBigOddEven,
-    });
-
-    const doubleDigit = Object.keys(counts).find((digit) => counts[digit] >= 2);
-    if (doubleDigit) {
-      winners.push({
-        label: `DOUBLE ${doubleDigit}${doubleDigit}`,
-        odds: resolvedPayouts.double,
-      });
-    }
-
-    uniqueDigits.forEach((digit) => {
-      const count = counts[digit];
-      const odds = count >= 2 ? resolvedPayouts.single.double : resolvedPayouts.single.single;
-      winners.push({ label: `SINGLE ${digit}`, odds });
-    });
-  }
-
-  if (sum >= resolvedPayouts.ranges.sumMin && sum <= resolvedPayouts.ranges.sumMax) {
-    const sumOdds = resolvedPayouts.sum[sum];
-    if (typeof sumOdds === 'number') {
-      winners.push({ label: `SUM ${sum}`, odds: sumOdds });
-    }
-  }
-
-  return winners;
 };
 
 const renderHistoryLists = (nextState: typeof state) => {
@@ -559,13 +1253,18 @@ const refreshTokenSelection = (nextState: typeof state) => {
 const refreshDigitHighlights = (nextState: typeof state) => {
   if (!digitTableEl) return;
   const roundId = nextState.currentRound?.id;
-  const activeKeys = new Set(
-    nextState.digitSelections
-      .filter((item) => item.roundId === roundId)
-      .map((item) => `${item.digitType}|${item.selection ?? ''}`),
+  const playerBets = nextState.digitSelections.filter(
+    (item) => item.roundId === roundId,
   );
-  const winningKeys = getWinningDigitKeys(
-    nextState.lastDigitResult,
+  const activeKeys = new Set(
+    playerBets.map((item) => `${item.digitType}|${item.selection ?? ''}`),
+  );
+
+  // Winner highlights come from server-settled bet results (no client-side rule logic).
+  const winnerKeys = new Set(
+    nextState.lastRoundBets
+      .filter((bet) => bet.betType === 'DIGIT' && bet.result === 'WIN' && bet.digitType)
+      .map((bet) => `${bet.digitType}|${bet.selection ?? ''}`),
   );
 
   digitTableEl.querySelectorAll<HTMLButtonElement>('.digit-cell').forEach((cell) => {
@@ -574,7 +1273,7 @@ const refreshDigitHighlights = (nextState: typeof state) => {
     const selection = cell.dataset.selection ?? '';
     const key = `${digitType}|${selection}`;
     cell.classList.toggle('digit-cell--active', activeKeys.has(key));
-    cell.classList.toggle('digit-cell--winner', winningKeys.has(key));
+    cell.classList.toggle('digit-cell--winner', winnerKeys.has(key));
   });
 };
 
@@ -647,66 +1346,6 @@ const refreshAuthScreen = (nextState: typeof state) => {
   if (isAuthed && !wasHidden) {
     window.dispatchEvent(new Event('app:layout:shown'));
   }
-};
-
-const getWinningDigitKeys = (digitResult: string | null) => {
-  const winners = new Set<string>();
-  if (!digitResult || !/^\d{3}$/.test(digitResult)) {
-    return winners;
-  }
-
-  const digits = digitResult.split('');
-  const uniqueDigits = Array.from(new Set(digits));
-  const counts: Record<string, number> = {
-    '0': 0,
-    '1': 0,
-    '2': 0,
-    '3': 0,
-    '4': 0,
-    '5': 0,
-    '6': 0,
-    '7': 0,
-    '8': 0,
-    '9': 0,
-  };
-  let sum = 0;
-  for (const digit of digits) {
-    counts[digit] += 1;
-    sum += Number(digit);
-  }
-
-  const isTriple = digits[0] === digits[1] && digits[1] === digits[2];
-  const key = (digitType: string, selection = '') =>
-    `${digitType}|${selection}`;
-
-  if (isTriple) {
-    winners.add(key('ANY_TRIPLE'));
-    winners.add(key('TRIPLE', digitResult));
-    winners.add(key('DOUBLE', `${digits[0]}${digits[0]}`));
-    winners.add(key('SINGLE', digits[0]));
-  } else {
-    if (sum <= 13) {
-      winners.add(key('SMALL'));
-    } else {
-      winners.add(key('BIG'));
-    }
-    winners.add(key(sum % 2 === 0 ? 'EVEN' : 'ODD'));
-
-    const doubleDigit = Object.keys(counts).find((digit) => counts[digit] >= 2);
-    if (doubleDigit) {
-      winners.add(key('DOUBLE', `${doubleDigit}${doubleDigit}`));
-    }
-
-    uniqueDigits.forEach((digit) => {
-      winners.add(key('SINGLE', digit));
-    });
-  }
-
-  if (sum >= 4 && sum <= 23) {
-    winners.add(key('SUM', String(sum)));
-  }
-
-  return winners;
 };
 
 const buildDigitBetTable = () => {

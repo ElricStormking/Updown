@@ -1,4 +1,4 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, ParseIntPipe, Query, UseGuards } from '@nestjs/common';
 import { HistoryService } from './history.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -18,6 +18,29 @@ export class HistoryController {
       user.userId,
       limit ? Number(limit) : undefined,
     );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('bets/paged')
+  getPlayerHistoryPaged(
+    @CurrentUser() user: AuthUser,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.historyService.getPlayerBetsPaged(
+      user.userId,
+      page ? Number(page) : undefined,
+      limit ? Number(limit) : undefined,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('bets/round/:roundId')
+  getPlayerBetsForRound(
+    @CurrentUser() user: AuthUser,
+    @Param('roundId', ParseIntPipe) roundId: number,
+  ) {
+    return this.historyService.getPlayerBetsForRound(user.userId, roundId);
   }
 
   @Get('rounds')

@@ -29,6 +29,8 @@ import { WalletService } from '../wallet/wallet.service';
 import { ClientReadyDto } from './dto/client-ready.dto';
 import { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { RoundStatus } from '@prisma/client';
+import { PrismaService } from '../prisma/prisma.service';
+import { RoundEvent } from './interfaces/round-event.interface';
 
 @Injectable()
 @WebSocketGateway({
@@ -59,6 +61,7 @@ export class GameGateway
     private readonly betsService: BetsService,
     private readonly walletService: WalletService,
     private readonly jwtService: JwtService,
+    private readonly prisma: PrismaService,
   ) {}
 
   onModuleInit() {
@@ -67,23 +70,7 @@ export class GameGateway
     });
 
     this.roundSub = this.roundEngine.events$().subscribe((event) => {
-      if (event.type === 'round:result') {
-        const { balanceUpdates, ...publicStats } = event.payload.stats;
-        this.server.emit(event.type, {
-          ...event.payload,
-          stats: publicStats,
-        });
-        for (const update of balanceUpdates) {
-          this.server
-            .to(this.getUserRoom(update.userId))
-            .emit('balance:update', {
-              balance: update.balance,
-            });
-        }
-        return;
-      }
-
-      this.server.emit(event.type, event.payload);
+      void this.handleRoundEvent(event);
     });
   }
 
@@ -211,5 +198,88 @@ export class GameGateway
       return error.message;
     }
     return 'Unexpected error';
+  }
+
+  private async handleRoundEvent(event: RoundEvent) {
+    if (event.type !== 'round:result') {
+      this.server.emit(event.type, event.payload);
+      return;
+    }
+
+    const { balanceUpdates, participants, ...publicStats } = event.payload.stats;
+
+    // Public broadcast: no per-user data
+    this.server.emit(event.type, {
+      ...event.payload,
+      stats: publicStats,
+    });
+
+    // Per-user balance updates (wins/refunds only)
+    for (const update of balanceUpdates) {
+      this.server.to(this.getUserRoom(update.userId)).emit('balance:update', {
+        balance: update.balance,
+      });
+    }
+
+    // Per-user settled bet results (ALL participants, including pure losses)
+    try {
+      await this.emitUserRoundSettlements(event.payload.roundId, participants);
+    } catch (error) {
+      this.logger.warn(`round:user-settlement emit failed: ${this.unwrapError(error)}`);
+    }
+  }
+
+  private async emitUserRoundSettlements(roundId: number, participants: string[]) {
+    if (!participants.length) {
+      return;
+    }
+
+    const bets = await this.prisma.bet.findMany({
+      where: { roundId },
+      include: { round: true },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const betsByUser = new Map<string, typeof bets>();
+    for (const bet of bets) {
+      const list = betsByUser.get(bet.userId);
+      if (list) list.push(bet);
+      else betsByUser.set(bet.userId, [bet]);
+    }
+
+    for (const userId of participants) {
+      const userBets = betsByUser.get(userId) ?? [];
+      const serialized = userBets.map((bet) => ({
+        id: bet.id,
+        roundId: bet.roundId,
+        betType: bet.betType,
+        side: bet.side,
+        digitType: bet.digitType,
+        selection: bet.selection,
+        amount: Number(bet.amount),
+        odds: Number(bet.odds),
+        result: bet.result,
+        payout: Number(bet.payout),
+        createdAt: bet.createdAt.toISOString(),
+        lockedPrice: bet.round.lockedPrice ? Number(bet.round.lockedPrice) : null,
+        finalPrice: bet.round.finalPrice ? Number(bet.round.finalPrice) : null,
+        winningSide: bet.round.winningSide,
+        digitResult: bet.round.digitResult ?? null,
+        digitSum: bet.round.digitSum ?? null,
+      }));
+
+      const stake = serialized.reduce((sum, b) => sum + b.amount, 0);
+      const payout = serialized.reduce((sum, b) => sum + b.payout, 0);
+
+      this.server.to(this.getUserRoom(userId)).emit('round:user-settlement', {
+        roundId,
+        totals: {
+          stake,
+          payout,
+          net: payout - stake,
+        },
+        bets: serialized,
+      });
+    }
   }
 }

@@ -60,6 +60,77 @@ export class HistoryService {
       );
   }
 
+  async getPlayerBetsPaged(userId: string, page?: number, limit?: number) {
+    const resolvedLimit = this.resolveLimit(limit, this.maxPlayerHistory);
+    const resolvedPage = Number.isFinite(page) ? Math.max(0, Number(page)) : 0;
+    const skip = resolvedPage * resolvedLimit;
+    const take = resolvedLimit + 1;
+
+    const bets = await this.prisma.bet.findMany({
+      where: { userId },
+      include: { round: true },
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take,
+    });
+
+    const hasNext = bets.length > resolvedLimit;
+    const pageItems = bets.slice(0, resolvedLimit);
+
+    return {
+      page: resolvedPage,
+      limit: resolvedLimit,
+      hasNext,
+      items: pageItems.map((bet) => ({
+        id: bet.id,
+        roundId: bet.roundId,
+        betType: bet.betType,
+        side: bet.side,
+        digitType: bet.digitType,
+        selection: bet.selection,
+        amount: Number(bet.amount),
+        odds: Number(bet.odds),
+        result: bet.result,
+        payout: Number(bet.payout),
+        createdAt: bet.createdAt,
+        lockedPrice: bet.round.lockedPrice ? Number(bet.round.lockedPrice) : null,
+        finalPrice: bet.round.finalPrice ? Number(bet.round.finalPrice) : null,
+        winningSide: bet.round.winningSide,
+        digitResult: bet.round.digitResult ?? null,
+        digitSum: bet.round.digitSum ?? null,
+      })),
+    };
+  }
+
+  getPlayerBetsForRound(userId: string, roundId: number) {
+    return this.prisma.bet
+      .findMany({
+        where: { userId, roundId },
+        include: { round: true },
+        orderBy: { createdAt: 'asc' },
+      })
+      .then((bets) =>
+        bets.map((bet) => ({
+          id: bet.id,
+          roundId: bet.roundId,
+          betType: bet.betType,
+          side: bet.side,
+          digitType: bet.digitType,
+          selection: bet.selection,
+          amount: Number(bet.amount),
+          odds: Number(bet.odds),
+          result: bet.result,
+          payout: Number(bet.payout),
+          createdAt: bet.createdAt,
+          lockedPrice: bet.round.lockedPrice ? Number(bet.round.lockedPrice) : null,
+          finalPrice: bet.round.finalPrice ? Number(bet.round.finalPrice) : null,
+          winningSide: bet.round.winningSide,
+          digitResult: bet.round.digitResult ?? null,
+          digitSum: bet.round.digitSum ?? null,
+        })),
+      );
+  }
+
   getRoundHistory(limit?: number) {
     const resolvedLimit = this.resolveLimit(limit, this.maxRoundHistory);
     return this.prisma.round

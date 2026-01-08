@@ -7,7 +7,13 @@ import type { BetSide, DigitBetType } from './types';
 import { api } from './services/api';
 import { authenticateGameSocket, createGameSocket } from './services/socket';
 import { state, updateState } from './state/gameState';
-import { initTradingViewWidget } from './ui/tradingViewWidget';
+import {
+  initTradingViewWidget,
+  pushPriceUpdate,
+  setLockedPrice,
+  setRoundTiming,
+} from './ui/tradingViewWidget';
+import type { LanguageCode } from './i18n';
 
 const scene = new HiLoScene();
 
@@ -49,11 +55,52 @@ const game = new Phaser.Game({
   },
 });
 
+type AudioSettings = { musicEnabled: boolean; sfxEnabled: boolean };
+const AUDIO_SETTINGS_KEY = 'audioSettings';
+
+const loadAudioSettings = (): AudioSettings => {
+  if (typeof window === 'undefined') return { musicEnabled: true, sfxEnabled: true };
+  try {
+    const raw = window.localStorage.getItem(AUDIO_SETTINGS_KEY);
+    if (!raw) return { musicEnabled: true, sfxEnabled: true };
+    const parsed = JSON.parse(raw) as Partial<AudioSettings>;
+    return {
+      musicEnabled: parsed.musicEnabled !== false,
+      sfxEnabled: parsed.sfxEnabled !== false,
+    };
+  } catch {
+    return { musicEnabled: true, sfxEnabled: true };
+  }
+};
+
+const applyAudioSettings = (settings: AudioSettings) => {
+  // We don't have separate channels yet; treat "both off" as global mute.
+  const enabled = settings.musicEnabled || settings.sfxEnabled;
+  game.sound.mute = !enabled;
+};
+
+applyAudioSettings(loadAudioSettings());
+
 const refreshGameScale = () => {
   game.scale.refresh();
 };
 
 if (typeof window !== 'undefined') {
+  // Apply initial language to Phaser scene
+  scene.setLanguage(state.language as LanguageCode);
+  window.addEventListener('app:language', (event) => {
+    const lang = (event as CustomEvent<LanguageCode>).detail;
+    if (!lang) return;
+    updateState({ language: lang });
+    scene.setLanguage(lang);
+  });
+
+  window.addEventListener('app:audio-settings', (event) => {
+    const detail = (event as CustomEvent<AudioSettings>).detail;
+    if (!detail) return;
+    applyAudioSettings(detail);
+  });
+
   window.addEventListener('resize', refreshGameScale);
   window.addEventListener('load', refreshGameScale);
   window.addEventListener('app:layout:shown', () => {
@@ -71,18 +118,27 @@ if (typeof window !== 'undefined') {
 
 const socket = createGameSocket(
   {
-    onPrice: (update) => scene.setPrice(update),
+    onPrice: (update) => {
+      scene.setPrice(update);
+      pushPriceUpdate(update);
+    },
     onRoundStart: (payload) => {
       scene.setRoundState(payload);
+      setRoundTiming(payload.lockTime, payload.endTime);
+      setLockedPrice(null);
       updateState({
         currentRound: payload,
         digitSelections: [],
         tokenPlacements: {},
       });
     },
-    onRoundLocked: (payload) => scene.handleRoundLock(payload),
+    onRoundLocked: (payload) => {
+      scene.handleRoundLock(payload);
+      setLockedPrice(payload.lockedPrice ?? null);
+    },
     onRoundResult: async (payload) => {
-      scene.handleRoundResult(payload, state.digitSelections);
+      scene.handleRoundResult(payload);
+      setLockedPrice(null);
       updateState({
         lastRoundResult: payload,
         lastDigitResult: payload.digitResult ?? null,
@@ -90,19 +146,65 @@ const socket = createGameSocket(
       });
       await refreshPlayerData();
 
-      const betsForRound = state.betHistory.filter(
-        (bet) => bet.roundId === payload.roundId,
-      );
-      const totalStake = betsForRound.reduce((sum, bet) => sum + bet.amount, 0);
-      const totalPayout = betsForRound.reduce(
-        (sum, bet) => sum + bet.payout,
-        0,
-      );
+      // Fallback: if the per-user settlement socket event is missed, pull the round bets from server.
+      if (
+        state.token &&
+        (!state.lastRoundBets.length ||
+          state.lastRoundBets[0]?.roundId !== payload.roundId)
+      ) {
+        try {
+          const res = await api.fetchPlayerBetsForRound(
+            state.token,
+            payload.roundId,
+          );
+          const bets = res.data;
+          const stake = bets.reduce((sum, b) => sum + b.amount, 0);
+          const payout = bets.reduce((sum, b) => sum + b.payout, 0);
+          const net = payout - stake;
+
+          updateState({
+            lastRoundBets: bets,
+            lastRoundStake: stake,
+            lastRoundPayout: payout,
+          });
+
+          scene.setPlayerPayout(payload.roundId, stake, payout);
+          if (stake <= 0) scene.setRoundOutcome(payload.roundId, 'SKIPPED');
+          else if (net > 0) scene.setRoundOutcome(payload.roundId, 'WIN');
+          else if (net === 0) scene.setRoundOutcome(payload.roundId, 'PUSH');
+          else scene.setRoundOutcome(payload.roundId, 'LOSE');
+          scene.setWinningBets(payload.roundId, bets);
+        } catch {
+          // ignore: socket settlement event should normally cover this
+        }
+      }
+    },
+    onRoundUserSettlement: (payload) => {
       updateState({
-        lastRoundStake: totalStake,
-        lastRoundPayout: totalPayout,
+        lastRoundBets: payload.bets,
+        lastRoundStake: payload.totals.stake,
+        lastRoundPayout: payload.totals.payout,
       });
-      scene.setPlayerPayout(payload.roundId, totalStake, totalPayout);
+
+      scene.setPlayerPayout(
+        payload.roundId,
+        payload.totals.stake,
+        payload.totals.payout,
+      );
+
+      // Outcome is derived from server-settled totals (not client-side rules)
+      const { stake, net } = payload.totals;
+      if (stake <= 0) {
+        scene.setRoundOutcome(payload.roundId, 'SKIPPED');
+      } else if (net > 0) {
+        scene.setRoundOutcome(payload.roundId, 'WIN');
+      } else if (net === 0) {
+        scene.setRoundOutcome(payload.roundId, 'PUSH');
+      } else {
+        scene.setRoundOutcome(payload.roundId, 'LOSE');
+      }
+
+      scene.setWinningBets(payload.roundId, payload.bets);
     },
     onBalance: (balance) => {
       updateState({ walletBalance: balance });
@@ -273,7 +375,7 @@ async function refreshPlayerData() {
   const [walletRes, betsRes, roundsRes] = await Promise.all([
     api.fetchWallet(state.token),
     api.fetchPlayerHistory(state.token, 10),
-    api.fetchRoundHistory(10),
+    api.fetchRoundHistory(20),
   ]);
 
   const latestCompletedRound =
@@ -306,14 +408,14 @@ async function refreshPlayerData() {
       : state.lastRoundResult;
 
   const summaryRoundId = lastRoundResult?.roundId;
-  const summaryBets = summaryRoundId
-    ? betsRes.data.filter((bet) => bet.roundId === summaryRoundId)
-    : [];
+  const summaryBets =
+    summaryRoundId && state.lastRoundBets.length && state.lastRoundBets[0]?.roundId === summaryRoundId
+      ? state.lastRoundBets
+      : summaryRoundId
+        ? betsRes.data.filter((bet) => bet.roundId === summaryRoundId)
+        : [];
   const lastRoundStake = summaryBets.reduce((sum, bet) => sum + bet.amount, 0);
-  const lastRoundPayout = summaryBets.reduce(
-    (sum, bet) => sum + bet.payout,
-    0,
-  );
+  const lastRoundPayout = summaryBets.reduce((sum, bet) => sum + bet.payout, 0);
 
   updateState({
     walletBalance: Number(walletRes.data.balance),
