@@ -37,6 +37,10 @@ let tokenBarMenuBtn: HTMLButtonElement | null = null;
 let hiLoTrendEl: HTMLDivElement | null = null;
 let hiLoTrendUpEl: HTMLSpanElement | null = null;
 let hiLoTrendDownEl: HTMLSpanElement | null = null;
+let statsDockEl: HTMLDivElement | null = null;
+let statsDockTabBtn: HTMLButtonElement | null = null;
+let statsDockPanelEl: HTMLDivElement | null = null;
+let statsDockLast9El: HTMLDivElement | null = null;
 let statsModalBackdropEl: HTMLDivElement | null = null;
 let statsModalCloseBtn: HTMLButtonElement | null = null;
 let statsLast9El: HTMLDivElement | null = null;
@@ -166,7 +170,21 @@ export const initControls = (handlers: ControlHandlers) => {
     <div class="page-wrapper" id="app-shell">
       <div id="tradingview-chart"></div>
       <div class="layout">
-        <div id="game-container"></div>
+        <div id="game-container">
+          <div class="stats-dock" id="stats-dock">
+            <button
+              type="button"
+              class="stats-dock-tab"
+              id="stats-dock-tab"
+              aria-expanded="false"
+            >
+              <span class="stats-dock-tab-text" data-i18n="stats.title"></span>
+            </button>
+            <div class="stats-dock-panel" id="stats-dock-panel" aria-hidden="true">
+              <div class="stats-last9 stats-dock-last9" id="stats-dock-last9"></div>
+            </div>
+          </div>
+        </div>
         <div class="control-panel">
           <div class="panel-meta">
             <div class="phase" id="phase-text"></div>
@@ -426,6 +444,10 @@ export const initControls = (handlers: ControlHandlers) => {
   hiLoTrendEl = root.querySelector('#hilo-trend');
   hiLoTrendUpEl = root.querySelector('#hilo-trend-up');
   hiLoTrendDownEl = root.querySelector('#hilo-trend-down');
+  statsDockEl = root.querySelector('#stats-dock');
+  statsDockTabBtn = root.querySelector('#stats-dock-tab');
+  statsDockPanelEl = root.querySelector('#stats-dock-panel');
+  statsDockLast9El = root.querySelector('#stats-dock-last9');
   statsModalBackdropEl = root.querySelector('#stats-modal-backdrop');
   statsModalCloseBtn = root.querySelector('#stats-modal-close');
   statsLast9El = root.querySelector('#stats-last9');
@@ -521,6 +543,13 @@ export const initControls = (handlers: ControlHandlers) => {
     );
   };
 
+  const setStatsDockOpen = (open: boolean) => {
+    if (!statsDockEl || !statsDockTabBtn || !statsDockPanelEl) return;
+    statsDockEl.classList.toggle('is-open', open);
+    statsDockTabBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    statsDockPanelEl.setAttribute('aria-hidden', open ? 'false' : 'true');
+  };
+
   const loadBettingHistoryPage = async (page: number) => {
     if (!state.token) {
       setStatus('Login before viewing history', true);
@@ -582,6 +611,12 @@ export const initControls = (handlers: ControlHandlers) => {
 
   tokenBarMenuBtn?.addEventListener('click', () => {
     toggleMenuModal();
+  });
+
+  // Floating "Statistics" side tab (top-left of the game canvas)
+  statsDockTabBtn?.addEventListener('click', () => {
+    const nextOpen = !statsDockEl?.classList.contains('is-open');
+    setStatsDockOpen(Boolean(nextOpen));
   });
 
   // Menu modal wiring
@@ -910,25 +945,21 @@ const classifySumBucket = (digitResult: string | null, digitSum: number | null):
 };
 
 const renderStatistics = (nextState: typeof state) => {
-  if (
-    !statsLast9El ||
-    !statsLast16El ||
-    !statsSmallLabelEl ||
-    !statsTripleLabelEl ||
-    !statsBigLabelEl ||
-    !statsSbtSmallEl ||
-    !statsSbtTripleEl ||
-    !statsSbtBigEl
-  ) {
-    return;
-  }
+  const hasModalNodes =
+    Boolean(statsLast9El) &&
+    Boolean(statsLast16El) &&
+    Boolean(statsSmallLabelEl) &&
+    Boolean(statsTripleLabelEl) &&
+    Boolean(statsBigLabelEl) &&
+    Boolean(statsSbtSmallEl) &&
+    Boolean(statsSbtTripleEl) &&
+    Boolean(statsSbtBigEl);
 
   const completed = nextState.roundHistory.filter((r) => Boolean(r.digitResult));
 
   // 1) Last 9 rounds: sum on top, digits stacked under it.
   const last9 = completed.slice(0, 9).reverse();
-  statsLast9El.classList.toggle('stats-last9--empty', !last9.length);
-  statsLast9El.innerHTML = last9.length
+  const last9Html = last9.length
     ? last9
         .map((round) => {
           const digits = (round.digitResult ?? '---').trim();
@@ -937,17 +968,37 @@ const renderStatistics = (nextState: typeof state) => {
           const d2 = digits[2] ?? '-';
           const sumLabel =
             typeof round.digitSum === 'number' ? String(round.digitSum) : '--';
+
+          const hiLo =
+            round.winningSide === 'UP'
+              ? { cls: 'stats-hilo--up', text: 'U' }
+              : round.winningSide === 'DOWN'
+                ? { cls: 'stats-hilo--down', text: 'D' }
+                : { cls: 'stats-hilo--none', text: '-' };
           return `
             <div class="stats-col" title="Round #${round.id}">
               <div class="stats-sum">${sumLabel}</div>
               <div class="stats-digit">${d0}</div>
               <div class="stats-digit">${d1}</div>
               <div class="stats-digit">${d2}</div>
+              <div class="stats-hilo ${hiLo.cls}" title="HiLo ${round.winningSide ?? 'N/A'}">${hiLo.text}</div>
             </div>
           `;
         })
         .join('')
     : '<div class="stats-empty">No digit results yet.</div>';
+
+  if (statsDockLast9El) {
+    statsDockLast9El.classList.toggle('stats-last9--empty', !last9.length);
+    statsDockLast9El.innerHTML = last9Html;
+  }
+
+  if (!hasModalNodes) {
+    return;
+  }
+
+  statsLast9El!.classList.toggle('stats-last9--empty', !last9.length);
+  statsLast9El!.innerHTML = last9Html;
 
   // 2) Last 16 rounds: Sic-bo style "road" for Small / Big / Triple.
   const last16 = completed.slice(0, 16).reverse();
