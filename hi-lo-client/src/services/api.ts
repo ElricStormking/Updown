@@ -3,6 +3,7 @@ import type {
   AuthResponse,
   BetHistoryItem,
   BetHistoryPageResponse,
+  ClearRoundBetsResponse,
   GameConfig,
   RoundHistoryItem,
   WalletResponse,
@@ -68,4 +69,7 @@ export const api = {
       selection?: string;
     },
   ) => client.post('/bets', payload, authHeader(token)),
+
+  clearRoundBets: (token: string, roundId: number) =>
+    client.delete<ClearRoundBetsResponse>(`/bets/round/${roundId}`, authHeader(token)),
 };

@@ -21,6 +21,7 @@ initControls({
   onLogin: handleLogin,
   onPlaceHiLoBet: handlePlaceHiLoBet,
   onPlaceDigitBet: handlePlaceDigitBet,
+  onClearTokens: handleClearTokens,
 });
 
 void initTradingViewWidget().catch((error: unknown) =>
@@ -357,6 +358,33 @@ async function handlePlaceDigitBet(selection: {
   } catch (error) {
     throw new Error(extractBetErrorMessage(error));
   }
+
+  await refreshPlayerData();
+}
+
+async function handleClearTokens() {
+  if (!state.token) {
+    throw new Error('You must login first.');
+  }
+  if (!state.currentRound) {
+    throw new Error('Waiting for next round to begin.');
+  }
+  if (state.currentRound.status !== 'BETTING') {
+    throw new Error('Not Betting Phase');
+  }
+  if (new Date(state.currentRound.lockTime).getTime() <= Date.now()) {
+    throw new Error('Round already locked');
+  }
+
+  const roundId = state.currentRound.id;
+  const res = await api.clearRoundBets(state.token, roundId);
+
+  updateState({
+    walletBalance: res.data.walletBalance,
+    tokenPlacements: {},
+    digitSelections: [],
+  });
+  scene.clearPlayerBets();
 
   await refreshPlayerData();
 }

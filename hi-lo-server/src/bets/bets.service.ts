@@ -20,11 +20,19 @@ import { PlaceBetDto } from './dto/place-bet.dto';
 import { AppConfig } from '../config/configuration';
 import { DIGIT_PAYOUTS, DIGIT_SUM_RANGES } from '../game/digit-bet.constants';
 import { DigitOutcome } from '../game/digit-bet.utils';
+import { applyBonusFactor, isBonusDigitBet, type DigitBonusSlot } from '../game/digit-bonus.utils';
 
 type SumKey = keyof typeof DIGIT_PAYOUTS.sum;
 
 export interface PlacedBetPayload {
   bet: Bet;
+  walletBalance: Prisma.Decimal;
+}
+
+export interface ClearedBetsPayload {
+  roundId: number;
+  cleared: number;
+  refundedAmount: Prisma.Decimal;
   walletBalance: Prisma.Decimal;
 }
 
@@ -156,10 +164,66 @@ export class BetsService {
     return bet;
   }
 
+  async clearBetsForRound(userId: string, roundId: number): Promise<ClearedBetsPayload> {
+    const round = await this.prisma.round.findUnique({
+      where: { id: roundId },
+    });
+
+    if (!round) {
+      throw new NotFoundException('Round not found');
+    }
+    if (round.status !== RoundStatus.BETTING) {
+      throw new BadRequestException('Betting window is closed for this round');
+    }
+    if (round.lockTime.getTime() <= Date.now()) {
+      throw new BadRequestException('Round already locked');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const bets = await tx.bet.findMany({
+        where: {
+          userId,
+          roundId,
+          result: BetResult.PENDING,
+        },
+      });
+
+      const refundedAmount = bets.reduce(
+        (sum, bet) => sum.add(bet.amount),
+        new Prisma.Decimal(0),
+      );
+
+      if (bets.length) {
+        await tx.bet.deleteMany({
+          where: {
+            userId,
+            roundId,
+            result: BetResult.PENDING,
+          },
+        });
+      }
+
+      const wallet = await this.walletService.adjustBalance(
+        userId,
+        refundedAmount,
+        tx,
+      );
+
+      return {
+        roundId,
+        cleared: bets.length,
+        refundedAmount,
+        walletBalance: new Prisma.Decimal(wallet.balance),
+      };
+    });
+  }
+
   async settleRound(
     roundId: number,
     winningSide: BetSide | null,
     digitOutcome: DigitOutcome | null,
+    digitBonusSlots: DigitBonusSlot[] = [],
+    digitBonusFactor: number | null = null,
   ): Promise<SettlementStats> {
     const bets = await this.prisma.bet.findMany({
       where: { roundId },
@@ -223,10 +287,18 @@ export class BetsService {
             digitOutcome,
           );
           if (payoutMultiplier !== null) {
+            const isBonus = isBonusDigitBet(
+              bet.digitType,
+              bet.selection ?? null,
+              digitBonusSlots,
+            );
+            const factor = Number(digitBonusFactor ?? 1);
+            const boosted =
+              isBonus && factor > 1 ? applyBonusFactor(payoutMultiplier, factor) : payoutMultiplier;
             await this.processDigitWin(
               tx,
               bet,
-              payoutMultiplier,
+              boosted,
               balanceUpdates,
             );
             winners += 1;

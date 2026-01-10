@@ -24,6 +24,13 @@ export interface RoundStatePayload {
   endTime: string;
   oddsUp: number;
   oddsDown: number;
+  digitBonus?: {
+    factor: number;
+    slots: Array<{
+      digitType: DigitBetType;
+      selection: string | null;
+    }>;
+  };
   lockedPrice?: number | null;
   finalPrice?: number | null;
   winningSide?: BetSide | null;
@@ -93,6 +100,12 @@ export interface GameConfig {
       sumMax: number;
     };
   };
+  digitBonus?: {
+    enabled: boolean;
+    minSlots: number;
+    maxSlots: number;
+    payoutFactor: number;
+  };
 }
 
 export interface BetHistoryItem {
@@ -119,6 +132,13 @@ export interface BetHistoryPageResponse {
   limit: number;
   hasNext: boolean;
   items: BetHistoryItem[];
+}
+
+export interface ClearRoundBetsResponse {
+  roundId: number;
+  cleared: number;
+  refundedAmount: number;
+  walletBalance: number;
 }
 
 export interface RoundHistoryItem {

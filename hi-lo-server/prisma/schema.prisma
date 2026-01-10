@@ -38,6 +38,8 @@ model Round {
   finalPrice     Decimal?        @db.Decimal(18, 8)
   digitResult    String?
   digitSum       Int?
+  digitBonusSlots  Json?
+  digitBonusFactor Decimal?      @db.Decimal(6, 3)
   winningSide    BetSide?
   status         RoundStatus     @default(PENDING)
   createdAt      DateTime        @default(now())

@@ -675,6 +675,16 @@ export class HiLoScene extends Phaser.Scene {
     this.playerBetAmount = amount;
   }
 
+  clearPlayerBets() {
+    this.playerBetSide = undefined;
+    this.playerBetAmount = null;
+    this.playerBetLockedPrice = null;
+    this.playerDigitSelections = [];
+    // Ensure the pending card doesn't show anything if user clears before lock.
+    this.playerBetCard?.setAlpha(0);
+    this.comparisonLine?.setVisible(false);
+  }
+
   setBalance(amount: number) {
     if (this.balanceText) {
       this.balanceText.setText(`${amount.toFixed(2)} USDT`);

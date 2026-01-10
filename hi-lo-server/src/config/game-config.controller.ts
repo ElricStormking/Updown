@@ -53,6 +53,9 @@ export class GameConfigController {
         sum: DIGIT_PAYOUTS.sum,
         ranges: DIGIT_SUM_RANGES,
       },
+      digitBonus: this.configService.getOrThrow('game.digitBonus', {
+        infer: true,
+      }),
     };
   }
 }

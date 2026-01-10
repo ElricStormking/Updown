@@ -17,6 +17,7 @@ const DICT: Record<LanguageCode, Dict> = {
     'auth.enter': 'Enter Arena',
 
     'ui.tokenBar': 'Token Bar',
+    'ui.cleanTokens': 'Clean Tokens',
     'ui.menu': 'Menu',
     'ui.tapToPlace': 'Tap a bet space to place a token.',
     'ui.digitBets': 'Digit Bets',
@@ -80,6 +81,7 @@ const DICT: Record<LanguageCode, Dict> = {
     'auth.enter': '进入',
 
     'ui.tokenBar': '筹码',
+    'ui.cleanTokens': '清除筹码',
     'ui.menu': '菜单',
     'ui.tapToPlace': '点选下注区域放置筹码。',
     'ui.digitBets': '数字下注',
@@ -143,6 +145,7 @@ const DICT: Record<LanguageCode, Dict> = {
     'auth.enter': 'Masuk',
 
     'ui.tokenBar': 'Token',
+    'ui.cleanTokens': 'Kosongkan Token',
     'ui.menu': 'Menu',
     'ui.tapToPlace': 'Ketik ruang taruhan untuk letak token.',
     'ui.digitBets': 'Taruhan Digit',

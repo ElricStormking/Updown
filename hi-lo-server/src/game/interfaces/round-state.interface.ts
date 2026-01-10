@@ -1,4 +1,9 @@
-import { BetSide, RoundStatus } from '@prisma/client';
+import { BetSide, DigitBetType, RoundStatus } from '@prisma/client';
+
+export interface DigitBonusSlotState {
+  digitType: DigitBetType;
+  selection: string | null;
+}
 
 export interface RoundState {
   id: number;
@@ -8,6 +13,10 @@ export interface RoundState {
   endTime: string;
   oddsUp: number;
   oddsDown: number;
+  digitBonus?: {
+    factor: number;
+    slots: DigitBonusSlotState[];
+  };
   lockedPrice?: number | null;
   finalPrice?: number | null;
   winningSide?: BetSide | null;

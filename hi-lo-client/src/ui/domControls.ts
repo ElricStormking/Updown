@@ -11,6 +11,7 @@ interface ControlHandlers {
     digitType: DigitBetType;
     selection?: string;
   }): Promise<void>;
+  onClearTokens(): Promise<void>;
 }
 
 let statusEl: HTMLElement | null = null;
@@ -34,6 +35,7 @@ let authStatusEl: HTMLElement | null = null;
 let tokenOptionsEl: HTMLDivElement | null = null;
 let tokenOptionButtons: HTMLButtonElement[] = [];
 let tokenBarMenuBtn: HTMLButtonElement | null = null;
+let tokenBarClearBtn: HTMLButtonElement | null = null;
 let hiLoTrendEl: HTMLDivElement | null = null;
 let hiLoTrendUpEl: HTMLSpanElement | null = null;
 let hiLoTrendDownEl: HTMLSpanElement | null = null;
@@ -73,6 +75,9 @@ let bettingHistoryListEl: HTMLDivElement | null = null;
 
 const tokenStackByKey = new Map<string, HTMLElement>();
 const TOKEN_VALUES = [10, 50, 100, 150, 200, 300, 500];
+
+const WIN_CELEBRATE_FALLBACK_MS = 2600;
+let lastWinCelebrateSignature: string | null = null;
 
 const sumPayouts: Record<number, number> = {
   4: 55,
@@ -215,6 +220,18 @@ export const initControls = (handlers: ControlHandlers) => {
                     </button>
                   `,
                 ).join('')}
+              </div>
+              <div class="token-bar-actions">
+                <button
+                  type="button"
+                  class="token-bar-action-btn"
+                  id="token-bar-clear"
+                  aria-label="Clean tokens"
+                  title="Clean tokens"
+                >
+                  <span aria-hidden="true">🧹</span>
+                  <span class="token-bar-action-text" data-i18n="ui.cleanTokens"></span>
+                </button>
               </div>
             </div>
             <div class="hilo-trend" id="hilo-trend" style="--up-pct: 50%;">
@@ -441,6 +458,7 @@ export const initControls = (handlers: ControlHandlers) => {
   downBtn = root.querySelector('button[data-side="DOWN"]');
   tokenOptionsEl = root.querySelector('#token-options');
   tokenBarMenuBtn = root.querySelector('#token-bar-menu');
+  tokenBarClearBtn = root.querySelector('#token-bar-clear');
   hiLoTrendEl = root.querySelector('#hilo-trend');
   hiLoTrendUpEl = root.querySelector('#hilo-trend-up');
   hiLoTrendDownEl = root.querySelector('#hilo-trend-down');
@@ -611,6 +629,20 @@ export const initControls = (handlers: ControlHandlers) => {
 
   tokenBarMenuBtn?.addEventListener('click', () => {
     toggleMenuModal();
+  });
+
+  tokenBarClearBtn?.addEventListener('click', async () => {
+    if (!tokenBarClearBtn || tokenBarClearBtn.disabled) return;
+    try {
+      setStatus('Cleaning tokens...');
+      await handlers.onClearTokens();
+      setStatus('Tokens cleared.');
+    } catch (error) {
+      setStatus(
+        error instanceof Error ? error.message : 'Failed to clear tokens',
+        true,
+      );
+    }
   });
 
   // Floating "Statistics" side tab (top-left of the game canvas)
@@ -846,10 +878,71 @@ export const setStatus = (message: string, isError = false) => {
   }
 };
 
+const celebrateWinningBetSlots = (nextState: typeof state) => {
+  const settledRoundId = nextState.lastRoundBets[0]?.roundId ?? null;
+  if (!settledRoundId) return;
+
+  const durationMs = Math.max(
+    0,
+    Number(nextState.config?.resultDisplayDurationMs ?? WIN_CELEBRATE_FALLBACK_MS),
+  );
+
+  const digitWinKeys = nextState.lastRoundBets
+    .filter((bet) => bet.betType === 'DIGIT' && bet.result === 'WIN' && bet.digitType)
+    .map((bet) => `${bet.digitType}|${bet.selection ?? ''}`);
+
+  const hiloWinSides = nextState.lastRoundBets
+    .filter((bet) => bet.betType === 'HILO' && bet.result === 'WIN' && bet.side)
+    .map((bet) => bet.side);
+
+  const signature = `${settledRoundId}|${digitWinKeys.slice().sort().join(',')}|${hiloWinSides.slice().sort().join(',')}`;
+  if (signature === lastWinCelebrateSignature) return;
+  lastWinCelebrateSignature = signature;
+
+  // DIGIT cell celebration
+  if (digitTableEl && digitWinKeys.length) {
+    const set = new Set(digitWinKeys);
+    digitTableEl.querySelectorAll<HTMLButtonElement>('.digit-cell').forEach((cell) => {
+      const digitType = cell.dataset.digitType;
+      if (!digitType) return;
+      const selection = cell.dataset.selection ?? '';
+      const key = `${digitType}|${selection}`;
+      if (!set.has(key)) return;
+      cell.classList.add('digit-cell--win-celebrate');
+      setTimeout(
+        () => cell.classList.remove('digit-cell--win-celebrate'),
+        durationMs,
+      );
+    });
+  }
+
+  // HILO button celebration
+  if (hiloWinSides.includes('UP')) {
+    upBtn?.classList.add('bet-space--win-celebrate');
+    setTimeout(() => upBtn?.classList.remove('bet-space--win-celebrate'), durationMs);
+  }
+  if (hiloWinSides.includes('DOWN')) {
+    downBtn?.classList.add('bet-space--win-celebrate');
+    setTimeout(() => downBtn?.classList.remove('bet-space--win-celebrate'), durationMs);
+  }
+};
+
 const render = (nextState: typeof state) => {
   applyI18n(nextState.language);
   if (walletEl) {
     walletEl.textContent = nextState.walletBalance.toFixed(2);
+  }
+
+  if (tokenBarClearBtn) {
+    const round = nextState.currentRound;
+    const hasPlacements = Object.keys(nextState.tokenPlacements ?? {}).length > 0;
+    const isBetting =
+      Boolean(nextState.token) &&
+      Boolean(round) &&
+      round.status === 'BETTING' &&
+      new Date(round.lockTime).getTime() > Date.now();
+    tokenBarClearBtn.disabled = !(isBetting && hasPlacements);
+    tokenBarClearBtn.classList.toggle('is-disabled', tokenBarClearBtn.disabled);
   }
 
   if (phaseEl) {
@@ -872,6 +965,7 @@ const render = (nextState: typeof state) => {
   refreshTokenSelection(nextState);
   refreshSideButtons();
   refreshDigitHighlights(nextState);
+  celebrateWinningBetSlots(nextState);
   renderTokenPlacements(nextState);
   renderDigitResult(nextState);
   renderRoundSummary(nextState);
@@ -1358,6 +1452,119 @@ const refreshDigitHighlights = (nextState: typeof state) => {
       .map((bet) => `${bet.digitType}|${bet.selection ?? ''}`),
   );
 
+  const getLatestDigitResult = () => {
+    const fromHistory =
+      nextState.roundHistory.find(
+        (r) => typeof r.digitResult === 'string' && /^\d{3}$/.test(r.digitResult),
+      ) ?? null;
+    return nextState.lastDigitResult ?? fromHistory?.digitResult ?? null;
+  };
+
+  const getResultKeys = () => {
+    const digits = getLatestDigitResult();
+    if (!digits || !/^\d{3}$/.test(digits)) return new Set<string>();
+
+    const parts = digits.split('');
+    const counts = new Map<string, number>();
+    for (const d of parts) {
+      counts.set(d, (counts.get(d) ?? 0) + 1);
+    }
+
+    const sum =
+      typeof nextState.lastDigitSum === 'number'
+        ? nextState.lastDigitSum
+        : parts.reduce((acc, d) => acc + Number(d), 0);
+    const isTriple = digits[0] === digits[1] && digits[1] === digits[2];
+
+    const keys = new Set<string>();
+
+    // Always highlight the three digits (SINGLE).
+    for (const d of parts) {
+      keys.add(`SINGLE|${d}`);
+    }
+
+    // Highlight doubles/triple if present.
+    for (const [d, count] of counts.entries()) {
+      if (count >= 2) keys.add(`DOUBLE|${d}${d}`);
+    }
+    if (isTriple) {
+      keys.add(`ANY_TRIPLE|`);
+      keys.add(`TRIPLE|${digits}`);
+    }
+
+    // SUM always highlights if within table range.
+    if (Number.isFinite(sum) && sum >= 4 && sum <= 23) {
+      keys.add(`SUM|${sum}`);
+    }
+
+    // Small/Big/Odd/Even are only winners when not a triple in our payout rules,
+    // but we still frame them to show the round's derived categories.
+    if (!isTriple && Number.isFinite(sum)) {
+      keys.add(sum <= 13 ? `SMALL|` : `BIG|`);
+      keys.add(sum % 2 === 0 ? `EVEN|` : `ODD|`);
+    }
+
+    return keys;
+  };
+
+  const resultKeys = getResultKeys();
+
+  const bonusSlots = nextState.currentRound?.digitBonus?.slots ?? [];
+  const bonusFactor = Number(nextState.currentRound?.digitBonus?.factor ?? 1);
+  const bonusKeys = new Set(
+    bonusSlots.map((slot) => `${slot.digitType}|${slot.selection ?? ''}`),
+  );
+  const nextBonusSignature = `${bonusFactor}|${Array.from(bonusKeys).sort().join(',')}`;
+  const bonusChanged = nextBonusSignature !== lastBonusSignature;
+  if (bonusChanged) {
+    lastBonusSignature = nextBonusSignature;
+  }
+
+  const formatPayoutRatio = (value: number) => {
+    if (!Number.isFinite(value)) return '--';
+    const rounded = Math.round(value * 100) / 100;
+    const asStr = rounded.toFixed(2).replace(/\.?0+$/, '');
+    return `${asStr}:1`;
+  };
+
+  const getBaseDigitOdds = (digitType: string, selection: string) => {
+    const payouts = nextState.config?.digitPayouts;
+    const fallback = {
+      smallBigOddEven: 0.96,
+      anyTriple: 85,
+      double: 23,
+      triple: 700,
+      single: { single: 2 },
+      sum: sumPayouts,
+    };
+
+    switch (digitType) {
+      case 'SMALL':
+      case 'BIG':
+      case 'ODD':
+      case 'EVEN':
+        return payouts?.smallBigOddEven ?? fallback.smallBigOddEven;
+      case 'ANY_TRIPLE':
+        return payouts?.anyTriple ?? fallback.anyTriple;
+      case 'DOUBLE':
+        return payouts?.double ?? fallback.double;
+      case 'TRIPLE':
+        return payouts?.triple ?? fallback.triple;
+      case 'SUM': {
+        const key = Number(selection);
+        const fromConfig =
+          payouts?.sum && Number.isFinite(key) ? payouts.sum[key] : undefined;
+        return fromConfig ?? sumPayouts[key];
+      }
+      case 'SINGLE':
+        // Bet placement stores SINGLE with base odds; settlement may upgrade to 8/12 depending on outcome.
+        // For bonus preview, show the base SINGLE odds.
+        return payouts?.single?.single ?? fallback.single.single;
+      default:
+        return null;
+    }
+  };
+
   digitTableEl.querySelectorAll<HTMLButtonElement>('.digit-cell').forEach((cell) => {
     const digitType = cell.dataset.digitType;
     if (!digitType) return;
@@ -1365,8 +1572,34 @@ const refreshDigitHighlights = (nextState: typeof state) => {
     const key = `${digitType}|${selection}`;
     cell.classList.toggle('digit-cell--active', activeKeys.has(key));
     cell.classList.toggle('digit-cell--winner', winnerKeys.has(key));
+    cell.classList.toggle('digit-cell--result', resultKeys.has(key));
+    const isBonus = bonusKeys.has(key) && bonusFactor > 1;
+    cell.classList.toggle('digit-cell--bonus', isBonus);
+
+    const bonusOddsEl = cell.querySelector<HTMLElement>('.digit-bonus-odds');
+    if (bonusOddsEl) {
+      if (isBonus) {
+        const baseOdds = getBaseDigitOdds(digitType, selection);
+        const boosted =
+          typeof baseOdds === 'number' && Number.isFinite(baseOdds)
+            ? baseOdds * bonusFactor
+            : NaN;
+        bonusOddsEl.textContent = Number.isFinite(boosted)
+          ? formatPayoutRatio(boosted)
+          : `x${bonusFactor.toFixed(2).replace(/\.?0+$/, '')}`;
+      } else {
+        bonusOddsEl.textContent = '';
+      }
+    }
+
+    if (bonusChanged && isBonus) {
+      cell.classList.add('digit-cell--bonus-pop');
+      setTimeout(() => cell.classList.remove('digit-cell--bonus-pop'), 1100);
+    }
   });
 };
+
+let lastBonusSignature: string | null = null;
 
 const renderTokenPlacements = (nextState: typeof state) => {
   if (!tokenStackByKey.size) return;
@@ -1411,7 +1644,13 @@ const renderDigitResult = (nextState: typeof state) => {
   if (!digitResultEl || digitResultDigits.length !== 3 || !digitResultSumEl) {
     return;
   }
-  const digits = nextState.lastDigitResult;
+
+  // Prefer live socket payload; fall back to the latest completed round so this never goes blank.
+  const fallbackFromHistory =
+    nextState.roundHistory.find((r) => typeof r.digitResult === 'string' && /^\d{3}$/.test(r.digitResult))
+      ?.digitResult ?? null;
+  const digits = nextState.lastDigitResult ?? fallbackFromHistory;
+
   if (!digits || !/^\d{3}$/.test(digits)) {
     digitResultDigits.forEach((digitEl) => {
       digitEl.textContent = '-';
@@ -1524,6 +1763,8 @@ const buildDigitBetTable = () => {
               <span class="digit-label">${cell.label}</span>
               ${subLabel}
               ${odds}
+              <span class="digit-bonus-badge" aria-hidden="true">BONUS</span>
+              <span class="digit-bonus-odds" aria-hidden="true"></span>
               <span class="token-stack"></span>
             </button>
           `;

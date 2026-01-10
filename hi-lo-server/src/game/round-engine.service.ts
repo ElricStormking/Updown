@@ -5,7 +5,7 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { BetSide, Prisma, Round, RoundStatus } from '@prisma/client';
+import { BetSide, DigitBetType, Prisma, Round, RoundStatus } from '@prisma/client';
 import { Subject } from 'rxjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { BinancePriceService } from '../binance/binance.service';
@@ -16,6 +16,7 @@ import { RoundEvent } from './interfaces/round-event.interface';
 import { BetsService } from '../bets/bets.service';
 import { AppConfig } from '../config/configuration';
 import { getDigitOutcome } from './digit-bet.utils';
+import { pickRandomDigitBonusSlots, type DigitBonusSlot } from './digit-bonus.utils';
 
 @Injectable()
 export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
@@ -25,6 +26,7 @@ export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
   private readonly resultDurationMs: number;
   private readonly resultDisplayDurationMs: number;
   private readonly roundStateTtlMs: number;
+  private readonly digitBonusConfig: AppConfig['game']['digitBonus'];
 
   private lockTimer?: NodeJS.Timeout;
   private resultTimer?: NodeJS.Timeout;
@@ -55,6 +57,10 @@ export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
       'roundState.ttlMs',
       { infer: true },
     );
+
+    this.digitBonusConfig = this.configService.getOrThrow('game.digitBonus', {
+      infer: true,
+    });
   }
 
   async onModuleInit() {
@@ -97,6 +103,16 @@ export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
     const oddsUp = this.getOdds('up');
     const oddsDown = this.getOdds('down');
 
+    const bonusEnabled = Boolean(this.digitBonusConfig?.enabled);
+    const bonusFactor = Number(this.digitBonusConfig?.payoutFactor ?? 1);
+    const minSlots = Math.max(0, Number(this.digitBonusConfig?.minSlots ?? 0));
+    const maxSlots = Math.max(minSlots, Number(this.digitBonusConfig?.maxSlots ?? minSlots));
+    const bonusSlotCount = bonusEnabled
+      ? Math.floor(Math.random() * (maxSlots - minSlots + 1)) + minSlots
+      : 0;
+    const bonusSlots: DigitBonusSlot[] =
+      bonusEnabled && bonusSlotCount > 0 ? pickRandomDigitBonusSlots(bonusSlotCount) : [];
+
     const round = await this.prisma.round.create({
       data: {
         startTime: start,
@@ -104,6 +120,8 @@ export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
         endTime: end,
         oddsUp: new Prisma.Decimal(oddsUp),
         oddsDown: new Prisma.Decimal(oddsDown),
+        digitBonusSlots: bonusSlots as unknown as Prisma.InputJsonValue,
+        digitBonusFactor: bonusEnabled ? new Prisma.Decimal(bonusFactor) : null,
         status: RoundStatus.BETTING,
       },
     });
@@ -249,6 +267,8 @@ export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
         this.currentRound.id,
         winningSide,
         digitOutcome,
+        this.currentRound.digitBonus?.slots ?? [],
+        this.currentRound.digitBonus?.factor ?? null,
       );
       await this.prisma.round.update({
         where: { id: this.currentRound.id },
@@ -320,6 +340,11 @@ export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
   }
 
   private toRoundState(round: Round): RoundState {
+    const slots = this.parseBonusSlots(round.digitBonusSlots);
+    const factor =
+      round.digitBonusFactor !== null && round.digitBonusFactor !== undefined
+        ? Number(round.digitBonusFactor)
+        : null;
     return {
       id: round.id,
       status: round.status,
@@ -328,10 +353,31 @@ export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
       endTime: round.endTime.toISOString(),
       oddsUp: Number(round.oddsUp),
       oddsDown: Number(round.oddsDown),
+      digitBonus:
+        slots.length > 0 || (factor !== null && factor !== undefined)
+          ? { factor: factor ?? 1, slots }
+          : undefined,
       lockedPrice: round.lockedPrice ? Number(round.lockedPrice) : null,
       finalPrice: round.finalPrice ? Number(round.finalPrice) : null,
       winningSide: round.winningSide,
     };
+  }
+
+  private parseBonusSlots(
+    value: unknown,
+  ): Array<{ digitType: DigitBetType; selection: string | null }> {
+    if (!Array.isArray(value)) return [];
+    const allowed = new Set(Object.values(DigitBetType));
+    const slots: Array<{ digitType: DigitBetType; selection: string | null }> = [];
+    for (const item of value) {
+      if (!item || typeof item !== 'object') continue;
+      const digitType = (item as any).digitType as unknown;
+      const selection = (item as any).selection;
+      if (typeof digitType !== 'string' || !allowed.has(digitType as DigitBetType)) continue;
+      if (selection !== null && selection !== undefined && typeof selection !== 'string') continue;
+      slots.push({ digitType: digitType as DigitBetType, selection: selection ?? null });
+    }
+    return slots;
   }
 
   private resumeTimersAfterRestore(state: RoundState) {
