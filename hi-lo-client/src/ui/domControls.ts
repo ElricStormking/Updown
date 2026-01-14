@@ -25,10 +25,6 @@ let digitTableEl: HTMLDivElement | null = null;
 let digitResultEl: HTMLDivElement | null = null;
 let digitResultDigits: HTMLSpanElement[] = [];
 let digitResultSumEl: HTMLSpanElement | null = null;
-let roundSummaryMetaEl: HTMLElement | null = null;
-let roundSummaryHiLoEl: HTMLElement | null = null;
-let roundSummaryDigitsEl: HTMLElement | null = null;
-let roundSummaryTotalEl: HTMLElement | null = null;
 let authScreenEl: HTMLDivElement | null = null;
 let appShellEl: HTMLDivElement | null = null;
 let authStatusEl: HTMLElement | null = null;
@@ -270,21 +266,6 @@ export const initControls = (handlers: ControlHandlers) => {
               <div>Single digit: 2:1 single, 8:1 double, 12:1 triple</div>
             </div>
           </section>
-          <section class="round-summary">
-            <h2 data-i18n="ui.roundSummary"></h2>
-            <div class="round-summary-meta" id="round-summary-meta">
-              Waiting for the first round result...
-            </div>
-            <div class="round-summary-section">
-              <div class="round-summary-heading" data-i18n="ui.hilo"></div>
-              <div class="round-summary-rows" id="round-summary-hilo"></div>
-            </div>
-            <div class="round-summary-section">
-              <div class="round-summary-heading" data-i18n="ui.digitWinners"></div>
-              <div class="round-summary-chips" id="round-summary-digits"></div>
-            </div>
-            <div class="round-summary-total" id="round-summary-total"></div>
-          </section>
           <section class="history-section history-section--bets">
             <h2 data-i18n="ui.myBets"></h2>
             <ul id="bet-history"></ul>
@@ -501,10 +482,6 @@ export const initControls = (handlers: ControlHandlers) => {
     root.querySelectorAll('#digit-result .digit-result-digit'),
   );
   digitResultSumEl = root.querySelector('#digit-result .digit-result-sum');
-  roundSummaryMetaEl = root.querySelector('#round-summary-meta');
-  roundSummaryHiLoEl = root.querySelector('#round-summary-hilo');
-  roundSummaryDigitsEl = root.querySelector('#round-summary-digits');
-  roundSummaryTotalEl = root.querySelector('#round-summary-total');
 
   const authForm = root.querySelector<HTMLFormElement>('#auth-form');
   authForm?.addEventListener('submit', async (event) => {
@@ -968,7 +945,6 @@ const render = (nextState: typeof state) => {
   celebrateWinningBetSlots(nextState);
   renderTokenPlacements(nextState);
   renderDigitResult(nextState);
-  renderRoundSummary(nextState);
   refreshAuthScreen(nextState);
 };
 
@@ -1267,128 +1243,6 @@ const renderBettingHistory = (nextState: typeof state) => {
       `;
     })
     .join('');
-};
-
-const renderRoundSummary = (nextState: typeof state) => {
-  if (
-    !roundSummaryMetaEl ||
-    !roundSummaryHiLoEl ||
-    !roundSummaryDigitsEl ||
-    !roundSummaryTotalEl
-  ) {
-    return;
-  }
-
-  const lastResult = nextState.lastRoundResult;
-  if (!lastResult) {
-    roundSummaryMetaEl.textContent = 'Waiting for the first round result...';
-    roundSummaryHiLoEl.innerHTML = '';
-    roundSummaryDigitsEl.innerHTML = '';
-    roundSummaryTotalEl.textContent = '';
-    return;
-  }
-
-  const roundId = lastResult.roundId;
-  const winningSide = lastResult.winningSide;
-  const digitResult = lastResult.digitResult;
-  const digitSum = lastResult.digitSum;
-
-  const roundDetails = nextState.roundHistory.find((round) => round.id === roundId);
-  const oddsUp = roundDetails?.oddsUp;
-  const oddsDown = roundDetails?.oddsDown;
-
-  const winnerLabel = winningSide ? `Hi-Lo: ${winningSide}` : 'Hi-Lo: PUSH';
-  const digitLabel = digitResult ? `Digits: ${digitResult}` : 'Digits: ---';
-  const sumLabel = typeof digitSum === 'number' ? `Sum: ${digitSum}` : 'Sum: --';
-  roundSummaryMetaEl.textContent = `Round #${roundId} • ${winnerLabel} • ${digitLabel} • ${sumLabel}`;
-
-  const betsForRound =
-    nextState.lastRoundBets.length && nextState.lastRoundBets[0]?.roundId === roundId
-      ? nextState.lastRoundBets
-      : nextState.betHistory.filter((bet) => bet.roundId === roundId);
-  const hiloBets = betsForRound.filter((bet) => bet.betType === 'HILO');
-
-  const sum = (items: number[]) => items.reduce((acc, value) => acc + value, 0);
-  const sumStake = (side: BetSide) =>
-    sum(hiloBets.filter((bet) => bet.side === side).map((bet) => bet.amount));
-  const sumPayout = (side: BetSide) =>
-    sum(hiloBets.filter((bet) => bet.side === side).map((bet) => bet.payout));
-
-  const formatNet = (stake: number, payout: number) => {
-    const net = payout - stake;
-    const sign = net >= 0 ? '+' : '-';
-    return `${sign}${Math.abs(net).toFixed(2)}`;
-  };
-
-  const upStake = sumStake('UP');
-  const upPayout = sumPayout('UP');
-  const downStake = sumStake('DOWN');
-  const downPayout = sumPayout('DOWN');
-
-  const renderSideRow = (side: BetSide, stake: number, payout: number, odds?: number) => {
-    const isWinner = winningSide === side;
-    const oddsLabel = typeof odds === 'number' ? `x${odds.toFixed(2)}` : 'x--';
-    const details = stake > 0 || payout > 0
-      ? `stake ${stake.toFixed(2)} → payout ${payout.toFixed(2)} (${formatNet(stake, payout)})`
-      : 'no bet';
-    return `
-      <div class="round-summary-row${isWinner ? ' is-winner' : ''}">
-        <span class="round-summary-side">${side} <span class="round-summary-odds">${oddsLabel}</span></span>
-        <span class="round-summary-values">${details}</span>
-      </div>
-    `;
-  };
-
-  roundSummaryHiLoEl.innerHTML =
-    renderSideRow('UP', upStake, upPayout, oddsUp) +
-    renderSideRow('DOWN', downStake, downPayout, oddsDown);
-
-  const digitWins = betsForRound.filter(
-    (bet) => bet.betType === 'DIGIT' && bet.result === 'WIN' && bet.digitType,
-  );
-  const formatDigitWin = (bet: (typeof digitWins)[number]) => {
-    const type = bet.digitType!;
-    const sel = bet.selection ?? '';
-    switch (type) {
-      case 'ANY_TRIPLE':
-        return 'ANY TRIPLE';
-      case 'SMALL':
-      case 'BIG':
-      case 'ODD':
-      case 'EVEN':
-        return type;
-      case 'SUM':
-        return `SUM ${sel}`;
-      case 'SINGLE':
-        return `SINGLE ${sel}`;
-      case 'DOUBLE':
-        return `DOUBLE ${sel}`;
-      case 'TRIPLE':
-        return `TRIPLE ${sel}`;
-      default:
-        return `${type}${sel ? ` ${sel}` : ''}`;
-    }
-  };
-  roundSummaryDigitsEl.innerHTML = digitResult
-    ? digitWins.length
-      ? digitWins
-          .map(
-            (bet) =>
-              `<span class="round-chip">${formatDigitWin(bet)}<span class="round-chip-odds">${bet.odds}:1</span></span>`,
-          )
-          .join('')
-      : '<span class="round-summary-muted">No winning digit bets.</span>'
-    : '<span class="round-summary-muted">No digit result yet.</span>';
-
-  const totalStake = nextState.lastRoundStake;
-  const totalPayout = nextState.lastRoundPayout;
-  const totalNet = totalPayout - totalStake;
-  if (totalStake <= 0) {
-    roundSummaryTotalEl.textContent = 'Your round: no bets placed';
-  } else {
-    const sign = totalNet >= 0 ? '+' : '-';
-    roundSummaryTotalEl.textContent = `Your round: stake ${totalStake.toFixed(2)} payout ${totalPayout.toFixed(2)} (${sign}${Math.abs(totalNet).toFixed(2)})`;
-  }
 };
 
 const renderHistoryLists = (nextState: typeof state) => {
