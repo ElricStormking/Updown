@@ -171,6 +171,17 @@ export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
 
     const restoredState = this.toRoundState(round);
     this.currentRound = restoredState;
+
+    if (restoredState.status === RoundStatus.RESULT_PENDING) {
+      try {
+        // Batch-write: if the server restarted after lock, ensure slips are committed.
+        await this.betsService.commitBetSlipsForRound(restoredState.id);
+      } catch (error) {
+        this.logger.warn(
+          `Slip commit on restore failed for round ${restoredState.id}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
     if (!this.resumeTimersAfterRestore(restoredState)) {
       this.currentRound = undefined;
       return false;
@@ -215,6 +226,15 @@ export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
     } catch (error) {
       this.logger.error(`Failed to lock round ${this.currentRound.id}`, error);
       return;
+    }
+
+    try {
+      // Batch-write: persist all pending bet slips into Bet rows at lock.
+      await this.betsService.commitBetSlipsForRound(this.currentRound.id);
+    } catch (error) {
+      this.logger.warn(
+        `Failed to commit bet slips for round ${this.currentRound.id}: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
 
     this.currentRound = {

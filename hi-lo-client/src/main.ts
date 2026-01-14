@@ -134,9 +134,11 @@ const socket = createGameSocket(
         tokenPlacements: {},
       });
     },
-    onRoundLocked: (payload) => {
+    onRoundLocked: async (payload) => {
       scene.handleRoundLock(payload);
       setLockedPrice(payload.lockedPrice ?? null);
+      // Batch-write mode: wallet is debited at lock (when slips are committed on server).
+      await refreshPlayerData();
     },
     onRoundResult: async (payload) => {
       scene.handleRoundResult(payload);
@@ -236,6 +238,12 @@ const addTokenPlacement = (key: string, tokenValue: number) => {
 const getPlacementTotal = (placement?: { value: number; count: number }) =>
   placement ? placement.value * placement.count : 0;
 
+const getTotalPlacedStake = () =>
+  Object.values(state.tokenPlacements ?? {}).reduce(
+    (sum, placement) => sum + getPlacementTotal(placement),
+    0,
+  );
+
 async function handleLogin(credentials: { account: string; password: string }) {
   const [{ data: auth }, { data: config }] = await Promise.all([
     api.login(credentials.account, credentials.password),
@@ -275,7 +283,7 @@ async function handlePlaceHiLoBet(side: BetSide) {
   if (amount !== tokenValue) {
     throw new Error('Token value outside betting limits');
   }
-  if (state.walletBalance < amount) {
+  if (state.walletBalance < getTotalPlacedStake() + amount) {
     throw new Error('Insufficient balance');
   }
   try {
@@ -321,7 +329,7 @@ async function handlePlaceDigitBet(selection: {
   if (amount !== tokenValue) {
     throw new Error('Token value outside betting limits');
   }
-  if (state.walletBalance < amount) {
+  if (state.walletBalance < getTotalPlacedStake() + amount) {
     throw new Error('Insufficient balance');
   }
 

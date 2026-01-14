@@ -15,6 +15,7 @@ import {
   RoundStatus,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { RedisService } from '../redis/redis.service';
 import { WalletService } from '../wallet/wallet.service';
 import { PlaceBetDto } from './dto/place-bet.dto';
 import { AppConfig } from '../config/configuration';
@@ -24,8 +25,20 @@ import { applyBonusFactor, isBonusDigitBet, type DigitBonusSlot } from '../game/
 
 type SumKey = keyof typeof DIGIT_PAYOUTS.sum;
 
+interface SlipBet {
+  id: string;
+  roundId: number;
+  betType: BetType;
+  side: BetSide | null;
+  digitType: DigitBetType | null;
+  selection: string | null;
+  amount: Prisma.Decimal;
+  odds: Prisma.Decimal;
+  createdAt: Date;
+}
+
 export interface PlacedBetPayload {
-  bet: Bet;
+  bet: SlipBet;
   walletBalance: Prisma.Decimal;
 }
 
@@ -52,10 +65,15 @@ export class BetsService {
   private readonly minBet: number;
   private readonly maxBet: number;
 
+  private redisOk: boolean | null = null;
+  private readonly slipMemory = new Map<string, BetSlipStored>();
+  private readonly slipUsersMemory = new Map<number, Set<string>>();
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly walletService: WalletService,
     private readonly configService: ConfigService<AppConfig>,
+    private readonly redis: RedisService,
   ) {
     this.minBet = this.configService.getOrThrow<number>('game.minBetAmount', {
       infer: true,
@@ -123,45 +141,45 @@ export class BetsService {
       odds = normalized.odds;
     }
 
-    const bet = await this.prisma.$transaction(async (tx) => {
-      const wallet = await tx.wallet.findUnique({
-        where: { userId },
-      });
-      if (!wallet) {
-        throw new NotFoundException('Wallet not found');
-      }
+    // Batch-write mode:
+    // - During BETTING: store the bet in a per-user "bet slip" (Redis/memory), do NOT write Bet rows yet.
+    // - At lock (RoundStatus.RESULT_PENDING): RoundEngine commits slips to Bet rows and debits wallets.
 
-      const balance = new Prisma.Decimal(wallet.balance);
-      if (balance.lt(amountDecimal)) {
-        throw new BadRequestException('Insufficient balance');
-      }
+    const wallet = await this.walletService.getOrCreateWallet(userId);
+    const walletBalance = new Prisma.Decimal(wallet.balance);
 
-      const createdBet = await tx.bet.create({
-        data: {
-          userId,
-          roundId: dto.roundId,
-          betType,
-          side: betSide,
-          digitType,
-          selection,
-          amount: amountDecimal,
-          odds,
-        },
-      });
+    const ttlMs = this.getSlipTtlMs(round.lockTime, round.endTime);
+    await this.addToSlipOrThrow(
+      userId,
+      dto.roundId,
+      {
+        betType,
+        side: betSide,
+        digitType,
+        selection,
+        amount: dto.amount,
+      },
+      walletBalance,
+      ttlMs,
+    );
 
-      const updatedWallet = await this.walletService.adjustBalance(
-        userId,
-        amountDecimal.mul(-1),
-        tx,
-      );
+    // Pseudo-bet payload for client UX (slot highlighting, etc.)
+    const accepted: SlipBet = {
+      id: `slip:${dto.roundId}:${Date.now()}:${Math.random().toString(16).slice(2)}`,
+      roundId: dto.roundId,
+      betType,
+      side: betSide,
+      digitType,
+      selection,
+      amount: amountDecimal,
+      odds,
+      createdAt: new Date(),
+    };
 
-      return {
-        bet: createdBet,
-        walletBalance: new Prisma.Decimal(updatedWallet.balance),
-      };
-    });
-
-    return bet;
+    return {
+      bet: accepted,
+      walletBalance: walletBalance,
+    };
   }
 
   async clearBetsForRound(userId: string, roundId: number): Promise<ClearedBetsPayload> {
@@ -179,43 +197,116 @@ export class BetsService {
       throw new BadRequestException('Round already locked');
     }
 
-    return this.prisma.$transaction(async (tx) => {
-      const bets = await tx.bet.findMany({
-        where: {
-          userId,
-          roundId,
-          result: BetResult.PENDING,
-        },
-      });
+    const cleared = await this.clearSlip(userId, roundId);
+    const wallet = await this.walletService.getOrCreateWallet(userId);
 
-      const refundedAmount = bets.reduce(
-        (sum, bet) => sum.add(bet.amount),
-        new Prisma.Decimal(0),
-      );
+    // In batch-write mode, bets aren't debited until lock, so there's nothing to "refund" here.
+    return {
+      roundId,
+      cleared,
+      refundedAmount: new Prisma.Decimal(0),
+      walletBalance: new Prisma.Decimal(wallet.balance),
+    };
+  }
 
-      if (bets.length) {
-        await tx.bet.deleteMany({
-          where: {
-            userId,
-            roundId,
-            result: BetResult.PENDING,
-          },
-        });
+  async commitBetSlipsForRound(roundId: number) {
+    const round = await this.prisma.round.findUnique({
+      where: { id: roundId },
+    });
+    if (!round) {
+      return;
+    }
+
+    // Guard: only commit once per round (best-effort).
+    const committedKey = this.getSlipCommittedKey(roundId);
+    if (await this.hasCommittedRound(committedKey)) {
+      return;
+    }
+
+    const userIds = await this.getSlipUsers(roundId);
+    if (!userIds.length) {
+      await this.markCommittedRound(committedKey, this.getSlipTtlMs(round.lockTime, round.endTime));
+      return;
+    }
+
+    for (const userId of userIds) {
+      const slip = await this.getSlip(userId, roundId);
+      if (!slip) continue;
+
+      const items = Object.values(slip.items ?? {});
+      if (!items.length) {
+        await this.clearSlip(userId, roundId);
+        continue;
       }
 
-      const wallet = await this.walletService.adjustBalance(
-        userId,
-        refundedAmount,
-        tx,
+      const total = items.reduce(
+        (sum, item) => sum.add(new Prisma.Decimal(item.amount)),
+        new Prisma.Decimal(0),
       );
+      if (total.lte(0)) {
+        await this.clearSlip(userId, roundId);
+        continue;
+      }
 
-      return {
-        roundId,
-        cleared: bets.length,
-        refundedAmount,
-        walletBalance: new Prisma.Decimal(wallet.balance),
-      };
-    });
+      try {
+        await this.prisma.$transaction(async (tx) => {
+          // Create Bet rows in a batch for this user/round.
+          const rows = items.map((item) => {
+            if (item.betType === BetType.HILO) {
+              if (!item.side) {
+                throw new BadRequestException('Missing side for Hi-Lo slip item');
+              }
+              const odds =
+                item.side === BetSide.UP
+                  ? new Prisma.Decimal(round.oddsUp)
+                  : new Prisma.Decimal(round.oddsDown);
+              return {
+                userId,
+                roundId,
+                betType: BetType.HILO,
+                side: item.side,
+                digitType: null,
+                selection: null,
+                amount: new Prisma.Decimal(item.amount),
+                odds,
+                payout: new Prisma.Decimal(0),
+                result: BetResult.PENDING,
+              };
+            }
+
+            if (!item.digitType) {
+              throw new BadRequestException('Missing digitType for digit slip item');
+            }
+            const normalized = this.normalizeDigitBet(item.digitType, item.selection ?? undefined);
+            return {
+              userId,
+              roundId,
+              betType: BetType.DIGIT,
+              side: null,
+              digitType: normalized.digitType,
+              selection: normalized.selection,
+              amount: new Prisma.Decimal(item.amount),
+              odds: normalized.odds,
+              payout: new Prisma.Decimal(0),
+              result: BetResult.PENDING,
+            };
+          });
+
+          await tx.bet.createMany({ data: rows });
+          await this.walletService.adjustBalance(userId, total.mul(-1), tx);
+        });
+      } catch (error) {
+        // If wallet changed externally or any slip item is invalid, skip this user.
+        const reason = error instanceof Error ? error.message : String(error);
+        this.logger.warn(`Slip commit skipped for user ${userId} round ${roundId}: ${reason}`);
+      } finally {
+        // Always clear slip so it can't be committed later after lock.
+        await this.clearSlip(userId, roundId);
+      }
+    }
+
+    await this.clearSlipUsers(roundId);
+    await this.markCommittedRound(committedKey, this.getSlipTtlMs(round.lockTime, round.endTime));
   }
 
   async settleRound(
@@ -617,7 +708,179 @@ export class BetsService {
     }
   }
 
+  private async isRedisOk() {
+    if (this.redisOk !== null) {
+      return this.redisOk;
+    }
+    const probe = await this.redis.set('probe:bets-slip', '1', 1000);
+    this.redisOk = probe === 'OK';
+    return this.redisOk;
+  }
+
+  private getSlipKey(userId: string, roundId: number) {
+    return `betslip:${roundId}:${userId}`;
+  }
+
+  private getSlipUsersKey(roundId: number) {
+    return `betslip:${roundId}:users`;
+  }
+
+  private getSlipCommittedKey(roundId: number) {
+    return `betslip:${roundId}:committed`;
+  }
+
+  private getSlipTtlMs(lockTime: Date, endTime: Date) {
+    // Keep slips around slightly past round end to survive short processing delays.
+    const ttl = endTime.getTime() - Date.now() + 60_000;
+    const min = lockTime.getTime() - Date.now() + 60_000;
+    return Math.max(ttl, min, 60_000);
+  }
+
+  private makeSlipItemKey(item: Omit<BetSlipItem, 'amount'>) {
+    if (item.betType === BetType.HILO) {
+      return `HILO|${item.side ?? ''}`;
+    }
+    return `DIGIT|${item.digitType ?? ''}|${item.selection ?? ''}`;
+  }
+
+  private async getSlip(userId: string, roundId: number): Promise<BetSlipStored | null> {
+    const key = this.getSlipKey(userId, roundId);
+    if (await this.isRedisOk()) {
+      return await this.redis.getJson<BetSlipStored>(key);
+    }
+    return this.slipMemory.get(key) ?? null;
+  }
+
+  private async setSlip(slip: BetSlipStored, ttlMs: number) {
+    const key = this.getSlipKey(slip.userId, slip.roundId);
+    if (await this.isRedisOk()) {
+      await this.redis.setJson(key, slip, ttlMs);
+      return;
+    }
+    this.slipMemory.set(key, slip);
+  }
+
+  private async getSlipUsers(roundId: number) {
+    const key = this.getSlipUsersKey(roundId);
+    if (await this.isRedisOk()) {
+      return (await this.redis.getJson<string[]>(key)) ?? [];
+    }
+    return Array.from(this.slipUsersMemory.get(roundId) ?? []);
+  }
+
+  private async addSlipUser(roundId: number, userId: string, ttlMs: number) {
+    const key = this.getSlipUsersKey(roundId);
+    if (await this.isRedisOk()) {
+      const existing = (await this.redis.getJson<string[]>(key)) ?? [];
+      if (!existing.includes(userId)) {
+        existing.push(userId);
+        await this.redis.setJson(key, existing, ttlMs);
+      }
+      return;
+    }
+    const set = this.slipUsersMemory.get(roundId) ?? new Set<string>();
+    set.add(userId);
+    this.slipUsersMemory.set(roundId, set);
+  }
+
+  private async clearSlipUsers(roundId: number) {
+    const key = this.getSlipUsersKey(roundId);
+    if (await this.isRedisOk()) {
+      await this.redis.del(key);
+      return;
+    }
+    this.slipUsersMemory.delete(roundId);
+  }
+
+  private async clearSlip(userId: string, roundId: number) {
+    const key = this.getSlipKey(userId, roundId);
+    const slip = await this.getSlip(userId, roundId);
+    const cleared = slip ? Object.keys(slip.items ?? {}).length : 0;
+    if (await this.isRedisOk()) {
+      await this.redis.del(key);
+      return cleared;
+    }
+    this.slipMemory.delete(key);
+    return cleared;
+  }
+
+  private async hasCommittedRound(committedKey: string) {
+    if (await this.isRedisOk()) {
+      const value = await this.redis.get(committedKey);
+      return value === '1';
+    }
+    return false;
+  }
+
+  private async markCommittedRound(committedKey: string, ttlMs: number) {
+    if (await this.isRedisOk()) {
+      await this.redis.set(committedKey, '1', ttlMs);
+    }
+  }
+
+  private async addToSlipOrThrow(
+    userId: string,
+    roundId: number,
+    item: BetSlipItem,
+    walletBalance: Prisma.Decimal,
+    ttlMs: number,
+  ) {
+    const existing = (await this.getSlip(userId, roundId)) ?? {
+      roundId,
+      userId,
+      items: {},
+      updatedAt: new Date().toISOString(),
+    };
+
+    const key = this.makeSlipItemKey(item);
+    const nextItems = { ...(existing.items ?? {}) };
+    const prev = nextItems[key];
+    nextItems[key] = {
+      betType: item.betType,
+      side: item.side,
+      digitType: item.digitType,
+      selection: item.selection,
+      amount: Number(prev?.amount ?? 0) + Number(item.amount),
+    };
+
+    const total = Object.values(nextItems).reduce(
+      (sum, entry) => sum.add(new Prisma.Decimal(entry.amount)),
+      new Prisma.Decimal(0),
+    );
+
+    if (total.gt(walletBalance)) {
+      throw new BadRequestException('Insufficient balance');
+    }
+
+    const slip: BetSlipStored = {
+      roundId,
+      userId,
+      items: nextItems,
+      updatedAt: new Date().toISOString(),
+    };
+
+    await this.setSlip(slip, ttlMs);
+    await this.addSlipUser(roundId, userId, ttlMs);
+    return slip;
+  }
+
   private isSumKey(value: number): value is SumKey {
     return Object.prototype.hasOwnProperty.call(DIGIT_PAYOUTS.sum, value);
   }
 }
+
+type BetSlipItem = {
+  betType: BetType;
+  side: BetSide | null;
+  digitType: DigitBetType | null;
+  selection: string | null;
+  amount: number;
+};
+
+type BetSlipStored = {
+  roundId: number;
+  userId: string;
+  items: Record<string, BetSlipItem>;
+  updatedAt: string;
+};
+
