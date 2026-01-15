@@ -98,6 +98,13 @@ const sumPayouts: Record<number, number> = {
   23: 55,
 };
 
+const formatPayoutRatio = (value: number) => {
+  if (!Number.isFinite(value)) return '--';
+  const rounded = Math.round(value * 100) / 100;
+  const asStr = rounded.toFixed(2).replace(/\.?0+$/, '');
+  return `${asStr}:1`;
+};
+
 export const initControls = (handlers: ControlHandlers) => {
   const root = document.querySelector<HTMLDivElement>('#app');
   if (!root) {
@@ -945,6 +952,7 @@ const render = (nextState: typeof state) => {
   celebrateWinningBetSlots(nextState);
   renderTokenPlacements(nextState);
   renderDigitResult(nextState);
+  updateDigitTableOdds(nextState);
   refreshAuthScreen(nextState);
 };
 
@@ -1374,13 +1382,6 @@ const refreshDigitHighlights = (nextState: typeof state) => {
     lastBonusSignature = nextBonusSignature;
   }
 
-  const formatPayoutRatio = (value: number) => {
-    if (!Number.isFinite(value)) return '--';
-    const rounded = Math.round(value * 100) / 100;
-    const asStr = rounded.toFixed(2).replace(/\.?0+$/, '');
-    return `${asStr}:1`;
-  };
-
   const getBaseDigitOdds = (digitType: string, selection: string) => {
     const payouts = nextState.config?.digitPayouts;
     const fallback = {
@@ -1454,6 +1455,25 @@ const refreshDigitHighlights = (nextState: typeof state) => {
 };
 
 let lastBonusSignature: string | null = null;
+
+const updateDigitTableOdds = (nextState: typeof state) => {
+  if (!digitTableEl) return;
+  const payouts = nextState.config?.digitPayouts;
+  digitTableEl
+    .querySelectorAll<HTMLButtonElement>('.digit-cell[data-digit-type="SUM"]')
+    .forEach((cell) => {
+      const selection = cell.dataset.selection;
+      if (!selection) return;
+      const key = Number(selection);
+      if (!Number.isFinite(key)) return;
+      const oddsValue = payouts?.sum?.[key] ?? sumPayouts[key];
+      const oddsEl = cell.querySelector<HTMLElement>('.digit-odds');
+      if (!oddsEl) return;
+      oddsEl.textContent = Number.isFinite(oddsValue)
+        ? formatPayoutRatio(oddsValue)
+        : '--';
+    });
+};
 
 const renderTokenPlacements = (nextState: typeof state) => {
   if (!tokenStackByKey.size) return;

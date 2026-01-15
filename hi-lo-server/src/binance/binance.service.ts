@@ -11,6 +11,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { CacheKeys } from '../common/constants/cache-keys';
 import { PriceUpdate } from './interfaces/price-update.interface';
+import { GameConfigService } from '../config/game-config.service';
 
 type BinanceTradePayload = {
   p?: string;
@@ -34,7 +35,7 @@ export class BinancePriceService implements OnModuleInit, OnModuleDestroy {
   private lastPersistAt = 0;
   private readonly reconnectDelayMs: number;
   private readonly heartbeatIntervalMs: number;
-  private readonly snapshotIntervalMs: number;
+  private snapshotIntervalMs: number;
   private readonly priceCacheTtlMs: number;
   // Throttle noisy trade stream so timers/DB don't get starved under load.
   private readonly emitIntervalMs = 250;
@@ -42,6 +43,7 @@ export class BinancePriceService implements OnModuleInit, OnModuleDestroy {
 
   constructor(
     private readonly configService: ConfigService,
+    private readonly gameConfigService: GameConfigService,
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
   ) {
@@ -53,10 +55,8 @@ export class BinancePriceService implements OnModuleInit, OnModuleDestroy {
       'binance.heartbeatIntervalMs',
       { infer: true },
     );
-    this.snapshotIntervalMs = this.configService.getOrThrow<number>(
-      'game.priceSnapshotInterval',
-      { infer: true },
-    );
+    this.snapshotIntervalMs =
+      this.gameConfigService.getDefaultConfig().priceSnapshotInterval;
     const redisTtlSeconds = this.configService.getOrThrow<number>(
       'redis.ttlSeconds',
       { infer: true },
@@ -181,6 +181,8 @@ export class BinancePriceService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async persistPrice(update: PriceUpdate) {
+    const config = await this.gameConfigService.getActiveConfig();
+    this.snapshotIntervalMs = config.priceSnapshotInterval;
     try {
       await this.redis.setJson(
         CacheKeys.btcPrice,

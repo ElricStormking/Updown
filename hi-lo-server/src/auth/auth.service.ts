@@ -86,12 +86,16 @@ export class AuthService {
       secret: this.configService.get<string>('auth.jwtSecret') ?? 'change-me',
       expiresIn,
     });
+    const adminAccounts =
+      this.configService.get<string[]>('admin.accounts') ?? [];
+    const isAdmin = adminAccounts.includes(user.email);
 
     return {
       accessToken,
       user: {
         id: user.id,
         account: user.email,
+        isAdmin,
       },
     };
   }

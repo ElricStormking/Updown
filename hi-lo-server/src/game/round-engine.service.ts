@@ -17,16 +17,16 @@ import { BetsService } from '../bets/bets.service';
 import { AppConfig } from '../config/configuration';
 import { getDigitOutcome } from './digit-bet.utils';
 import { pickRandomDigitBonusSlots, type DigitBonusSlot } from './digit-bonus.utils';
+import { GameConfigService } from '../config/game-config.service';
+import { GameConfigSnapshot } from '../config/game-config.defaults';
 
 @Injectable()
 export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(RoundEngineService.name);
   private readonly eventsSubject = new Subject<RoundEvent>();
-  private readonly bettingDurationMs: number;
-  private readonly resultDurationMs: number;
-  private readonly resultDisplayDurationMs: number;
   private readonly roundStateTtlMs: number;
   private readonly digitBonusConfig: AppConfig['game']['digitBonus'];
+  private currentConfig?: GameConfigSnapshot;
 
   private lockTimer?: NodeJS.Timeout;
   private resultTimer?: NodeJS.Timeout;
@@ -37,22 +37,11 @@ export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService<AppConfig>,
+    private readonly gameConfigService: GameConfigService,
     private readonly binancePrice: BinancePriceService,
     private readonly redis: RedisService,
     private readonly betsService: BetsService,
   ) {
-    this.bettingDurationMs = this.configService.getOrThrow<number>(
-      'game.bettingDurationMs',
-      { infer: true },
-    );
-    this.resultDurationMs = this.configService.getOrThrow<number>(
-      'game.resultDurationMs',
-      { infer: true },
-    );
-    this.resultDisplayDurationMs = this.configService.getOrThrow<number>(
-      'game.resultDisplayDurationMs',
-      { infer: true },
-    );
     this.roundStateTtlMs = this.configService.getOrThrow<number>(
       'roundState.ttlMs',
       { infer: true },
@@ -97,11 +86,13 @@ export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
       return;
     }
     const now = Date.now();
+    const config = await this.gameConfigService.getActiveConfig();
+    this.currentConfig = config;
     const start = new Date(now);
-    const lock = new Date(now + this.bettingDurationMs);
-    const end = new Date(lock.getTime() + this.resultDurationMs);
-    const oddsUp = this.getOdds('up');
-    const oddsDown = this.getOdds('down');
+    const lock = new Date(now + config.bettingDurationMs);
+    const end = new Date(lock.getTime() + config.resultDurationMs);
+    const oddsUp = config.payoutMultiplierUp;
+    const oddsDown = config.payoutMultiplierDown;
 
     const bonusEnabled = Boolean(this.digitBonusConfig?.enabled);
     const bonusFactor = Number(this.digitBonusConfig?.payoutFactor ?? 1);
@@ -120,6 +111,7 @@ export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
         endTime: end,
         oddsUp: new Prisma.Decimal(oddsUp),
         oddsDown: new Prisma.Decimal(oddsDown),
+        gameConfigSnapshot: config as unknown as Prisma.InputJsonValue,
         digitBonusSlots: bonusSlots as unknown as Prisma.InputJsonValue,
         digitBonusFactor: bonusEnabled ? new Prisma.Decimal(bonusFactor) : null,
         status: RoundStatus.BETTING,
@@ -145,6 +137,7 @@ export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
     );
     if (cachedState) {
       this.currentRound = cachedState;
+      await this.loadRoundConfigSnapshot(cachedState.id);
       if (this.resumeTimersAfterRestore(cachedState)) {
         await this.cacheRoundState();
         this.eventsSubject.next({
@@ -154,6 +147,7 @@ export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
         return true;
       }
       this.currentRound = undefined;
+      this.currentConfig = undefined;
     }
 
     const round = await this.prisma.round.findFirst({
@@ -171,6 +165,9 @@ export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
 
     const restoredState = this.toRoundState(round);
     this.currentRound = restoredState;
+    this.currentConfig = this.gameConfigService.normalizeSnapshot(
+      round.gameConfigSnapshot,
+    );
 
     if (restoredState.status === RoundStatus.RESULT_PENDING) {
       try {
@@ -184,6 +181,7 @@ export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
     }
     if (!this.resumeTimersAfterRestore(restoredState)) {
       this.currentRound = undefined;
+      this.currentConfig = undefined;
       return false;
     }
 
@@ -194,17 +192,6 @@ export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
     });
 
     return true;
-  }
-
-  private getOdds(direction: 'up' | 'down') {
-    if (direction === 'up') {
-      return this.configService.getOrThrow<number>('game.payoutMultiplierUp', {
-        infer: true,
-      });
-    }
-    return this.configService.getOrThrow<number>('game.payoutMultiplierDown', {
-      infer: true,
-    });
   }
 
   private async lockCurrentRound() {
@@ -252,9 +239,7 @@ export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
     });
 
     const remaining = Math.max(
-      this.currentRound
-        ? new Date(this.currentRound.endTime).getTime() - Date.now()
-        : this.resultDurationMs,
+      new Date(this.currentRound.endTime).getTime() - Date.now(),
       0,
     );
     this.resultTimer = setTimeout(() => {
@@ -332,6 +317,11 @@ export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
     });
 
     this.currentRound = undefined;
+    const displayDelay = Math.max(
+      this.currentConfig?.resultDisplayDurationMs ?? 0,
+      0,
+    );
+    this.currentConfig = undefined;
     await this.redis.del(CacheKeys.activeRoundState);
 
     if (this.nextRoundTimer) {
@@ -339,7 +329,7 @@ export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
     }
     this.nextRoundTimer = setTimeout(() => {
       void this.startNewRound();
-    }, Math.max(this.resultDisplayDurationMs, 0));
+    }, displayDelay);
   }
 
   private async fetchLatestPrice(): Promise<number | null> {
@@ -359,12 +349,25 @@ export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
     );
   }
 
+  private async loadRoundConfigSnapshot(roundId: number) {
+    const round = await this.prisma.round.findUnique({
+      where: { id: roundId },
+      select: { gameConfigSnapshot: true },
+    });
+    this.currentConfig = this.gameConfigService.normalizeSnapshot(
+      round?.gameConfigSnapshot,
+    );
+  }
+
   private toRoundState(round: Round): RoundState {
     const slots = this.parseBonusSlots(round.digitBonusSlots);
     const factor =
       round.digitBonusFactor !== null && round.digitBonusFactor !== undefined
         ? Number(round.digitBonusFactor)
         : null;
+    const configVersion =
+      this.gameConfigService.normalizeSnapshot(round.gameConfigSnapshot)
+        .configVersion ?? null;
     return {
       id: round.id,
       status: round.status,
@@ -373,6 +376,7 @@ export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
       endTime: round.endTime.toISOString(),
       oddsUp: Number(round.oddsUp),
       oddsDown: Number(round.oddsDown),
+      configVersion,
       digitBonus:
         slots.length > 0 || (factor !== null && factor !== undefined)
           ? { factor: factor ?? 1, slots }

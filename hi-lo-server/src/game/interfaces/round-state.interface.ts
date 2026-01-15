@@ -13,6 +13,7 @@ export interface RoundState {
   endTime: string;
   oddsUp: number;
   oddsDown: number;
+  configVersion?: string | null;
   digitBonus?: {
     factor: number;
     slots: DigitBonusSlotState[];

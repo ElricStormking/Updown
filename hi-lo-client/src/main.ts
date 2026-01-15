@@ -133,6 +133,11 @@ const socket = createGameSocket(
         digitSelections: [],
         tokenPlacements: {},
       });
+      const currentVersion = state.config?.configVersion ?? null;
+      const nextVersion = payload.configVersion ?? null;
+      if (!currentVersion || !nextVersion || currentVersion !== nextVersion) {
+        void refreshConfig();
+      }
     },
     onRoundLocked: async (payload) => {
       scene.handleRoundLock(payload);
@@ -262,6 +267,18 @@ async function handleLogin(credentials: { account: string; password: string }) {
 
   await refreshPlayerData();
   authenticateGameSocket(socket, auth.accessToken);
+}
+
+async function refreshConfig() {
+  try {
+    const { data: config } = await api.fetchGameConfig();
+    updateState({ config });
+    scene.setResultDisplayDuration(
+      config.resultDisplayDurationMs ?? 8000,
+    );
+  } catch {
+    // Ignore config refresh failures; we keep the last known config.
+  }
 }
 
 async function handlePlaceHiLoBet(side: BetSide) {

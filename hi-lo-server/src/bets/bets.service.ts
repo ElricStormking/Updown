@@ -4,7 +4,6 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import {
   Bet,
   BetResult,
@@ -18,12 +17,13 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { WalletService } from '../wallet/wallet.service';
 import { PlaceBetDto } from './dto/place-bet.dto';
-import { AppConfig } from '../config/configuration';
-import { DIGIT_PAYOUTS, DIGIT_SUM_RANGES } from '../game/digit-bet.constants';
+import { DIGIT_SUM_RANGES } from '../game/digit-bet.constants';
 import { DigitOutcome } from '../game/digit-bet.utils';
 import { applyBonusFactor, isBonusDigitBet, type DigitBonusSlot } from '../game/digit-bonus.utils';
+import { GameConfigService } from '../config/game-config.service';
+import type { DigitPayouts, GameConfigSnapshot } from '../config/game-config.defaults';
 
-type SumKey = keyof typeof DIGIT_PAYOUTS.sum;
+type SumKey = keyof DigitPayouts['sum'];
 
 interface SlipBet {
   id: string;
@@ -62,9 +62,6 @@ export interface SettlementStats {
 export class BetsService {
   private readonly logger = new Logger(BetsService.name);
 
-  private readonly minBet: number;
-  private readonly maxBet: number;
-
   private redisOk: boolean | null = null;
   private readonly slipMemory = new Map<string, BetSlipStored>();
   private readonly slipUsersMemory = new Map<number, Set<string>>();
@@ -72,24 +69,11 @@ export class BetsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly walletService: WalletService,
-    private readonly configService: ConfigService<AppConfig>,
+    private readonly gameConfigService: GameConfigService,
     private readonly redis: RedisService,
-  ) {
-    this.minBet = this.configService.getOrThrow<number>('game.minBetAmount', {
-      infer: true,
-    });
-    this.maxBet = this.configService.getOrThrow<number>('game.maxBetAmount', {
-      infer: true,
-    });
-  }
+  ) {}
 
   async placeBet(userId: string, dto: PlaceBetDto): Promise<PlacedBetPayload> {
-    if (dto.amount < this.minBet || dto.amount > this.maxBet) {
-      throw new BadRequestException(
-        `Bet amount must be between ${this.minBet} and ${this.maxBet}`,
-      );
-    }
-
     const round = await this.prisma.round.findUnique({
       where: { id: dto.roundId },
     });
@@ -102,6 +86,13 @@ export class BetsService {
     }
     if (round.lockTime.getTime() <= Date.now()) {
       throw new BadRequestException('Round already locked');
+    }
+
+    const config = this.getConfigForRound(round);
+    if (dto.amount < config.minBetAmount || dto.amount > config.maxBetAmount) {
+      throw new BadRequestException(
+        `Bet amount must be between ${config.minBetAmount} and ${config.maxBetAmount}`,
+      );
     }
 
     const amountDecimal = new Prisma.Decimal(dto.amount);
@@ -135,7 +126,11 @@ export class BetsService {
       if (!dto.digitType) {
         throw new BadRequestException('Digit bet type is required');
       }
-      const normalized = this.normalizeDigitBet(dto.digitType, dto.selection);
+      const normalized = this.normalizeDigitBet(
+        dto.digitType,
+        dto.selection,
+        config.digitPayouts,
+      );
       digitType = normalized.digitType;
       selection = normalized.selection;
       odds = normalized.odds;
@@ -216,6 +211,7 @@ export class BetsService {
     if (!round) {
       return;
     }
+    const config = this.getConfigForRound(round);
 
     // Guard: only commit once per round (best-effort).
     const committedKey = this.getSlipCommittedKey(roundId);
@@ -277,7 +273,11 @@ export class BetsService {
             if (!item.digitType) {
               throw new BadRequestException('Missing digitType for digit slip item');
             }
-            const normalized = this.normalizeDigitBet(item.digitType, item.selection ?? undefined);
+            const normalized = this.normalizeDigitBet(
+              item.digitType,
+              item.selection ?? undefined,
+              config.digitPayouts,
+            );
             return {
               userId,
               roundId,
@@ -316,6 +316,15 @@ export class BetsService {
     digitBonusSlots: DigitBonusSlot[] = [],
     digitBonusFactor: number | null = null,
   ): Promise<SettlementStats> {
+    const round = await this.prisma.round.findUnique({
+      where: { id: roundId },
+      select: { gameConfigSnapshot: true },
+    });
+    const config = this.gameConfigService.normalizeSnapshot(
+      round?.gameConfigSnapshot,
+    );
+    const digitPayouts = config.digitPayouts;
+
     const bets = await this.prisma.bet.findMany({
       where: { roundId },
     });
@@ -376,6 +385,7 @@ export class BetsService {
           const payoutMultiplier = this.resolveDigitPayout(
             bet,
             digitOutcome,
+            digitPayouts,
           );
           if (payoutMultiplier !== null) {
             const isBonus = isBonusDigitBet(
@@ -520,6 +530,7 @@ export class BetsService {
   private normalizeDigitBet(
     digitType: DigitBetType,
     selection: string | undefined,
+    payouts: DigitPayouts,
   ): { digitType: DigitBetType; selection: string | null; odds: Prisma.Decimal } {
     const cleanSelection = selection?.trim();
     switch (digitType) {
@@ -533,7 +544,7 @@ export class BetsService {
         return {
           digitType,
           selection: null,
-          odds: new Prisma.Decimal(DIGIT_PAYOUTS.smallBigOddEven),
+          odds: new Prisma.Decimal(payouts.smallBigOddEven),
         };
       case DigitBetType.ANY_TRIPLE:
         if (cleanSelection) {
@@ -542,14 +553,14 @@ export class BetsService {
         return {
           digitType,
           selection: null,
-          odds: new Prisma.Decimal(DIGIT_PAYOUTS.anyTriple),
+          odds: new Prisma.Decimal(payouts.anyTriple),
         };
       case DigitBetType.DOUBLE: {
         const normalized = this.normalizeDoubleSelection(cleanSelection);
         return {
           digitType,
           selection: normalized,
-          odds: new Prisma.Decimal(DIGIT_PAYOUTS.double),
+          odds: new Prisma.Decimal(payouts.double),
         };
       }
       case DigitBetType.TRIPLE: {
@@ -557,12 +568,12 @@ export class BetsService {
         return {
           digitType,
           selection: normalized,
-          odds: new Prisma.Decimal(DIGIT_PAYOUTS.triple),
+          odds: new Prisma.Decimal(payouts.triple),
         };
       }
       case DigitBetType.SUM: {
-        const normalized = this.normalizeSumSelection(cleanSelection);
-        const payout = DIGIT_PAYOUTS.sum[normalized];
+        const normalized = this.normalizeSumSelection(cleanSelection, payouts);
+        const payout = payouts.sum[normalized];
         return {
           digitType,
           selection: String(normalized),
@@ -574,7 +585,7 @@ export class BetsService {
         return {
           digitType,
           selection: normalized,
-          odds: new Prisma.Decimal(DIGIT_PAYOUTS.single.single),
+          odds: new Prisma.Decimal(payouts.single.single),
         };
       }
       default:
@@ -608,7 +619,10 @@ export class BetsService {
     return selection;
   }
 
-  private normalizeSumSelection(selection?: string | null): SumKey {
+  private normalizeSumSelection(
+    selection: string | null | undefined,
+    payouts: DigitPayouts,
+  ): SumKey {
     if (!selection) {
       throw new BadRequestException('Sum selection is required');
     }
@@ -622,7 +636,7 @@ export class BetsService {
     ) {
       throw new BadRequestException('Sum selection out of range');
     }
-    if (!this.isSumKey(sum)) {
+    if (!this.isSumKey(sum, payouts.sum)) {
       throw new BadRequestException('Sum selection out of range');
     }
     return sum;
@@ -638,7 +652,11 @@ export class BetsService {
     return selection;
   }
 
-  private resolveDigitPayout(bet: Bet, outcome: DigitOutcome): number | null {
+  private resolveDigitPayout(
+    bet: Bet,
+    outcome: DigitOutcome,
+    payouts: DigitPayouts,
+  ): number | null {
     if (!bet.digitType) {
       return null;
     }
@@ -653,38 +671,38 @@ export class BetsService {
         return !isTriple &&
           sum >= DIGIT_SUM_RANGES.small.min &&
           sum <= DIGIT_SUM_RANGES.small.max
-          ? DIGIT_PAYOUTS.smallBigOddEven
+          ? payouts.smallBigOddEven
           : null;
       case DigitBetType.BIG:
         return !isTriple &&
           sum >= DIGIT_SUM_RANGES.big.min &&
           sum <= DIGIT_SUM_RANGES.big.max
-          ? DIGIT_PAYOUTS.smallBigOddEven
+          ? payouts.smallBigOddEven
           : null;
       case DigitBetType.ODD:
         return !isTriple && sum % 2 === 1
-          ? DIGIT_PAYOUTS.smallBigOddEven
+          ? payouts.smallBigOddEven
           : null;
       case DigitBetType.EVEN:
         return !isTriple && sum % 2 === 0
-          ? DIGIT_PAYOUTS.smallBigOddEven
+          ? payouts.smallBigOddEven
           : null;
       case DigitBetType.ANY_TRIPLE:
-        return isTriple ? DIGIT_PAYOUTS.anyTriple : null;
+        return isTriple ? payouts.anyTriple : null;
       case DigitBetType.TRIPLE:
         return isTriple && selection === outcome.digits
-          ? DIGIT_PAYOUTS.triple
+          ? payouts.triple
           : null;
       case DigitBetType.DOUBLE: {
         const digit = selection[0];
-        return digit && countFor(digit) >= 2 ? DIGIT_PAYOUTS.double : null;
+        return digit && countFor(digit) >= 2 ? payouts.double : null;
       }
       case DigitBetType.SUM: {
         const target = Number(selection);
-        if (!Number.isFinite(target) || !this.isSumKey(target)) {
+        if (!Number.isFinite(target) || !this.isSumKey(target, payouts.sum)) {
           return null;
         }
-        return sum === target ? DIGIT_PAYOUTS.sum[target] : null;
+        return sum === target ? payouts.sum[target] : null;
       }
       case DigitBetType.SINGLE: {
         const digit = selection[0];
@@ -693,13 +711,13 @@ export class BetsService {
         }
         const count = countFor(digit);
         if (count === 1) {
-          return DIGIT_PAYOUTS.single.single;
+          return payouts.single.single;
         }
         if (count === 2) {
-          return DIGIT_PAYOUTS.single.double;
+          return payouts.single.double;
         }
         if (count === 3) {
-          return DIGIT_PAYOUTS.single.triple;
+          return payouts.single.triple;
         }
         return null;
       }
@@ -864,8 +882,15 @@ export class BetsService {
     return slip;
   }
 
-  private isSumKey(value: number): value is SumKey {
-    return Object.prototype.hasOwnProperty.call(DIGIT_PAYOUTS.sum, value);
+  private getConfigForRound(round: { gameConfigSnapshot?: unknown | null }): GameConfigSnapshot {
+    return this.gameConfigService.normalizeSnapshot(round.gameConfigSnapshot);
+  }
+
+  private isSumKey(
+    value: number,
+    sumTable: DigitPayouts['sum'],
+  ): value is SumKey {
+    return Object.prototype.hasOwnProperty.call(sumTable, value);
   }
 }
 

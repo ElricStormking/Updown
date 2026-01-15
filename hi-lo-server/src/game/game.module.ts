@@ -8,6 +8,7 @@ import { BetsModule } from '../bets/bets.module';
 import { WalletModule } from '../wallet/wallet.module';
 import { AuthModule } from '../auth/auth.module';
 import { GameGateway } from './game.gateway';
+import { GameConfigModule } from '../config/game-config.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { GameGateway } from './game.gateway';
     BetsModule,
     WalletModule,
     AuthModule,
+    GameConfigModule,
   ],
   providers: [RoundEngineService, GameGateway],
   exports: [RoundEngineService, GameGateway],

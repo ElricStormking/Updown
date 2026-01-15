@@ -11,6 +11,8 @@ DATABASE_URL=postgresql://localhost:5433/hi_lo_game?schema=public
 JWT_SECRET=change-me
 JWT_EXPIRES_IN=1h
 PASSWORD_SALT_ROUNDS=12
+# Admin allowlist (comma-separated account identifiers)
+ADMIN_ACCOUNTS=
 # Account identifier used as login (was email)
 SEED_USER_ACCOUNT=demo_account
 SEED_USER_PASSWORD=changeme
@@ -27,8 +29,8 @@ BINANCE_REST_URL=https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT
 BINANCE_RECONNECT_DELAY=3000
 BINANCE_HEARTBEAT_INTERVAL=2000
 
-# Game tuning (round timing, bet limits, payouts, snapshots) lives in:
-# hi-lo-server/src/config/game-config.ts
+# Game tuning (round timing, bet limits, payouts, snapshots) is stored via:
+# PUT /config/game (admin-only). Defaults live in hi-lo-server/src/config/game-config.ts
 ROUND_STATE_TTL=60000
 PLAYER_BET_HISTORY_LIMIT=100
 ROUND_HISTORY_LIMIT=100

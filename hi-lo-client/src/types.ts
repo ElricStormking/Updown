@@ -24,6 +24,7 @@ export interface RoundStatePayload {
   endTime: string;
   oddsUp: number;
   oddsDown: number;
+  configVersion?: string | null;
   digitBonus?: {
     factor: number;
     slots: Array<{
@@ -71,6 +72,7 @@ export interface WalletResponse {
 }
 
 export interface GameConfig {
+  configVersion?: string;
   bettingDurationMs: number;
   resultDurationMs: number;
   resultDisplayDurationMs: number;
@@ -78,6 +80,7 @@ export interface GameConfig {
   maxBetAmount: number;
   payoutMultiplierUp: number;
   payoutMultiplierDown: number;
+  priceSnapshotInterval: number;
   historyLimits: {
     player: number;
     rounds: number;

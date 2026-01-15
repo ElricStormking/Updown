@@ -38,13 +38,14 @@ Backend for the Hi-Lo Bitcoin Prediction prototype. The service consumes the Bin
 | `SEED_USER_ACCOUNT` | Seed user login | `demo_account` |
 | `SEED_USER_PASSWORD` | Seed user password | `changeme` |
 | `SEED_USER_BALANCE` | Seed wallet balance | `1000` |
+| `ADMIN_ACCOUNTS` | Comma-separated admin accounts for `/config/game` | `designer1,designer2` |
 | `PLAYER_BET_HISTORY_LIMIT` | Bets returned from `/history/bets` | `100` |
 | `ROUND_HISTORY_LIMIT` | Rounds returned from `/history/rounds` | `100` |
 | `BINANCE_RECONNECT_DELAY` | WS reconnect backoff (ms) | `3000` |
 | `BINANCE_HEARTBEAT_INTERVAL` | Price heartbeat guard (ms) | `2000` |
 | `ROUND_STATE_TTL` | Round cache TTL in Redis (ms) | `60000` |
 
-Game tuning (round timing, bet limits, payouts, snapshots) now lives in `hi-lo-server/src/config/game-config.ts`.
+Game tuning (round timing, bet limits, payouts, snapshots) is stored in the database via `PUT /config/game` (admin-only). Defaults live in `hi-lo-server/src/config/game-config.ts`.
 
 > Tip: store Supabase service role + anon keys as secrets in Cursor’s Supabase MCP so DTO/codegen stays schema-aware.
 

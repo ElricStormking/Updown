@@ -5,5 +5,6 @@ export interface AuthResponseDto {
   user: {
     id: string;
     account: string;
+    isAdmin: boolean;
   };
 }

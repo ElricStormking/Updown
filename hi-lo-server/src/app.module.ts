@@ -4,7 +4,8 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { configuration } from './config/configuration';
 import { validateEnv } from './config/env.validation';
-import { GameConfigController } from './config/game-config.controller';
+import { GameConfigModule } from './config/game-config.module';
+import { AdminModule } from './admin/admin.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
@@ -26,6 +27,8 @@ import { HistoryModule } from './history/history.module';
     }),
     PrismaModule,
     RedisModule,
+    AdminModule,
+    GameConfigModule,
     UsersModule,
     AuthModule,
     WalletModule,
@@ -34,7 +37,7 @@ import { HistoryModule } from './history/history.module';
     HistoryModule,
     GameModule,
   ],
-  controllers: [AppController, GameConfigController],
+  controllers: [AppController],
   providers: [AppService],
 })
 export class AppModule {}

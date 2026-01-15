@@ -10,6 +10,7 @@ const envSchema = z.object({
   JWT_SECRET: z.string().min(8, 'JWT_SECRET should be at least 8 characters'),
   JWT_EXPIRES_IN: z.string().default('1h'),
   PASSWORD_SALT_ROUNDS: z.coerce.number().min(4).default(12),
+  ADMIN_ACCOUNTS: z.string().default(''),
   REDIS_URL: z.string().url().default('redis://localhost:6379'),
   CACHE_TTL_SECONDS: z.coerce.number().min(1).default(5),
   BINANCE_WS_URL: z.string().url(),

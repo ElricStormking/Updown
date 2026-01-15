@@ -16,6 +16,12 @@ export const configuration = () => ({
     jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? '1h',
     saltRounds: Number(process.env.PASSWORD_SALT_ROUNDS ?? 12),
   },
+  admin: {
+    accounts: (process.env.ADMIN_ACCOUNTS ?? '')
+      .split(',')
+      .map((entry) => entry.trim())
+      .filter(Boolean),
+  },
   redis: {
     url: process.env.REDIS_URL ?? 'redis://localhost:6379',
     ttlSeconds: Number(process.env.CACHE_TTL_SECONDS ?? 5),
