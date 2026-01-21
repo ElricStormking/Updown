@@ -3,6 +3,7 @@ import { BetSide, DigitBetType, RoundStatus } from '@prisma/client';
 export interface DigitBonusSlotState {
   digitType: DigitBetType;
   selection: string | null;
+  bonusRatio?: number | null;
 }
 
 export interface RoundState {
@@ -15,7 +16,7 @@ export interface RoundState {
   oddsDown: number;
   configVersion?: string | null;
   digitBonus?: {
-    factor: number;
+    factor?: number | null;
     slots: DigitBonusSlotState[];
   };
   lockedPrice?: number | null;

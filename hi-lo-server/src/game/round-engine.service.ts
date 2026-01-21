@@ -16,7 +16,13 @@ import { RoundEvent } from './interfaces/round-event.interface';
 import { BetsService } from '../bets/bets.service';
 import { AppConfig } from '../config/configuration';
 import { getDigitOutcome } from './digit-bet.utils';
-import { pickRandomDigitBonusSlots, type DigitBonusSlot } from './digit-bonus.utils';
+import {
+  DEFAULT_BONUS_SLOT_CHANCE_TOTAL,
+  buildDigitBonusKey,
+  getAllDigitBetSlots,
+  pickBonusRatioWithChance,
+  type DigitBonusSlot,
+} from './digit-bonus.utils';
 import { GameConfigService } from '../config/game-config.service';
 import { GameConfigSnapshot } from '../config/game-config.defaults';
 
@@ -96,13 +102,23 @@ export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
 
     const bonusEnabled = Boolean(this.digitBonusConfig?.enabled);
     const bonusFactor = Number(this.digitBonusConfig?.payoutFactor ?? 1);
-    const minSlots = Math.max(0, Number(this.digitBonusConfig?.minSlots ?? 0));
-    const maxSlots = Math.max(minSlots, Number(this.digitBonusConfig?.maxSlots ?? minSlots));
-    const bonusSlotCount = bonusEnabled
-      ? Math.floor(Math.random() * (maxSlots - minSlots + 1)) + minSlots
-      : 0;
-    const bonusSlots: DigitBonusSlot[] =
-      bonusEnabled && bonusSlotCount > 0 ? pickRandomDigitBonusSlots(bonusSlotCount) : [];
+    const bonusSlots: DigitBonusSlot[] = [];
+    if (bonusEnabled) {
+      const bonusChanceTotal = Number(
+        config.bonusSlotChanceTotal ?? DEFAULT_BONUS_SLOT_CHANCE_TOTAL,
+      );
+      const allSlots = getAllDigitBetSlots();
+      allSlots.forEach((slot) => {
+        const key = buildDigitBonusKey(slot);
+        const entry = config.digitBonusRatios?.[key];
+        const bonusRatio = entry
+          ? pickBonusRatioWithChance(entry.ratios, entry.weights, Math.random, bonusChanceTotal)
+          : null;
+        if (bonusRatio !== null && bonusRatio !== undefined) {
+          bonusSlots.push({ ...slot, bonusRatio });
+        }
+      });
+    }
 
     const round = await this.prisma.round.create({
       data: {
@@ -389,17 +405,24 @@ export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
 
   private parseBonusSlots(
     value: unknown,
-  ): Array<{ digitType: DigitBetType; selection: string | null }> {
+  ): Array<{ digitType: DigitBetType; selection: string | null; bonusRatio?: number | null }> {
     if (!Array.isArray(value)) return [];
     const allowed = new Set(Object.values(DigitBetType));
-    const slots: Array<{ digitType: DigitBetType; selection: string | null }> = [];
+    const slots: Array<{ digitType: DigitBetType; selection: string | null; bonusRatio?: number | null }> = [];
     for (const item of value) {
       if (!item || typeof item !== 'object') continue;
       const digitType = (item as any).digitType as unknown;
       const selection = (item as any).selection;
+      const bonusRatio = (item as any).bonusRatio;
       if (typeof digitType !== 'string' || !allowed.has(digitType as DigitBetType)) continue;
       if (selection !== null && selection !== undefined && typeof selection !== 'string') continue;
-      slots.push({ digitType: digitType as DigitBetType, selection: selection ?? null });
+      const ratio =
+        typeof bonusRatio === 'number' && Number.isFinite(bonusRatio) ? bonusRatio : null;
+      slots.push({
+        digitType: digitType as DigitBetType,
+        selection: selection ?? null,
+        bonusRatio: ratio,
+      });
     }
     return slots;
   }

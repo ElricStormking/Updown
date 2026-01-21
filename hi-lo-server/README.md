@@ -30,7 +30,7 @@ Backend for the Hi-Lo Bitcoin Prediction prototype. The service consumes the Bin
 
 | Key | Description | Example |
 | --- | --- | --- |
-| `API_PORT` | Nest API port (reserve 3000 for Phaser) | `4001` |
+| `API_PORT` | Nest API port (avoid 3000 if client runs on 3000) | `4001` |
 | `FRONTEND_ORIGIN` | Allowed CORS origin | `http://localhost:3000` |
 | `DATABASE_URL` | Supabase Postgres URI | `postgresql://...` |
 | `REDIS_URL` | Redis connection string | `redis://localhost:6380` |
@@ -75,6 +75,7 @@ npm run db:seed                         # seed demo wallet/user
 
 - API (Nest): configurable via `API_PORT` (default 4001)
 - Web client (Phaser): serve via a separate process on port 3000
+- Admin UI: `http://localhost:4001/admin` (or `http://localhost:3000/admin` via Vite proxy)
 
 ## Manual QA script
 

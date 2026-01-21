@@ -19,7 +19,12 @@ import { WalletService } from '../wallet/wallet.service';
 import { PlaceBetDto } from './dto/place-bet.dto';
 import { DIGIT_SUM_RANGES } from '../game/digit-bet.constants';
 import { DigitOutcome } from '../game/digit-bet.utils';
-import { applyBonusFactor, isBonusDigitBet, type DigitBonusSlot } from '../game/digit-bonus.utils';
+import {
+  buildDigitBetKey,
+  getBonusRatioForSlot,
+  isBonusDigitBet,
+  type DigitBonusSlot,
+} from '../game/digit-bonus.utils';
 import { GameConfigService } from '../config/game-config.service';
 import type { DigitPayouts, GameConfigSnapshot } from '../config/game-config.defaults';
 
@@ -388,14 +393,23 @@ export class BetsService {
             digitPayouts,
           );
           if (payoutMultiplier !== null) {
-            const isBonus = isBonusDigitBet(
+            const bonusRatio = getBonusRatioForSlot(
+              bet.digitType,
+              bet.selection ?? null,
+              digitBonusSlots,
+            );
+            const isBonusSlot = isBonusDigitBet(
               bet.digitType,
               bet.selection ?? null,
               digitBonusSlots,
             );
             const factor = Number(digitBonusFactor ?? 1);
             const boosted =
-              isBonus && factor > 1 ? applyBonusFactor(payoutMultiplier, factor) : payoutMultiplier;
+              typeof bonusRatio === 'number' && Number.isFinite(bonusRatio)
+                ? bonusRatio
+                : isBonusSlot && factor > 1
+                  ? payoutMultiplier * factor
+                : payoutMultiplier;
             await this.processDigitWin(
               tx,
               bet,
@@ -541,34 +555,42 @@ export class BetsService {
         if (cleanSelection) {
           throw new BadRequestException('Selection is not needed for this bet');
         }
+        const sboePayout =
+          this.getSlotPayoutOverride(digitType, null, payouts) ?? payouts.smallBigOddEven;
         return {
           digitType,
           selection: null,
-          odds: new Prisma.Decimal(payouts.smallBigOddEven),
+          odds: new Prisma.Decimal(sboePayout),
         };
       case DigitBetType.ANY_TRIPLE:
         if (cleanSelection) {
           throw new BadRequestException('Selection is not needed for this bet');
         }
+        const anyTriplePayout =
+          this.getSlotPayoutOverride(digitType, null, payouts) ?? payouts.anyTriple;
         return {
           digitType,
           selection: null,
-          odds: new Prisma.Decimal(payouts.anyTriple),
+          odds: new Prisma.Decimal(anyTriplePayout),
         };
       case DigitBetType.DOUBLE: {
         const normalized = this.normalizeDoubleSelection(cleanSelection);
+        const doublePayout =
+          this.getSlotPayoutOverride(digitType, normalized, payouts) ?? payouts.double;
         return {
           digitType,
           selection: normalized,
-          odds: new Prisma.Decimal(payouts.double),
+          odds: new Prisma.Decimal(doublePayout),
         };
       }
       case DigitBetType.TRIPLE: {
         const normalized = this.normalizeTripleSelection(cleanSelection);
+        const triplePayout =
+          this.getSlotPayoutOverride(digitType, normalized, payouts) ?? payouts.triple;
         return {
           digitType,
           selection: normalized,
-          odds: new Prisma.Decimal(payouts.triple),
+          odds: new Prisma.Decimal(triplePayout),
         };
       }
       case DigitBetType.SUM: {
@@ -582,15 +604,34 @@ export class BetsService {
       }
       case DigitBetType.SINGLE: {
         const normalized = this.normalizeSingleSelection(cleanSelection);
+        const singlePayout =
+          this.getSlotPayoutOverride(digitType, normalized, payouts) ?? payouts.single.single;
         return {
           digitType,
           selection: normalized,
-          odds: new Prisma.Decimal(payouts.single.single),
+          odds: new Prisma.Decimal(singlePayout),
         };
       }
       default:
         throw new BadRequestException('Unsupported digit bet type');
     }
+  }
+
+  private getSlotPayoutOverride(
+    digitType: DigitBetType,
+    selection: string | null,
+    payouts: DigitPayouts,
+  ): number | null {
+    if (!payouts.bySlot) return null;
+    const key = buildDigitBetKey(digitType, selection);
+    const value = payouts.bySlot[key];
+    return typeof value === 'number' && Number.isFinite(value) ? value : null;
+  }
+
+  private scaleSinglePayout(base: number, target: number, defaultBase: number): number {
+    if (!Number.isFinite(base)) return target;
+    if (!Number.isFinite(defaultBase) || defaultBase <= 0) return target;
+    return base * (target / defaultBase);
   }
 
   private normalizeDoubleSelection(selection?: string | null) {
@@ -665,37 +706,42 @@ export class BetsService {
     const isTriple = outcome.isTriple;
     const selection = bet.selection ?? '';
     const countFor = (digit: string) => outcome.counts[digit] ?? 0;
+    const slotPayout = this.getSlotPayoutOverride(
+      bet.digitType,
+      bet.selection ?? null,
+      payouts,
+    );
 
     switch (bet.digitType) {
       case DigitBetType.SMALL:
         return !isTriple &&
           sum >= DIGIT_SUM_RANGES.small.min &&
           sum <= DIGIT_SUM_RANGES.small.max
-          ? payouts.smallBigOddEven
+          ? slotPayout ?? payouts.smallBigOddEven
           : null;
       case DigitBetType.BIG:
         return !isTriple &&
           sum >= DIGIT_SUM_RANGES.big.min &&
           sum <= DIGIT_SUM_RANGES.big.max
-          ? payouts.smallBigOddEven
+          ? slotPayout ?? payouts.smallBigOddEven
           : null;
       case DigitBetType.ODD:
         return !isTriple && sum % 2 === 1
-          ? payouts.smallBigOddEven
+          ? slotPayout ?? payouts.smallBigOddEven
           : null;
       case DigitBetType.EVEN:
         return !isTriple && sum % 2 === 0
-          ? payouts.smallBigOddEven
+          ? slotPayout ?? payouts.smallBigOddEven
           : null;
       case DigitBetType.ANY_TRIPLE:
-        return isTriple ? payouts.anyTriple : null;
+        return isTriple ? slotPayout ?? payouts.anyTriple : null;
       case DigitBetType.TRIPLE:
         return isTriple && selection === outcome.digits
-          ? payouts.triple
+          ? slotPayout ?? payouts.triple
           : null;
       case DigitBetType.DOUBLE: {
         const digit = selection[0];
-        return digit && countFor(digit) >= 2 ? payouts.double : null;
+        return digit && countFor(digit) >= 2 ? slotPayout ?? payouts.double : null;
       }
       case DigitBetType.SUM: {
         const target = Number(selection);
@@ -711,13 +757,15 @@ export class BetsService {
         }
         const count = countFor(digit);
         if (count === 1) {
-          return payouts.single.single;
+          return slotPayout ?? payouts.single.single;
         }
         if (count === 2) {
-          return payouts.single.double;
+          const base = slotPayout ?? payouts.single.single;
+          return this.scaleSinglePayout(base, payouts.single.double, payouts.single.single);
         }
         if (count === 3) {
-          return payouts.single.triple;
+          const base = slotPayout ?? payouts.single.single;
+          return this.scaleSinglePayout(base, payouts.single.triple, payouts.single.single);
         }
         return null;
       }

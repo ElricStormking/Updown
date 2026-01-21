@@ -9,8 +9,6 @@ export const gameConfig = {
   priceSnapshotInterval: 5000,
   digitBonus: {
     enabled: true,
-    minSlots: 1,
-    maxSlots: 3,
     payoutFactor: 1.2,
   },
 } as const;

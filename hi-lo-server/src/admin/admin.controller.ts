@@ -10,79 +10,122 @@ const ADMIN_PAGE_HTML = `<!doctype html>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Admin Tools</title>
     <style>
+      @import url("https://fonts.googleapis.com/css2?family=Fraunces:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap");
       :root {
-        color-scheme: light;
-        --bg: #f5f6f8;
-        --panel: #ffffff;
-        --text: #1b1f24;
-        --muted: #6b7280;
-        --accent: #0ea5e9;
-        --border: #e5e7eb;
+        color-scheme: dark;
+        --bg: #0b0f16;
+        --bg-strong: #0f1622;
+        --panel: rgba(15, 23, 42, 0.86);
+        --panel-strong: #0f172a;
+        --text: #e2e8f0;
+        --muted: #9aa4b2;
+        --accent: #38bdf8;
+        --accent-strong: #0ea5e9;
+        --accent-soft: #0b2333;
+        --border: #1f2a3a;
+        --shadow: 0 24px 60px rgba(3, 6, 10, 0.65);
+        --radius: 18px;
+        --radius-sm: 12px;
       }
       * {
         box-sizing: border-box;
       }
       body {
         margin: 0;
-        font-family: "Segoe UI", Tahoma, Arial, sans-serif;
-        background: var(--bg);
+        font-family: "IBM Plex Sans", "Segoe UI", Tahoma, Arial, sans-serif;
+        background: radial-gradient(
+            1100px circle at 12% -18%,
+            rgba(56, 189, 248, 0.08) 0%,
+            transparent 50%
+          ),
+          radial-gradient(
+            900px circle at 90% -12%,
+            rgba(15, 118, 110, 0.12) 0%,
+            transparent 55%
+          ),
+          linear-gradient(180deg, var(--bg) 0%, var(--bg-strong) 100%);
         color: var(--text);
       }
       .page {
-        max-width: 1100px;
+        max-width: 1180px;
         margin: 0 auto;
-        padding: 2rem 1.25rem 3rem;
+        padding: 2.5rem 1.5rem 3.5rem;
       }
       header {
         display: flex;
-        align-items: center;
+        align-items: flex-start;
         justify-content: space-between;
-        margin-bottom: 1.5rem;
+        gap: 1rem;
+        margin-bottom: 1.8rem;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid var(--border);
       }
       h1 {
-        font-size: 1.6rem;
+        font-family: "Fraunces", "Times New Roman", serif;
+        font-size: 1.9rem;
         margin: 0;
+        letter-spacing: 0.02em;
       }
       .tagline {
         color: var(--muted);
-        font-size: 0.95rem;
-        margin-top: 0.25rem;
+        font-size: 0.9rem;
+        margin-top: 0.35rem;
       }
       .toolbar {
         display: flex;
-        gap: 0.75rem;
+        gap: 0.6rem;
+        align-items: center;
       }
       button {
         cursor: pointer;
         border: 1px solid var(--border);
-        background: #fff;
+        background: var(--panel-strong);
         color: var(--text);
-        padding: 0.6rem 0.9rem;
-        border-radius: 10px;
+        padding: 0.55rem 1.1rem;
+        border-radius: 999px;
         font-weight: 600;
+        font-size: 0.92rem;
+        transition:
+          transform 0.12s ease,
+          box-shadow 0.12s ease,
+          border-color 0.12s ease,
+          background 0.12s ease;
+      }
+      button:hover:not(:disabled) {
+        transform: translateY(-1px);
+        box-shadow: 0 10px 24px rgba(3, 6, 10, 0.6);
+        border-color: rgba(56, 189, 248, 0.35);
       }
       button.primary {
-        background: var(--accent);
-        border-color: var(--accent);
-        color: #fff;
+        background: linear-gradient(135deg, var(--accent) 0%, var(--accent-strong) 100%);
+        border-color: transparent;
+        color: #04111f;
+        box-shadow: 0 14px 30px rgba(14, 165, 233, 0.35);
       }
       button.secondary {
-        background: #fff;
+        background: transparent;
+        color: var(--text);
       }
       button:disabled {
         opacity: 0.6;
         cursor: not-allowed;
+        box-shadow: none;
+        transform: none;
       }
       .section {
         background: var(--panel);
         border: 1px solid var(--border);
-        border-radius: 16px;
-        padding: 1.25rem;
+        border-radius: var(--radius);
+        padding: 1.4rem 1.35rem;
         margin-bottom: 1.25rem;
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(8px);
       }
       .section h2 {
-        margin: 0 0 0.9rem 0;
-        font-size: 1.15rem;
+        margin: 0 0 1rem 0;
+        font-size: 1.2rem;
+        font-family: "Fraunces", "Times New Roman", serif;
+        letter-spacing: 0.01em;
       }
       .hidden {
         display: none;
@@ -93,69 +136,234 @@ const ADMIN_PAGE_HTML = `<!doctype html>
         color: var(--muted);
       }
       .status.error {
-        color: #b91c1c;
+        color: #f87171;
       }
       .grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
         gap: 0.9rem 1.1rem;
       }
       label {
         display: flex;
         flex-direction: column;
-        gap: 0.35rem;
-        font-size: 0.9rem;
+        gap: 0.45rem;
+        font-size: 0.82rem;
         color: var(--muted);
+        letter-spacing: 0.02em;
       }
       input {
-        padding: 0.45rem 0.6rem;
-        border-radius: 8px;
+        padding: 0.55rem 0.7rem;
+        border-radius: var(--radius-sm);
         border: 1px solid var(--border);
         font-size: 0.95rem;
+        background: #0b1320;
+        color: var(--text);
+        transition:
+          border-color 0.12s ease,
+          box-shadow 0.12s ease,
+          background 0.12s ease;
+        font-variant-numeric: tabular-nums;
+      }
+      input:focus {
+        outline: none;
+        border-color: rgba(56, 189, 248, 0.7);
+        box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.16);
+        background: #0f1b2f;
       }
       .form-actions {
         display: flex;
         gap: 0.6rem;
         margin-top: 1rem;
+        flex-wrap: wrap;
       }
       .sum-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
         gap: 0.6rem;
       }
       .sum-field {
         border: 1px solid var(--border);
-        border-radius: 10px;
-        padding: 0.5rem;
-        background: #f9fafb;
+        border-radius: var(--radius-sm);
+        padding: 0.55rem;
+        background: var(--panel-strong);
       }
       .sum-field span {
-        font-size: 0.8rem;
+        font-size: 0.75rem;
         color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
       }
       .sum-field input {
-        margin-top: 0.35rem;
+        margin-top: 0.4rem;
         width: 100%;
+      }
+      .bonus-ratio-wrapper {
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        overflow: auto;
+        background: var(--panel-strong);
+      }
+      .bonus-ratio-table {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 860px;
+      }
+      .bonus-ratio-table th,
+      .bonus-ratio-table td {
+        border-bottom: 1px solid var(--border);
+        text-align: center;
+        padding: 0.55rem 0.6rem;
+        font-size: 0.82rem;
+      }
+      .bonus-ratio-table th {
+        color: var(--muted);
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        font-size: 0.7rem;
+      }
+      .bonus-ratio-table th:first-child,
+      .bonus-ratio-table td:first-child {
+        text-align: left;
+      }
+      .bonus-ratio-table input {
+        width: 78px;
+      }
+      .bonus-ratio-table .sum-payout-input {
+        width: 96px;
+      }
+      .bonus-ratio-table .sum-payout-col {
+        text-align: left;
+      }
+      .bonus-ratio-table .payout-col {
+        text-align: left;
+        min-width: 130px;
+      }
+      .bonus-ratio-table .metric-col {
+        min-width: 110px;
+        text-align: left;
+      }
+      .bonus-ratio-table .total-counts-col {
+        min-width: 120px;
+        text-align: left;
+      }
+      .metric-cell {
+        text-align: left;
+      }
+      .metric-value {
+        font-weight: 600;
+        color: #7dd3fc;
+      }
+      .metric-input input {
+        width: 84px;
+      }
+      .total-counts-cell input {
+        width: 104px;
+      }
+      .bonus-ratio-table .payout-cell {
+        text-align: left;
+        padding: 0.55rem 0.6rem;
+      }
+      .bonus-ratio-table .payout-cell input {
+        width: 96px;
+      }
+      .table-controls-row th {
+        text-transform: none;
+        letter-spacing: normal;
+        font-size: 0.78rem;
+        padding: 0.35rem 0.6rem;
+        text-align: right;
+      }
+      .chip-group {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+      }
+      .chip-title {
+        font-size: 0.68rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--muted);
+      }
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0.2rem 0.45rem;
+        border-radius: 999px;
+        border: 1px solid rgba(56, 189, 248, 0.28);
+        background: rgba(56, 189, 248, 0.08);
+        font-size: 0.7rem;
+        color: var(--text);
+      }
+      .chip input {
+        width: 64px;
+        padding: 0.3rem 0.4rem;
+        font-size: 0.8rem;
+      }
+      .bonus-ratio-table tbody tr:hover {
+        background: #0f1a2a;
+      }
+      .bonus-ratio-table .slot-label {
+        font-weight: 600;
+        color: var(--text);
+        letter-spacing: 0.02em;
       }
       table {
         width: 100%;
         border-collapse: collapse;
       }
-      th, td {
+      th,
+      td {
         border-bottom: 1px solid var(--border);
         text-align: left;
-        padding: 0.6rem 0.4rem;
+        padding: 0.65rem 0.45rem;
         font-size: 0.9rem;
       }
       th {
         color: var(--muted);
         font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        font-size: 0.72rem;
+      }
+      tbody tr:hover {
+        background: #0e1826;
       }
       .rtp-controls {
         display: flex;
         flex-wrap: wrap;
         gap: 0.75rem;
         align-items: flex-end;
+      }
+      .sum-bonus-layout {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1.5rem;
+        align-items: flex-start;
+      }
+      .sum-bonus-layout .sum-grid {
+        flex: 1 1 320px;
+      }
+      .sum-bonus-layout .bonus-ratio-wrapper {
+        flex: 1 1 560px;
+      }
+      .sum-bonus-layout h4 {
+        margin: 0 0 0.5rem 0;
+        font-family: "Fraunces", "Times New Roman", serif;
+      }
+      @media (max-width: 760px) {
+        header {
+          flex-direction: column;
+          align-items: flex-start;
+        }
+        .toolbar {
+          width: 100%;
+          justify-content: flex-end;
+        }
+        button {
+          width: 100%;
+        }
       }
     </style>
   </head>
@@ -212,6 +420,10 @@ const ADMIN_PAGE_HTML = `<!doctype html>
               <input id="cfg-snapshot-interval" type="number" min="1" step="100" />
             </label>
             <label>
+              Bonus slot chance total
+              <input id="cfg-bonus-slot-total" type="number" min="1" step="1" />
+            </label>
+            <label>
               Min bet amount
               <input id="cfg-min-bet" type="number" min="0" step="0.01" />
             </label>
@@ -227,38 +439,87 @@ const ADMIN_PAGE_HTML = `<!doctype html>
               Hi-Lo payout down
               <input id="cfg-payout-down" type="number" min="0" step="0.01" />
             </label>
-            <label>
-              Small/Big/Odd/Even payout
-              <input id="cfg-digit-sboe" type="number" min="0" step="0.01" />
-            </label>
-            <label>
-              Any triple payout
-              <input id="cfg-digit-any-triple" type="number" min="0" step="0.01" />
-            </label>
-            <label>
-              Double payout
-              <input id="cfg-digit-double" type="number" min="0" step="0.01" />
-            </label>
-            <label>
-              Triple payout
-              <input id="cfg-digit-triple" type="number" min="0" step="0.01" />
-            </label>
-            <label>
-              Single payout (1x)
-              <input id="cfg-digit-single" type="number" min="0" step="0.01" />
-            </label>
-            <label>
-              Single payout (2x)
-              <input id="cfg-digit-single-double" type="number" min="0" step="0.01" />
-            </label>
-            <label>
-              Single payout (3x)
-              <input id="cfg-digit-single-triple" type="number" min="0" step="0.01" />
-            </label>
           </div>
           <div style="margin-top: 1rem;">
-            <h3 style="margin: 0 0 0.5rem 0;">Digit Sum Payouts</h3>
-            <div class="sum-grid" id="sum-grid"></div>
+            <h3 style="margin: 0 0 0.5rem 0;">Digit Bonus Ratios (Other Slots)</h3>
+            <div class="bonus-ratio-wrapper">
+              <table class="bonus-ratio-table">
+                <thead>
+                  <tr class="table-controls-row">
+                    <th colspan="17">
+                      <div class="chip-group">
+                        <span class="chip-title">Single multipliers</span>
+                        <label class="chip">
+                          <span>2x</span>
+                          <input id="cfg-digit-single-double" type="number" min="0" step="0.01" />
+                        </label>
+                        <label class="chip">
+                          <span>3x</span>
+                          <input id="cfg-digit-single-triple" type="number" min="0" step="0.01" />
+                        </label>
+                      </div>
+                    </th>
+                  </tr>
+                  <tr>
+                    <th rowspan="2">Bet Slot</th>
+                    <th rowspan="2" class="payout-col">Payout Ratio</th>
+                    <th rowspan="2" class="metric-col">Bonus %</th>
+                    <th rowspan="2" class="metric-col">Suggest Win %</th>
+                    <th rowspan="2" class="metric-col">RTP %</th>
+                    <th rowspan="2" class="metric-col">RTP FP %</th>
+                    <th colspan="5">Bonus Ratios</th>
+                    <th colspan="5">Bonus Weights</th>
+                    <th rowspan="2" class="total-counts-col">Total Counts</th>
+                  </tr>
+                  <tr>
+                    <th>1</th>
+                    <th>2</th>
+                    <th>3</th>
+                    <th>4</th>
+                    <th>5</th>
+                    <th>1</th>
+                    <th>2</th>
+                    <th>3</th>
+                    <th>4</th>
+                    <th>5</th>
+                  </tr>
+                </thead>
+                <tbody id="bonus-ratio-body"></tbody>
+              </table>
+            </div>
+          </div>
+          <div style="margin-top: 1.25rem;">
+            <h3 style="margin: 0 0 0.5rem 0;">Digit Sum Payouts + Sum Bonus Ratios</h3>
+            <div class="bonus-ratio-wrapper">
+              <table class="bonus-ratio-table sum-bonus-table">
+                <thead>
+                  <tr>
+                    <th rowspan="2">Bet Slot</th>
+                    <th rowspan="2" class="sum-payout-col">Sum payout</th>
+                    <th rowspan="2" class="metric-col">Bonus %</th>
+                    <th rowspan="2" class="metric-col">Suggest Win %</th>
+                    <th rowspan="2" class="metric-col">RTP %</th>
+                    <th rowspan="2" class="metric-col">RTP FP %</th>
+                    <th colspan="5">Bonus Ratios</th>
+                    <th colspan="5">Bonus Weights</th>
+                    <th rowspan="2" class="total-counts-col">Total Counts</th>
+                  </tr>
+                  <tr>
+                    <th>1</th>
+                    <th>2</th>
+                    <th>3</th>
+                    <th>4</th>
+                    <th>5</th>
+                    <th>1</th>
+                    <th>2</th>
+                    <th>3</th>
+                    <th>4</th>
+                    <th>5</th>
+                  </tr>
+                </thead>
+                <tbody id="bonus-ratio-sum-body"></tbody>
+              </table>
+            </div>
           </div>
           <div class="form-actions">
             <button type="button" id="config-reload">Reload</button>
@@ -316,9 +577,62 @@ const ADMIN_PAGE_HTML = `<!doctype html>
       const rtpStatus = document.querySelector('#rtp-status');
       const rtpBody = document.querySelector('#rtp-table-body');
       const sumGrid = document.querySelector('#sum-grid');
+      const bonusRatioBody = document.querySelector('#bonus-ratio-body');
+      const bonusRatioSumBody = document.querySelector('#bonus-ratio-sum-body');
+      const bonusSlotTotalInput = document.querySelector('#cfg-bonus-slot-total');
 
-      const sumKeys = Array.from({ length: 20 }, (_, idx) => idx + 4);
+      const sumKeys = Array.from({ length: 26 }, (_, idx) => idx + 1);
       const sumInputs = new Map();
+      const bonusRatioInputs = new Map();
+      const slotPayoutInputs = new Map();
+      const slotMetaInputs = new Map();
+
+      const buildBonusSlotDefs = () => {
+        const defs = [];
+        const pushDef = (entry) => defs.push(entry);
+        pushDef({ digitType: 'SMALL', selection: null, label: 'SMALL' });
+        pushDef({ digitType: 'ODD', selection: null, label: 'ODD' });
+        pushDef({ digitType: 'EVEN', selection: null, label: 'EVEN' });
+        pushDef({ digitType: 'BIG', selection: null, label: 'BIG' });
+        pushDef({ digitType: 'ANY_TRIPLE', selection: null, label: 'ANY TRIPLE' });
+
+        for (let d = 0; d <= 9; d += 1) {
+          pushDef({
+            digitType: 'SINGLE',
+            selection: String(d),
+            label: 'SINGLE ' + String(d),
+          });
+        }
+
+        for (const d of ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']) {
+          pushDef({
+            digitType: 'DOUBLE',
+            selection: d + d,
+            label: 'DOUBLE ' + d + d,
+          });
+        }
+
+        for (const d of ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']) {
+          pushDef({
+            digitType: 'TRIPLE',
+            selection: d + d + d,
+            label: 'TRIPLE ' + d + d + d,
+          });
+        }
+
+        for (let sum = 1; sum <= 26; sum += 1) {
+          pushDef({
+            digitType: 'SUM',
+            selection: String(sum),
+            label: 'SUM ' + String(sum),
+            group: 'sum',
+          });
+        }
+
+        return defs;
+      };
+
+      const bonusSlotDefs = buildBonusSlotDefs();
 
       const setStatus = (el, message, isError) => {
         if (!el) return;
@@ -361,6 +675,15 @@ const ADMIN_PAGE_HTML = `<!doctype html>
         return value;
       };
 
+      const readOptionalNumber = (value, label) => {
+        const raw = String(value || '').trim();
+        if (!raw) return 0;
+        const numberValue = Number(raw);
+        if (!Number.isFinite(numberValue)) throw new Error(label + ' must be a number');
+        if (numberValue < 0) throw new Error(label + ' must be >= 0');
+        return numberValue;
+      };
+
       const setValue = (id, value) => {
         const el = document.querySelector(id);
         if (!el) return;
@@ -369,6 +692,177 @@ const ADMIN_PAGE_HTML = `<!doctype html>
         } else {
           el.value = String(value);
         }
+      };
+
+      const formatPercent = (value) => {
+        if (!Number.isFinite(value)) return '--';
+        return value.toFixed(2) + '%';
+      };
+
+      const computeDigitSumSuggestWinPct = (sumValue) => {
+        const sum = Number(sumValue);
+        if (!Number.isFinite(sum)) return 0;
+        let count = 0;
+        for (let a = 0; a <= 9; a += 1) {
+          for (let b = 0; b <= 9; b += 1) {
+            const c = sum - a - b;
+            if (c >= 0 && c <= 9) count += 1;
+          }
+        }
+        return (count / 1000) * 100;
+      };
+
+      const getDefaultSuggestWinPct = (key) => {
+        const [digitType, selectionRaw] = key.split('|');
+        switch (digitType) {
+          case 'SMALL':
+          case 'BIG':
+          case 'ODD':
+          case 'EVEN':
+            return 49.5;
+          case 'ANY_TRIPLE':
+            return 1;
+          case 'DOUBLE':
+            return 2.7;
+          case 'TRIPLE':
+            return 0.1;
+          case 'SINGLE':
+            return 27.1;
+          case 'SUM':
+            return computeDigitSumSuggestWinPct(selectionRaw);
+          default:
+            return 0;
+        }
+      };
+
+      const collectWeightedEntries = (ratios, weights) => {
+        const entries = [];
+        const limit = Math.min(ratios.length, weights.length);
+        for (let i = 0; i < limit; i += 1) {
+          const ratio = Number(ratios[i].value);
+          const weight = Number(weights[i].value);
+          if (!Number.isFinite(ratio)) continue;
+          if (!Number.isFinite(weight) || weight <= 0) continue;
+          entries.push({ ratio, weight });
+        }
+        return entries;
+      };
+
+      const computeBonusPercent = (entries, totalRoll) => {
+        if (!Number.isFinite(totalRoll) || totalRoll <= 0) return NaN;
+        const weightSum = entries.reduce((sum, entry) => sum + entry.weight, 0);
+        return weightSum <= 0 ? 0 : (weightSum / totalRoll) * 100;
+      };
+
+      const computeRtpPercent = (entries, suggestWinPct, baseRatio, totalRoll) => {
+        if (!Number.isFinite(suggestWinPct)) return NaN;
+        if (!entries.length) return suggestWinPct;
+        const weightSum = entries.reduce((sum, entry) => sum + entry.weight, 0);
+        const baseCount = Number.isFinite(totalRoll) ? Math.max(totalRoll - weightSum, 0) : 0;
+        const totalCount = baseCount + weightSum;
+        if (totalCount <= 0) return suggestWinPct;
+        const ratioSum = entries.reduce((sum, entry) => sum + entry.ratio * entry.weight, 0);
+        const weightedSum = (Number.isFinite(baseRatio) ? baseRatio : 0) * baseCount + ratioSum;
+        const avgRatio = weightedSum / totalCount;
+        return suggestWinPct * (1 + avgRatio);
+      };
+
+      const updateSlotMetrics = (key) => {
+        const entry = bonusRatioInputs.get(key);
+        const meta = slotMetaInputs.get(key);
+        if (!entry || !meta) return;
+        const entries = collectWeightedEntries(entry.ratios, entry.weights);
+        const metaTotalRoll = Number(meta.totalCountsInput?.value);
+        const fallbackTotalRoll = Number(bonusSlotTotalInput?.value);
+        const totalRoll = Number.isFinite(metaTotalRoll) && metaTotalRoll > 0 ? metaTotalRoll : fallbackTotalRoll;
+        const bonusPct = computeBonusPercent(entries, totalRoll);
+        const suggestWinPct = Number(meta.suggestInput.value);
+        const [digitType, selectionRaw] = key.split('|');
+        const baseRatio =
+          digitType === 'SUM'
+            ? Number(sumInputs.get(Number(selectionRaw))?.value)
+            : Number(slotPayoutInputs.get(key)?.value);
+        const rtpPct = computeRtpPercent(entries, suggestWinPct, baseRatio, totalRoll);
+        const rtpCap = Number(meta.rtpFoolProofInput.value);
+        const cappedRtpPct =
+          Number.isFinite(rtpCap) && rtpCap > 0 ? Math.min(rtpPct, rtpCap) : rtpPct;
+        meta.bonusEl.textContent = formatPercent(bonusPct);
+        meta.rtpEl.textContent = formatPercent(cappedRtpPct);
+      };
+
+      const updateAllSlotMetrics = () => {
+        slotMetaInputs.forEach((_, key) => updateSlotMetrics(key));
+      };
+
+      if (bonusSlotTotalInput) {
+        bonusSlotTotalInput.addEventListener('input', updateAllSlotMetrics);
+      }
+
+      const resolveSlotPayoutValue = (digitPayouts, slotKey) => {
+        if (!digitPayouts) return null;
+        const bySlotValue = digitPayouts.bySlot && digitPayouts.bySlot[slotKey];
+        if (typeof bySlotValue === 'number' && Number.isFinite(bySlotValue)) {
+          return bySlotValue;
+        }
+        const digitType = slotKey.split('|')[0];
+        switch (digitType) {
+          case 'SMALL':
+          case 'ODD':
+          case 'EVEN':
+          case 'BIG':
+            return digitPayouts.smallBigOddEven;
+          case 'ANY_TRIPLE':
+            return digitPayouts.anyTriple;
+          case 'DOUBLE':
+            return digitPayouts.double;
+          case 'TRIPLE':
+            return digitPayouts.triple;
+          case 'SINGLE':
+            return digitPayouts.single?.single;
+          default:
+            return null;
+        }
+      };
+
+      const setSlotPayoutInputs = (digitPayouts) => {
+        slotPayoutInputs.forEach((input, key) => {
+          const value = resolveSlotPayoutValue(digitPayouts, key);
+          input.value = value !== undefined && value !== null ? String(value) : '';
+        });
+      };
+
+      const setSlotMetaInputs = (bySlotMeta) => {
+        const hasAnyMeta =
+          bySlotMeta &&
+          Object.values(bySlotMeta).some((entry) =>
+            Number.isFinite(entry?.suggestWinPct) && entry.suggestWinPct > 0,
+          );
+        slotMetaInputs.forEach((entry, key) => {
+          const configEntry = bySlotMeta ? bySlotMeta[key] : null;
+          const suggestValue =
+            typeof configEntry?.suggestWinPct === 'number' &&
+            Number.isFinite(configEntry.suggestWinPct)
+              ? configEntry.suggestWinPct
+              : null;
+          const defaultSuggest = getDefaultSuggestWinPct(key);
+          const isSumKey = key.startsWith('SUM|');
+          entry.suggestInput.value =
+            suggestValue !== null && hasAnyMeta && (!isSumKey || suggestValue > 0)
+              ? String(suggestValue)
+              : String(defaultSuggest);
+          entry.rtpFoolProofInput.value =
+            typeof configEntry?.rtpFoolProofPct === 'number' &&
+            Number.isFinite(configEntry.rtpFoolProofPct)
+              ? String(configEntry.rtpFoolProofPct)
+              : '';
+          const totalCountsValue =
+            typeof configEntry?.totalCounts === 'number' &&
+            Number.isFinite(configEntry.totalCounts) &&
+            configEntry.totalCounts > 0
+              ? configEntry.totalCounts
+              : 100000;
+          entry.totalCountsInput.value = String(totalCountsValue);
+        });
       };
 
       const buildSumInputs = () => {
@@ -392,20 +886,232 @@ const ADMIN_PAGE_HTML = `<!doctype html>
         });
       };
 
+      const buildBonusRatioTable = () => {
+        if (!bonusRatioBody && !bonusRatioSumBody) return;
+        if (bonusRatioBody) bonusRatioBody.innerHTML = '';
+        if (bonusRatioSumBody) bonusRatioSumBody.innerHTML = '';
+        bonusRatioInputs.clear();
+        sumInputs.clear();
+        slotPayoutInputs.clear();
+        slotMetaInputs.clear();
+
+        bonusSlotDefs.forEach((slot) => {
+          const key = slot.digitType + '|' + (slot.selection ?? '');
+          const row = document.createElement('tr');
+          const labelCell = document.createElement('td');
+          labelCell.textContent = slot.label;
+          labelCell.className = 'slot-label';
+          row.appendChild(labelCell);
+
+          if (slot.group === 'sum') {
+            const payoutCell = document.createElement('td');
+            payoutCell.className = 'sum-payout-col';
+            const payoutInput = document.createElement('input');
+            payoutInput.type = 'number';
+            payoutInput.min = '0';
+            payoutInput.step = '0.01';
+            payoutInput.className = 'sum-payout-input';
+            payoutInput.dataset.sumKey = String(slot.selection ?? '');
+            payoutCell.appendChild(payoutInput);
+            row.appendChild(payoutCell);
+            const sumKey = Number(slot.selection);
+            if (Number.isFinite(sumKey)) {
+              sumInputs.set(sumKey, payoutInput);
+            }
+
+            const bonusCell = document.createElement('td');
+            bonusCell.className = 'metric-cell';
+            const bonusValue = document.createElement('span');
+            bonusValue.className = 'metric-value';
+            bonusValue.textContent = '--';
+            bonusCell.appendChild(bonusValue);
+            row.appendChild(bonusCell);
+
+            const suggestCell = document.createElement('td');
+            suggestCell.className = 'metric-input';
+            const suggestInput = document.createElement('input');
+            suggestInput.type = 'number';
+            suggestInput.min = '0';
+            suggestInput.step = '0.01';
+            suggestCell.appendChild(suggestInput);
+            row.appendChild(suggestCell);
+
+            const rtpCell = document.createElement('td');
+            rtpCell.className = 'metric-cell';
+            const rtpValue = document.createElement('span');
+            rtpValue.className = 'metric-value';
+            rtpValue.textContent = '--';
+            rtpCell.appendChild(rtpValue);
+            row.appendChild(rtpCell);
+
+            const rtpFoolProofCell = document.createElement('td');
+            rtpFoolProofCell.className = 'metric-input';
+            const rtpFoolProofInput = document.createElement('input');
+            rtpFoolProofInput.type = 'number';
+            rtpFoolProofInput.min = '0';
+            rtpFoolProofInput.step = '0.01';
+            rtpFoolProofCell.appendChild(rtpFoolProofInput);
+            row.appendChild(rtpFoolProofCell);
+
+            const totalCountsInput = document.createElement('input');
+            totalCountsInput.type = 'number';
+            totalCountsInput.min = '0';
+            totalCountsInput.step = '1';
+
+            slotMetaInputs.set(key, {
+              bonusEl: bonusValue,
+              suggestInput,
+              rtpEl: rtpValue,
+              rtpFoolProofInput,
+              totalCountsInput,
+              label: slot.label,
+            });
+            payoutInput.addEventListener('input', () => updateSlotMetrics(key));
+            suggestInput.addEventListener('input', () => updateSlotMetrics(key));
+            rtpFoolProofInput.addEventListener('input', () => updateSlotMetrics(key));
+            totalCountsInput.addEventListener('input', () => updateSlotMetrics(key));
+          } else {
+            const payoutCell = document.createElement('td');
+            payoutCell.className = 'payout-cell';
+            const payoutInput = document.createElement('input');
+            payoutInput.type = 'number';
+            payoutInput.min = '0';
+            payoutInput.step = '0.01';
+            payoutInput.className = 'payout-input';
+            payoutInput.dataset.slotKey = key;
+            payoutCell.appendChild(payoutInput);
+            row.appendChild(payoutCell);
+            slotPayoutInputs.set(key, payoutInput);
+            payoutInput.addEventListener('input', () => updateSlotMetrics(key));
+
+            const bonusCell = document.createElement('td');
+            bonusCell.className = 'metric-cell';
+            const bonusValue = document.createElement('span');
+            bonusValue.className = 'metric-value';
+            bonusValue.textContent = '--';
+            bonusCell.appendChild(bonusValue);
+            row.appendChild(bonusCell);
+
+            const suggestCell = document.createElement('td');
+            suggestCell.className = 'metric-input';
+            const suggestInput = document.createElement('input');
+            suggestInput.type = 'number';
+            suggestInput.min = '0';
+            suggestInput.step = '0.01';
+            suggestCell.appendChild(suggestInput);
+            row.appendChild(suggestCell);
+
+            const rtpCell = document.createElement('td');
+            rtpCell.className = 'metric-cell';
+            const rtpValue = document.createElement('span');
+            rtpValue.className = 'metric-value';
+            rtpValue.textContent = '--';
+            rtpCell.appendChild(rtpValue);
+            row.appendChild(rtpCell);
+
+            const rtpFoolProofCell = document.createElement('td');
+            rtpFoolProofCell.className = 'metric-input';
+            const rtpFoolProofInput = document.createElement('input');
+            rtpFoolProofInput.type = 'number';
+            rtpFoolProofInput.min = '0';
+            rtpFoolProofInput.step = '0.01';
+            rtpFoolProofCell.appendChild(rtpFoolProofInput);
+            row.appendChild(rtpFoolProofCell);
+
+            const totalCountsInput = document.createElement('input');
+            totalCountsInput.type = 'number';
+            totalCountsInput.min = '0';
+            totalCountsInput.step = '1';
+
+            slotMetaInputs.set(key, {
+              bonusEl: bonusValue,
+              suggestInput,
+              rtpEl: rtpValue,
+              rtpFoolProofInput,
+              totalCountsInput,
+              label: slot.label,
+            });
+            totalCountsInput.addEventListener('input', () => updateSlotMetrics(key));
+          }
+
+          const ratios = [];
+          const weights = [];
+          for (let i = 0; i < 5; i += 1) {
+            const ratioInput = document.createElement('input');
+            ratioInput.type = 'number';
+            ratioInput.min = '0';
+            ratioInput.step = '0.01';
+            const cell = document.createElement('td');
+            cell.appendChild(ratioInput);
+            row.appendChild(cell);
+            ratios.push(ratioInput);
+          }
+
+          for (let i = 0; i < 5; i += 1) {
+            const weightInput = document.createElement('input');
+            weightInput.type = 'number';
+            weightInput.min = '0';
+            weightInput.step = '1';
+            const cell = document.createElement('td');
+            cell.appendChild(weightInput);
+            row.appendChild(cell);
+            weights.push(weightInput);
+          }
+
+          bonusRatioInputs.set(key, { ratios, weights, label: slot.label });
+          const meta = slotMetaInputs.get(key);
+          if (meta?.totalCountsInput) {
+            const totalCountsCell = document.createElement('td');
+            totalCountsCell.className = 'metric-input total-counts-cell';
+            totalCountsCell.appendChild(meta.totalCountsInput);
+            row.appendChild(totalCountsCell);
+          }
+          if (meta) {
+            ratios.forEach((input) => input.addEventListener('input', () => updateSlotMetrics(key)));
+            weights.forEach((input) => input.addEventListener('input', () => updateSlotMetrics(key)));
+            meta.suggestInput.addEventListener('input', () => updateSlotMetrics(key));
+            meta.rtpFoolProofInput.addEventListener('input', () => updateSlotMetrics(key));
+          }
+          const targetBody = slot.group === 'sum' ? bonusRatioSumBody : bonusRatioBody;
+          if (targetBody) {
+            targetBody.appendChild(row);
+          }
+        });
+      };
+
+      const setBonusRatioInputs = (digitBonusRatios) => {
+        bonusRatioInputs.forEach((entry, key) => {
+          const configEntry = digitBonusRatios ? digitBonusRatios[key] : null;
+          const ratioValues = Array.isArray(configEntry?.ratios)
+            ? configEntry.ratios
+            : [];
+          const weightValues = Array.isArray(configEntry?.weights)
+            ? configEntry.weights
+            : [];
+
+          entry.ratios.forEach((input, idx) => {
+            const value = ratioValues[idx];
+            input.value =
+              typeof value === 'number' && Number.isFinite(value) ? String(value) : '';
+          });
+          entry.weights.forEach((input, idx) => {
+            const value = weightValues[idx];
+            input.value =
+              typeof value === 'number' && Number.isFinite(value) ? String(value) : '';
+          });
+        });
+      };
+
       const setConfigForm = (config) => {
         setValue('#cfg-betting-duration', config.bettingDurationMs);
         setValue('#cfg-result-duration', config.resultDurationMs);
         setValue('#cfg-result-display-duration', config.resultDisplayDurationMs);
         setValue('#cfg-snapshot-interval', config.priceSnapshotInterval);
+        setValue('#cfg-bonus-slot-total', config.bonusSlotChanceTotal);
         setValue('#cfg-min-bet', config.minBetAmount);
         setValue('#cfg-max-bet', config.maxBetAmount);
         setValue('#cfg-payout-up', config.payoutMultiplierUp);
         setValue('#cfg-payout-down', config.payoutMultiplierDown);
-        setValue('#cfg-digit-sboe', config.digitPayouts.smallBigOddEven);
-        setValue('#cfg-digit-any-triple', config.digitPayouts.anyTriple);
-        setValue('#cfg-digit-double', config.digitPayouts.double);
-        setValue('#cfg-digit-triple', config.digitPayouts.triple);
-        setValue('#cfg-digit-single', config.digitPayouts.single.single);
         setValue('#cfg-digit-single-double', config.digitPayouts.single.double);
         setValue('#cfg-digit-single-triple', config.digitPayouts.single.triple);
         sumKeys.forEach((key) => {
@@ -414,6 +1120,10 @@ const ADMIN_PAGE_HTML = `<!doctype html>
           const value = config.digitPayouts.sum[key];
           input.value = value !== undefined ? String(value) : '';
         });
+        setSlotPayoutInputs(config.digitPayouts);
+        setSlotMetaInputs(config.digitPayouts.bySlotMeta);
+        setBonusRatioInputs(config.digitBonusRatios);
+        updateAllSlotMetrics();
       };
 
       const loadConfig = async () => {
@@ -435,6 +1145,58 @@ const ADMIN_PAGE_HTML = `<!doctype html>
           sum[key] = value;
         });
 
+        const slotPayouts = {};
+        slotPayoutInputs.forEach((input, key) => {
+          const value = Number(input.value);
+          if (!Number.isFinite(value)) {
+            throw new Error('Payout ratio for ' + key + ' is required');
+          }
+          slotPayouts[key] = value;
+        });
+
+        const slotMeta = {};
+        slotMetaInputs.forEach((entry, key) => {
+          const suggestWinPct = readOptionalNumber(
+            entry.suggestInput.value,
+            entry.label + ' suggest win %',
+          );
+          const rtpFoolProofPct = readOptionalNumber(
+            entry.rtpFoolProofInput.value,
+            entry.label + ' RTP fool proof %',
+          );
+          const totalCountsRaw = readOptionalNumber(
+            entry.totalCountsInput.value,
+            entry.label + ' total counts',
+          );
+          const totalCounts = totalCountsRaw > 0 ? totalCountsRaw : 100000;
+          slotMeta[key] = { suggestWinPct, rtpFoolProofPct, totalCounts };
+        });
+
+        const digitBonusRatios = {};
+        bonusRatioInputs.forEach((entry, key) => {
+          const ratios = entry.ratios.map((input, idx) =>
+            readOptionalNumber(
+              input.value,
+              entry.label + ' bonus ratio ' + String(idx + 1),
+            ),
+          );
+          const weights = entry.weights.map((input, idx) =>
+            readOptionalNumber(
+              input.value,
+              entry.label + ' bonus weight ' + String(idx + 1),
+            ),
+          );
+          digitBonusRatios[key] = { ratios, weights };
+        });
+
+        const requireSlotPayout = (key, label) => {
+          const value = slotPayouts[key];
+          if (!Number.isFinite(value)) {
+            throw new Error(label + ' payout ratio is required');
+          }
+          return value;
+        };
+
         return {
           bettingDurationMs: readNumber('#cfg-betting-duration', 'Betting duration'),
           resultDurationMs: readNumber('#cfg-result-duration', 'Result duration'),
@@ -444,18 +1206,22 @@ const ADMIN_PAGE_HTML = `<!doctype html>
           payoutMultiplierUp: readNumber('#cfg-payout-up', 'Hi-Lo payout up'),
           payoutMultiplierDown: readNumber('#cfg-payout-down', 'Hi-Lo payout down'),
           priceSnapshotInterval: readNumber('#cfg-snapshot-interval', 'Price snapshot interval'),
+          bonusSlotChanceTotal: readNumber('#cfg-bonus-slot-total', 'Bonus slot chance total'),
           digitPayouts: {
-            smallBigOddEven: readNumber('#cfg-digit-sboe', 'Small/Big/Odd/Even payout'),
-            anyTriple: readNumber('#cfg-digit-any-triple', 'Any triple payout'),
-            double: readNumber('#cfg-digit-double', 'Double payout'),
-            triple: readNumber('#cfg-digit-triple', 'Triple payout'),
+            smallBigOddEven: requireSlotPayout('SMALL|', 'Small/Big/Odd/Even'),
+            anyTriple: requireSlotPayout('ANY_TRIPLE|', 'Any triple'),
+            double: requireSlotPayout('DOUBLE|00', 'Double'),
+            triple: requireSlotPayout('TRIPLE|000', 'Triple'),
             single: {
-              single: readNumber('#cfg-digit-single', 'Single payout (1x)'),
+              single: requireSlotPayout('SINGLE|0', 'Single payout (1x)'),
               double: readNumber('#cfg-digit-single-double', 'Single payout (2x)'),
               triple: readNumber('#cfg-digit-single-triple', 'Single payout (3x)'),
             },
             sum: sum,
+            bySlot: slotPayouts,
+            bySlotMeta: slotMeta,
           },
+          digitBonusRatios,
         };
       };
 
@@ -498,6 +1264,7 @@ const ADMIN_PAGE_HTML = `<!doctype html>
 
       const initDefaults = () => {
         buildSumInputs();
+        buildBonusRatioTable();
         const startEl = document.querySelector('#rtp-start');
         const endEl = document.querySelector('#rtp-end');
         if (startEl && endEl) {

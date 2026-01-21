@@ -76,26 +76,32 @@ const WIN_CELEBRATE_FALLBACK_MS = 2600;
 let lastWinCelebrateSignature: string | null = null;
 
 const sumPayouts: Record<number, number> = {
-  4: 55,
-  5: 40,
-  6: 30,
-  7: 22,
-  8: 18,
-  9: 15,
-  10: 13,
-  11: 11,
-  12: 10,
-  13: 10,
-  14: 10,
-  15: 10,
-  16: 11,
-  17: 13,
-  18: 15,
-  19: 18,
-  20: 22,
-  21: 30,
-  22: 40,
-  23: 55,
+  1: 130,
+  2: 70,
+  3: 40,
+  4: 26,
+  5: 18,
+  6: 14,
+  7: 12,
+  8: 10,
+  9: 9,
+  10: 8,
+  11: 8,
+  12: 8,
+  13: 7,
+  14: 7,
+  15: 8,
+  16: 8,
+  17: 8,
+  18: 9,
+  19: 10,
+  20: 12,
+  21: 14,
+  22: 18,
+  23: 26,
+  24: 40,
+  25: 70,
+  26: 130,
 };
 
 const formatPayoutRatio = (value: number) => {
@@ -268,9 +274,9 @@ export const initControls = (handlers: ControlHandlers) => {
             <div class="digit-bet-table" id="digit-bet-table"></div>
             <div class="digit-bet-notes">
               <div>Small/Big/Odd/Even: 0.96:1 (lose on any triple)</div>
-              <div>Any Triple: 85:1</div>
-              <div>Double: 23:1 each | Triple: 700:1 each</div>
-              <div>Single digit: 2:1 single, 8:1 double, 12:1 triple</div>
+              <div>Any Triple: 40:1</div>
+              <div>Double: 15:1 each | Triple: 400:1 each</div>
+              <div>Single digit: 1:1 single, 8:1 double, 30:1 triple</div>
             </div>
           </section>
           <section class="history-section history-section--bets">
@@ -1101,12 +1107,12 @@ const renderStatistics = (nextState: typeof state) => {
     if (prev === null || item.bucket !== prev) {
       col += 1;
       row = 0;
-    } else {
+  } else {
       const downKey = `${row + 1},${col}`;
       const canGoDown = row + 1 < maxRows && !occupied.has(downKey);
       if (canGoDown) {
         row += 1;
-      } else {
+    } else {
         col += 1;
         while (occupied.has(`${row},${col}`)) {
           col += 1;
@@ -1355,7 +1361,7 @@ const refreshDigitHighlights = (nextState: typeof state) => {
     }
 
     // SUM always highlights if within table range.
-    if (Number.isFinite(sum) && sum >= 4 && sum <= 23) {
+    if (Number.isFinite(sum) && sum >= 1 && sum <= 26) {
       keys.add(`SUM|${sum}`);
     }
 
@@ -1372,53 +1378,23 @@ const refreshDigitHighlights = (nextState: typeof state) => {
   const resultKeys = getResultKeys();
 
   const bonusSlots = nextState.currentRound?.digitBonus?.slots ?? [];
-  const bonusFactor = Number(nextState.currentRound?.digitBonus?.factor ?? 1);
-  const bonusKeys = new Set(
-    bonusSlots.map((slot) => `${slot.digitType}|${slot.selection ?? ''}`),
-  );
-  const nextBonusSignature = `${bonusFactor}|${Array.from(bonusKeys).sort().join(',')}`;
+  const bonusMap = new Map<string, number | null>();
+  bonusSlots.forEach((slot) => {
+    const key = `${slot.digitType}|${slot.selection ?? ''}`;
+    const ratio =
+      typeof slot.bonusRatio === 'number' && Number.isFinite(slot.bonusRatio)
+        ? slot.bonusRatio
+        : null;
+    bonusMap.set(key, ratio);
+  });
+  const nextBonusSignature = Array.from(bonusMap.entries())
+    .map(([key, ratio]) => `${key}:${ratio ?? ''}`)
+    .sort()
+    .join(',');
   const bonusChanged = nextBonusSignature !== lastBonusSignature;
   if (bonusChanged) {
     lastBonusSignature = nextBonusSignature;
   }
-
-  const getBaseDigitOdds = (digitType: string, selection: string) => {
-    const payouts = nextState.config?.digitPayouts;
-    const fallback = {
-      smallBigOddEven: 0.96,
-      anyTriple: 85,
-      double: 23,
-      triple: 700,
-      single: { single: 2 },
-      sum: sumPayouts,
-    };
-
-    switch (digitType) {
-      case 'SMALL':
-      case 'BIG':
-      case 'ODD':
-      case 'EVEN':
-        return payouts?.smallBigOddEven ?? fallback.smallBigOddEven;
-      case 'ANY_TRIPLE':
-        return payouts?.anyTriple ?? fallback.anyTriple;
-      case 'DOUBLE':
-        return payouts?.double ?? fallback.double;
-      case 'TRIPLE':
-        return payouts?.triple ?? fallback.triple;
-      case 'SUM': {
-        const key = Number(selection);
-        const fromConfig =
-          payouts?.sum && Number.isFinite(key) ? payouts.sum[key] : undefined;
-        return fromConfig ?? sumPayouts[key];
-      }
-      case 'SINGLE':
-        // Bet placement stores SINGLE with base odds; settlement may upgrade to 8/12 depending on outcome.
-        // For bonus preview, show the base SINGLE odds.
-        return payouts?.single?.single ?? fallback.single.single;
-      default:
-        return null;
-    }
-  };
 
   digitTableEl.querySelectorAll<HTMLButtonElement>('.digit-cell').forEach((cell) => {
     const digitType = cell.dataset.digitType;
@@ -1428,20 +1404,17 @@ const refreshDigitHighlights = (nextState: typeof state) => {
     cell.classList.toggle('digit-cell--active', activeKeys.has(key));
     cell.classList.toggle('digit-cell--winner', winnerKeys.has(key));
     cell.classList.toggle('digit-cell--result', resultKeys.has(key));
-    const isBonus = bonusKeys.has(key) && bonusFactor > 1;
+    const bonusRatio = bonusMap.get(key);
+    const isBonus = bonusMap.has(key);
     cell.classList.toggle('digit-cell--bonus', isBonus);
 
     const bonusOddsEl = cell.querySelector<HTMLElement>('.digit-bonus-odds');
     if (bonusOddsEl) {
       if (isBonus) {
-        const baseOdds = getBaseDigitOdds(digitType, selection);
-        const boosted =
-          typeof baseOdds === 'number' && Number.isFinite(baseOdds)
-            ? baseOdds * bonusFactor
-            : NaN;
-        bonusOddsEl.textContent = Number.isFinite(boosted)
-          ? formatPayoutRatio(boosted)
-          : `x${bonusFactor.toFixed(2).replace(/\.?0+$/, '')}`;
+        bonusOddsEl.textContent =
+          typeof bonusRatio === 'number' && Number.isFinite(bonusRatio)
+            ? formatPayoutRatio(bonusRatio)
+            : '';
       } else {
         bonusOddsEl.textContent = '';
       }
@@ -1472,7 +1445,7 @@ const updateDigitTableOdds = (nextState: typeof state) => {
       oddsEl.textContent = Number.isFinite(oddsValue)
         ? formatPayoutRatio(oddsValue)
         : '--';
-    });
+  });
 };
 
 const renderTokenPlacements = (nextState: typeof state) => {
@@ -1604,8 +1577,9 @@ const buildDigitBetTable = () => {
     selection: value,
   })));
 
-  const sumValues = Array.from({ length: 20 }, (_, index) => index + 4);
-  for (let row = 0; row < 4; row += 1) {
+  const sumValues = Array.from({ length: 26 }, (_, index) => index + 1);
+  const sumRows = Math.ceil(sumValues.length / 5);
+  for (let row = 0; row < sumRows; row += 1) {
     const rowValues = sumValues.slice(row * 5, row * 5 + 5);
     rows.push(
       rowValues.map((value) => ({

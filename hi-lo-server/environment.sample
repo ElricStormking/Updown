@@ -1,6 +1,6 @@
 # Server
 NODE_ENV=development
-API_PORT=4000
+API_PORT=4001
 FRONTEND_ORIGIN=http://localhost:3000
 
 # Database (local PostgreSQL)

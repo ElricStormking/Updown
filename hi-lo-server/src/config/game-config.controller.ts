@@ -37,6 +37,7 @@ export class GameConfigController {
     payoutMultiplierUp: number;
     payoutMultiplierDown: number;
     priceSnapshotInterval: number;
+    bonusSlotChanceTotal: number;
     digitPayouts: {
       smallBigOddEven: number;
       anyTriple: number;
@@ -48,7 +49,10 @@ export class GameConfigController {
         triple: number;
       };
       sum: Record<number, number>;
+      bySlot: Record<string, number>;
+      bySlotMeta: Record<string, { suggestWinPct: number; rtpFoolProofPct: number; totalCounts: number }>;
     };
+    digitBonusRatios: Record<string, { ratios: number[]; weights: number[] }>;
   }) {
     return {
       configVersion: config.configVersion ?? null,
@@ -60,6 +64,7 @@ export class GameConfigController {
       payoutMultiplierUp: config.payoutMultiplierUp,
       payoutMultiplierDown: config.payoutMultiplierDown,
       priceSnapshotInterval: config.priceSnapshotInterval,
+      bonusSlotChanceTotal: config.bonusSlotChanceTotal,
       historyLimits: {
         player: this.configService.getOrThrow<number>('history.playerLimit', {
           infer: true,
@@ -75,8 +80,11 @@ export class GameConfigController {
         triple: config.digitPayouts.triple,
         single: config.digitPayouts.single,
         sum: config.digitPayouts.sum,
+        bySlot: config.digitPayouts.bySlot,
+        bySlotMeta: config.digitPayouts.bySlotMeta,
         ranges: DIGIT_SUM_RANGES,
       },
+      digitBonusRatios: config.digitBonusRatios,
       digitBonus: this.configService.getOrThrow('game.digitBonus', {
         infer: true,
       }),

@@ -26,10 +26,11 @@ export interface RoundStatePayload {
   oddsDown: number;
   configVersion?: string | null;
   digitBonus?: {
-    factor: number;
+    factor?: number | null;
     slots: Array<{
       digitType: DigitBetType;
       selection: string | null;
+      bonusRatio?: number | null;
     }>;
   };
   lockedPrice?: number | null;
@@ -81,6 +82,7 @@ export interface GameConfig {
   payoutMultiplierUp: number;
   payoutMultiplierDown: number;
   priceSnapshotInterval: number;
+  bonusSlotChanceTotal?: number;
   historyLimits: {
     player: number;
     rounds: number;
@@ -109,6 +111,7 @@ export interface GameConfig {
     maxSlots: number;
     payoutFactor: number;
   };
+  digitBonusRatios?: Record<string, { ratios: number[]; weights: number[] }>;
 }
 
 export interface BetHistoryItem {

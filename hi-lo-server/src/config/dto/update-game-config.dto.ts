@@ -1,4 +1,4 @@
-import { IsInt, IsNumber, IsObject, Min } from 'class-validator';
+import { IsInt, IsNumber, IsObject, IsOptional, Min } from 'class-validator';
 
 export class UpdateGameConfigDto {
   @IsInt()
@@ -33,6 +33,14 @@ export class UpdateGameConfigDto {
   @Min(1)
   priceSnapshotInterval: number;
 
+  @IsInt()
+  @Min(1)
+  bonusSlotChanceTotal: number;
+
   @IsObject()
   digitPayouts: Record<string, unknown>;
+
+  @IsOptional()
+  @IsObject()
+  digitBonusRatios?: Record<string, unknown>;
 }
