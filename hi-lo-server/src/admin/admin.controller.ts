@@ -247,6 +247,43 @@ const ADMIN_PAGE_HTML = `<!doctype html>
         min-width: 120px;
         text-align: left;
       }
+      .bonus-ratio-table th.base-weight-col {
+        color: #f8fafc;
+        background: linear-gradient(120deg, rgba(59, 130, 246, 0.2), rgba(2, 132, 199, 0.15));
+        border-color: rgba(2, 132, 199, 0.55);
+      }
+      .bonus-ratio-table td.base-weight-cell {
+        background: rgba(2, 132, 199, 0.12);
+        border-left: 1px solid rgba(2, 132, 199, 0.45);
+      }
+      .bonus-ratio-table td.base-weight-cell input {
+        background: rgba(2, 132, 199, 0.18);
+        border-color: rgba(59, 130, 246, 0.4);
+        color: #e0f2fe;
+      }
+      .bonus-ratio-table th.weights-group {
+        color: #a5f3fc;
+        background: linear-gradient(120deg, rgba(14, 116, 144, 0.2), rgba(15, 118, 110, 0.05));
+        border-color: rgba(15, 118, 110, 0.55);
+      }
+      .bonus-ratio-table td.weight-cell {
+        background: rgba(15, 118, 110, 0.12);
+        border-left: 1px solid rgba(15, 118, 110, 0.45);
+      }
+      .bonus-ratio-table td.weight-cell input {
+        background: rgba(2, 132, 199, 0.1);
+        border-color: rgba(56, 189, 248, 0.4);
+        color: #e0f2fe;
+      }
+      .bonus-ratio-table .total-counts-cell {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+      .total-counts-value {
+        font-weight: 600;
+        color: #f8fafc;
+      }
       .metric-cell {
         text-align: left;
       }
@@ -352,6 +389,19 @@ const ADMIN_PAGE_HTML = `<!doctype html>
         margin: 0 0 0.5rem 0;
         font-family: "Fraunces", "Times New Roman", serif;
       }
+      .formula-note {
+        margin: 0 0 0.75rem 0;
+        color: var(--muted);
+        font-size: 0.78rem;
+        line-height: 1.4;
+      }
+      .formula-note code {
+        background: rgba(15, 23, 42, 0.9);
+        padding: 0.15rem 0.35rem;
+        border-radius: 4px;
+        font-size: 0.78rem;
+        letter-spacing: 0.03em;
+      }
       @media (max-width: 760px) {
         header {
           flex-direction: column;
@@ -442,11 +492,15 @@ const ADMIN_PAGE_HTML = `<!doctype html>
           </div>
           <div style="margin-top: 1rem;">
             <h3 style="margin: 0 0 0.5rem 0;">Digit Bonus Ratios (Other Slots)</h3>
+            <p class="formula-note">
+              Payout Ratio is calculated as <code>1 + (baseRatio * baseCount + sum(bonusRatio_i * bonusWeight_i)) / (baseCount + sum(bonusWeight_i))</code>,
+              where <code>baseCount = max(totalRoll - sum(bonusWeight_i), 0)</code> and <code>totalRoll</code> references the slot's Total Counts input (or the global Bonus slot chance total when the per-slot value is empty).
+            </p>
             <div class="bonus-ratio-wrapper">
               <table class="bonus-ratio-table">
                 <thead>
                   <tr class="table-controls-row">
-                    <th colspan="17">
+                    <th colspan="18">
                       <div class="chip-group">
                         <span class="chip-title">Single multipliers</span>
                         <label class="chip">
@@ -468,7 +522,7 @@ const ADMIN_PAGE_HTML = `<!doctype html>
                     <th rowspan="2" class="metric-col">RTP %</th>
                     <th rowspan="2" class="metric-col">RTP FP %</th>
                     <th colspan="5">Bonus Ratios</th>
-                    <th colspan="5">Bonus Weights</th>
+                    <th colspan="6" class="weights-group">Bonus Weights</th>
                     <th rowspan="2" class="total-counts-col">Total Counts</th>
                   </tr>
                   <tr>
@@ -477,6 +531,7 @@ const ADMIN_PAGE_HTML = `<!doctype html>
                     <th>3</th>
                     <th>4</th>
                     <th>5</th>
+                    <th class="base-weight-col">Base</th>
                     <th>1</th>
                     <th>2</th>
                     <th>3</th>
@@ -501,7 +556,7 @@ const ADMIN_PAGE_HTML = `<!doctype html>
                     <th rowspan="2" class="metric-col">RTP %</th>
                     <th rowspan="2" class="metric-col">RTP FP %</th>
                     <th colspan="5">Bonus Ratios</th>
-                    <th colspan="5">Bonus Weights</th>
+                    <th colspan="6" class="weights-group">Bonus Weights</th>
                     <th rowspan="2" class="total-counts-col">Total Counts</th>
                   </tr>
                   <tr>
@@ -510,6 +565,7 @@ const ADMIN_PAGE_HTML = `<!doctype html>
                     <th>3</th>
                     <th>4</th>
                     <th>5</th>
+                    <th class="base-weight-col">Base</th>
                     <th>1</th>
                     <th>2</th>
                     <th>3</th>
@@ -772,9 +828,14 @@ const ADMIN_PAGE_HTML = `<!doctype html>
         const meta = slotMetaInputs.get(key);
         if (!entry || !meta) return;
         const entries = collectWeightedEntries(entry.ratios, entry.weights);
-        const metaTotalRoll = Number(meta.totalCountsInput?.value);
-        const fallbackTotalRoll = Number(bonusSlotTotalInput?.value);
-        const totalRoll = Number.isFinite(metaTotalRoll) && metaTotalRoll > 0 ? metaTotalRoll : fallbackTotalRoll;
+        const fallbackBaseWeight = Number(bonusSlotTotalInput?.value);
+        const configuredFallback = Number.isFinite(fallbackBaseWeight) && fallbackBaseWeight > 0 ? fallbackBaseWeight : 100000;
+        const baseWeightRaw = Number(meta.baseWeightInput?.value);
+        const baseWeight =
+          Number.isFinite(baseWeightRaw) && baseWeightRaw > 0 ? baseWeightRaw : configuredFallback;
+        const bonusWeightSum = entries.reduce((sum, current) => sum + current.weight, 0);
+        const totalCounts = baseWeight + bonusWeightSum;
+        const totalRoll = totalCounts > 0 ? totalCounts : configuredFallback;
         const bonusPct = computeBonusPercent(entries, totalRoll);
         const suggestWinPct = Number(meta.suggestInput.value);
         const [digitType, selectionRaw] = key.split('|');
@@ -788,6 +849,9 @@ const ADMIN_PAGE_HTML = `<!doctype html>
           Number.isFinite(rtpCap) && rtpCap > 0 ? Math.min(rtpPct, rtpCap) : rtpPct;
         meta.bonusEl.textContent = formatPercent(bonusPct);
         meta.rtpEl.textContent = formatPercent(cappedRtpPct);
+        if (meta.totalCountsEl) {
+          meta.totalCountsEl.textContent = formatCount(totalCounts);
+        }
       };
 
       const updateAllSlotMetrics = () => {
@@ -855,13 +919,13 @@ const ADMIN_PAGE_HTML = `<!doctype html>
             Number.isFinite(configEntry.rtpFoolProofPct)
               ? String(configEntry.rtpFoolProofPct)
               : '';
-          const totalCountsValue =
+          const baseWeightValue =
             typeof configEntry?.totalCounts === 'number' &&
             Number.isFinite(configEntry.totalCounts) &&
             configEntry.totalCounts > 0
               ? configEntry.totalCounts
               : 100000;
-          entry.totalCountsInput.value = String(totalCountsValue);
+          entry.baseWeightInput.value = String(baseWeightValue);
         });
       };
 
@@ -902,6 +966,18 @@ const ADMIN_PAGE_HTML = `<!doctype html>
           labelCell.textContent = slot.label;
           labelCell.className = 'slot-label';
           row.appendChild(labelCell);
+
+          const baseWeightInput = document.createElement('input');
+          baseWeightInput.type = 'number';
+          baseWeightInput.min = '0';
+          baseWeightInput.step = '1';
+          baseWeightInput.className = 'base-weight-input';
+          const baseWeightCell = document.createElement('td');
+          baseWeightCell.className = 'base-weight-cell';
+          baseWeightCell.appendChild(baseWeightInput);
+          const totalCountsValueEl = document.createElement('span');
+          totalCountsValueEl.className = 'total-counts-value';
+          totalCountsValueEl.textContent = '0';
 
           if (slot.group === 'sum') {
             const payoutCell = document.createElement('td');
@@ -953,23 +1029,19 @@ const ADMIN_PAGE_HTML = `<!doctype html>
             rtpFoolProofCell.appendChild(rtpFoolProofInput);
             row.appendChild(rtpFoolProofCell);
 
-            const totalCountsInput = document.createElement('input');
-            totalCountsInput.type = 'number';
-            totalCountsInput.min = '0';
-            totalCountsInput.step = '1';
-
             slotMetaInputs.set(key, {
               bonusEl: bonusValue,
               suggestInput,
               rtpEl: rtpValue,
               rtpFoolProofInput,
-              totalCountsInput,
+              baseWeightInput,
+              totalCountsEl: totalCountsValueEl,
               label: slot.label,
             });
             payoutInput.addEventListener('input', () => updateSlotMetrics(key));
             suggestInput.addEventListener('input', () => updateSlotMetrics(key));
             rtpFoolProofInput.addEventListener('input', () => updateSlotMetrics(key));
-            totalCountsInput.addEventListener('input', () => updateSlotMetrics(key));
+            baseWeightInput.addEventListener('input', () => updateSlotMetrics(key));
           } else {
             const payoutCell = document.createElement('td');
             payoutCell.className = 'payout-cell';
@@ -1018,20 +1090,15 @@ const ADMIN_PAGE_HTML = `<!doctype html>
             rtpFoolProofCell.appendChild(rtpFoolProofInput);
             row.appendChild(rtpFoolProofCell);
 
-            const totalCountsInput = document.createElement('input');
-            totalCountsInput.type = 'number';
-            totalCountsInput.min = '0';
-            totalCountsInput.step = '1';
-
             slotMetaInputs.set(key, {
               bonusEl: bonusValue,
               suggestInput,
               rtpEl: rtpValue,
               rtpFoolProofInput,
-              totalCountsInput,
+              baseWeightInput,
+              totalCountsEl: totalCountsValueEl,
               label: slot.label,
             });
-            totalCountsInput.addEventListener('input', () => updateSlotMetrics(key));
           }
 
           const ratios = [];
@@ -1045,32 +1112,32 @@ const ADMIN_PAGE_HTML = `<!doctype html>
             cell.appendChild(ratioInput);
             row.appendChild(cell);
             ratios.push(ratioInput);
+            ratioInput.addEventListener('input', () => updateSlotMetrics(key));
           }
+
+          row.appendChild(baseWeightCell);
 
           for (let i = 0; i < 5; i += 1) {
             const weightInput = document.createElement('input');
             weightInput.type = 'number';
             weightInput.min = '0';
             weightInput.step = '1';
+            weightInput.className = 'weight-input';
             const cell = document.createElement('td');
+            cell.className = 'weight-cell';
             cell.appendChild(weightInput);
             row.appendChild(cell);
             weights.push(weightInput);
+            weightInput.addEventListener('input', () => updateSlotMetrics(key));
           }
 
           bonusRatioInputs.set(key, { ratios, weights, label: slot.label });
           const meta = slotMetaInputs.get(key);
-          if (meta?.totalCountsInput) {
+          if (meta?.totalCountsEl) {
             const totalCountsCell = document.createElement('td');
-            totalCountsCell.className = 'metric-input total-counts-cell';
-            totalCountsCell.appendChild(meta.totalCountsInput);
+            totalCountsCell.className = 'metric-cell total-counts-col total-counts-cell';
+            totalCountsCell.appendChild(meta.totalCountsEl);
             row.appendChild(totalCountsCell);
-          }
-          if (meta) {
-            ratios.forEach((input) => input.addEventListener('input', () => updateSlotMetrics(key)));
-            weights.forEach((input) => input.addEventListener('input', () => updateSlotMetrics(key)));
-            meta.suggestInput.addEventListener('input', () => updateSlotMetrics(key));
-            meta.rtpFoolProofInput.addEventListener('input', () => updateSlotMetrics(key));
           }
           const targetBody = slot.group === 'sum' ? bonusRatioSumBody : bonusRatioBody;
           if (targetBody) {
@@ -1164,12 +1231,12 @@ const ADMIN_PAGE_HTML = `<!doctype html>
             entry.rtpFoolProofInput.value,
             entry.label + ' RTP fool proof %',
           );
-          const totalCountsRaw = readOptionalNumber(
-            entry.totalCountsInput.value,
-            entry.label + ' total counts',
+          const baseWeightRaw = readOptionalNumber(
+            entry.baseWeightInput.value,
+            entry.label + ' base weight',
           );
-          const totalCounts = totalCountsRaw > 0 ? totalCountsRaw : 100000;
-          slotMeta[key] = { suggestWinPct, rtpFoolProofPct, totalCounts };
+          const baseWeight = baseWeightRaw > 0 ? baseWeightRaw : 100000;
+          slotMeta[key] = { suggestWinPct, rtpFoolProofPct, totalCounts: baseWeight };
         });
 
         const digitBonusRatios = {};
@@ -1228,6 +1295,11 @@ const ADMIN_PAGE_HTML = `<!doctype html>
       const formatNumber = (value) => {
         if (!Number.isFinite(value)) return '--';
         return value.toFixed(2).replace(/\\.00$/, '');
+      };
+
+      const formatCount = (value) => {
+        if (!Number.isFinite(value)) return '--';
+        return Math.round(value).toLocaleString('en-US');
       };
 
       const renderRtp = (rows) => {
