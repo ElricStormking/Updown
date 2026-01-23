@@ -203,6 +203,30 @@ const ADMIN_PAGE_HTML = `<!doctype html>
         overflow: auto;
         background: var(--panel-strong);
       }
+      .bonus-ratio-scrollbar-top {
+        overflow-x: auto;
+        overflow-y: hidden;
+        height: 14px;
+        margin-bottom: 0.55rem;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        background: rgba(15, 23, 42, 0.7);
+        scrollbar-color: var(--accent) rgba(15, 23, 42, 0.35);
+      }
+      .bonus-ratio-scrollbar-top::-webkit-scrollbar {
+        height: 8px;
+      }
+      .bonus-ratio-scrollbar-top::-webkit-scrollbar-thumb {
+        background: rgba(56, 189, 248, 0.55);
+        border-radius: 999px;
+      }
+      .bonus-ratio-scrollbar-top::-webkit-scrollbar-track {
+        background: rgba(15, 23, 42, 0.35);
+        border-radius: 999px;
+      }
+      .bonus-ratio-scrollbar-inner {
+        height: 1px;
+      }
       .bonus-ratio-table {
         width: 100%;
         border-collapse: collapse;
@@ -496,7 +520,10 @@ const ADMIN_PAGE_HTML = `<!doctype html>
               Payout Ratio is calculated as <code>1 + (baseRatio * baseCount + sum(bonusRatio_i * bonusWeight_i)) / (baseCount + sum(bonusWeight_i))</code>,
               where <code>baseCount = max(totalRoll - sum(bonusWeight_i), 0)</code> and <code>totalRoll</code> references the slot's Total Counts input (or the global Bonus slot chance total when the per-slot value is empty).
             </p>
-            <div class="bonus-ratio-wrapper">
+            <div class="bonus-ratio-scrollbar-top" id="bonus-ratio-scrollbar-top">
+              <div class="bonus-ratio-scrollbar-inner"></div>
+            </div>
+            <div class="bonus-ratio-wrapper" id="bonus-ratio-scroll">
               <table class="bonus-ratio-table">
                 <thead>
                   <tr class="table-controls-row">
@@ -516,11 +543,11 @@ const ADMIN_PAGE_HTML = `<!doctype html>
                   </tr>
                   <tr>
                     <th rowspan="2">Bet Slot</th>
-                    <th rowspan="2" class="payout-col">Payout Ratio</th>
                     <th rowspan="2" class="metric-col">Bonus %</th>
                     <th rowspan="2" class="metric-col">Suggest Win %</th>
                     <th rowspan="2" class="metric-col">RTP %</th>
                     <th rowspan="2" class="metric-col">RTP FP %</th>
+                    <th rowspan="2" class="payout-col">Payout Ratio</th>
                     <th colspan="5">Bonus Ratios</th>
                     <th colspan="6" class="weights-group">Bonus Weights</th>
                     <th rowspan="2" class="total-counts-col">Total Counts</th>
@@ -550,11 +577,11 @@ const ADMIN_PAGE_HTML = `<!doctype html>
                 <thead>
                   <tr>
                     <th rowspan="2">Bet Slot</th>
-                    <th rowspan="2" class="sum-payout-col">Sum payout</th>
                     <th rowspan="2" class="metric-col">Bonus %</th>
                     <th rowspan="2" class="metric-col">Suggest Win %</th>
                     <th rowspan="2" class="metric-col">RTP %</th>
                     <th rowspan="2" class="metric-col">RTP FP %</th>
+                    <th rowspan="2" class="sum-payout-col">Sum payout</th>
                     <th colspan="5">Bonus Ratios</th>
                     <th colspan="6" class="weights-group">Bonus Weights</th>
                     <th rowspan="2" class="total-counts-col">Total Counts</th>
@@ -636,6 +663,11 @@ const ADMIN_PAGE_HTML = `<!doctype html>
       const bonusRatioBody = document.querySelector('#bonus-ratio-body');
       const bonusRatioSumBody = document.querySelector('#bonus-ratio-sum-body');
       const bonusSlotTotalInput = document.querySelector('#cfg-bonus-slot-total');
+      const bonusRatioScroll = document.querySelector('#bonus-ratio-scroll');
+      const bonusRatioScrollbarTop = document.querySelector('#bonus-ratio-scrollbar-top');
+      const bonusRatioScrollbarInner = document.querySelector(
+        '#bonus-ratio-scrollbar-top .bonus-ratio-scrollbar-inner',
+      );
 
       const sumKeys = Array.from({ length: 26 }, (_, idx) => idx + 1);
       const sumInputs = new Map();
@@ -647,9 +679,9 @@ const ADMIN_PAGE_HTML = `<!doctype html>
         const defs = [];
         const pushDef = (entry) => defs.push(entry);
         pushDef({ digitType: 'SMALL', selection: null, label: 'SMALL' });
+        pushDef({ digitType: 'BIG', selection: null, label: 'BIG' });
         pushDef({ digitType: 'ODD', selection: null, label: 'ODD' });
         pushDef({ digitType: 'EVEN', selection: null, label: 'EVEN' });
-        pushDef({ digitType: 'BIG', selection: null, label: 'BIG' });
         pushDef({ digitType: 'ANY_TRIPLE', selection: null, label: 'ANY TRIPLE' });
 
         for (let d = 0; d <= 9; d += 1) {
@@ -705,6 +737,28 @@ const ADMIN_PAGE_HTML = `<!doctype html>
         if (configSection) configSection.classList.toggle('hidden', !authed);
         if (rtpSection) rtpSection.classList.toggle('hidden', !authed);
         if (logoutBtn) logoutBtn.classList.toggle('hidden', !authed);
+        if (authed) {
+          scheduleBonusRatioScrollbarUpdate();
+        }
+      };
+
+      const parseErrorMessage = async (response) => {
+        try {
+          const detail = await response.json();
+          if (detail && typeof detail.message === 'string') {
+            return detail.message;
+          }
+        } catch (error) {
+          // Ignore JSON parse errors for empty bodies.
+        }
+        return response.statusText || 'Request failed';
+      };
+
+      const handleAuthFailure = (message) => {
+        token = '';
+        localStorage.removeItem(tokenKey);
+        setAuthState(false);
+        setStatus(loginStatus, message || 'Session expired. Please log in again.', true);
       };
 
       const apiFetch = async (path, options) => {
@@ -714,8 +768,10 @@ const ADMIN_PAGE_HTML = `<!doctype html>
         if (token) headers['Authorization'] = 'Bearer ' + token;
         const response = await fetch(path, Object.assign({}, next, { headers }));
         if (!response.ok) {
-          const detail = await response.json().catch(() => ({}));
-          const message = detail && detail.message ? detail.message : response.statusText;
+          const message = await parseErrorMessage(response);
+          if (response.status === 401 || response.status === 403) {
+            handleAuthFailure(message || 'Session expired. Please log in again.');
+          }
           throw new Error(message);
         }
         return response.json();
@@ -858,6 +914,40 @@ const ADMIN_PAGE_HTML = `<!doctype html>
         slotMetaInputs.forEach((_, key) => updateSlotMetrics(key));
       };
 
+      let syncingBonusScroll = false;
+      const syncBonusRatioScroll = (source, target) => {
+        if (!source || !target) return;
+        syncingBonusScroll = true;
+        requestAnimationFrame(() => {
+          target.scrollLeft = source.scrollLeft;
+          syncingBonusScroll = false;
+        });
+      };
+      const updateBonusRatioScrollbarWidth = () => {
+        if (!bonusRatioScroll || !bonusRatioScrollbarInner || !bonusRatioScrollbarTop) return;
+        const scrollWidth = bonusRatioScroll.scrollWidth;
+        const clientWidth = bonusRatioScroll.clientWidth;
+        const width = Math.max(scrollWidth, clientWidth + 1);
+        bonusRatioScrollbarInner.style.width = width + 'px';
+        bonusRatioScrollbarTop.scrollLeft = bonusRatioScroll.scrollLeft;
+      };
+      const scheduleBonusRatioScrollbarUpdate = () => {
+        if (!bonusRatioScroll) return;
+        requestAnimationFrame(updateBonusRatioScrollbarWidth);
+        setTimeout(updateBonusRatioScrollbarWidth, 60);
+      };
+      if (bonusRatioScroll && bonusRatioScrollbarTop) {
+        bonusRatioScroll.addEventListener('scroll', () => {
+          if (syncingBonusScroll) return;
+          syncBonusRatioScroll(bonusRatioScroll, bonusRatioScrollbarTop);
+        });
+        bonusRatioScrollbarTop.addEventListener('scroll', () => {
+          if (syncingBonusScroll) return;
+          syncBonusRatioScroll(bonusRatioScrollbarTop, bonusRatioScroll);
+        });
+        window.addEventListener('resize', updateBonusRatioScrollbarWidth);
+      }
+
       if (bonusSlotTotalInput) {
         bonusSlotTotalInput.addEventListener('input', updateAllSlotMetrics);
       }
@@ -980,6 +1070,40 @@ const ADMIN_PAGE_HTML = `<!doctype html>
           totalCountsValueEl.textContent = '0';
 
           if (slot.group === 'sum') {
+            const bonusCell = document.createElement('td');
+            bonusCell.className = 'metric-cell';
+            const bonusValue = document.createElement('span');
+            bonusValue.className = 'metric-value';
+            bonusValue.textContent = '--';
+            bonusCell.appendChild(bonusValue);
+            row.appendChild(bonusCell);
+
+            const suggestCell = document.createElement('td');
+            suggestCell.className = 'metric-input';
+            const suggestInput = document.createElement('input');
+            suggestInput.type = 'number';
+            suggestInput.min = '0';
+            suggestInput.step = '0.01';
+            suggestCell.appendChild(suggestInput);
+            row.appendChild(suggestCell);
+
+            const rtpCell = document.createElement('td');
+            rtpCell.className = 'metric-cell';
+            const rtpValue = document.createElement('span');
+            rtpValue.className = 'metric-value';
+            rtpValue.textContent = '--';
+            rtpCell.appendChild(rtpValue);
+            row.appendChild(rtpCell);
+
+            const rtpFoolProofCell = document.createElement('td');
+            rtpFoolProofCell.className = 'metric-input';
+            const rtpFoolProofInput = document.createElement('input');
+            rtpFoolProofInput.type = 'number';
+            rtpFoolProofInput.min = '0';
+            rtpFoolProofInput.step = '0.01';
+            rtpFoolProofCell.appendChild(rtpFoolProofInput);
+            row.appendChild(rtpFoolProofCell);
+
             const payoutCell = document.createElement('td');
             payoutCell.className = 'sum-payout-col';
             const payoutInput = document.createElement('input');
@@ -995,40 +1119,6 @@ const ADMIN_PAGE_HTML = `<!doctype html>
               sumInputs.set(sumKey, payoutInput);
             }
 
-            const bonusCell = document.createElement('td');
-            bonusCell.className = 'metric-cell';
-            const bonusValue = document.createElement('span');
-            bonusValue.className = 'metric-value';
-            bonusValue.textContent = '--';
-            bonusCell.appendChild(bonusValue);
-            row.appendChild(bonusCell);
-
-            const suggestCell = document.createElement('td');
-            suggestCell.className = 'metric-input';
-            const suggestInput = document.createElement('input');
-            suggestInput.type = 'number';
-            suggestInput.min = '0';
-            suggestInput.step = '0.01';
-            suggestCell.appendChild(suggestInput);
-            row.appendChild(suggestCell);
-
-            const rtpCell = document.createElement('td');
-            rtpCell.className = 'metric-cell';
-            const rtpValue = document.createElement('span');
-            rtpValue.className = 'metric-value';
-            rtpValue.textContent = '--';
-            rtpCell.appendChild(rtpValue);
-            row.appendChild(rtpCell);
-
-            const rtpFoolProofCell = document.createElement('td');
-            rtpFoolProofCell.className = 'metric-input';
-            const rtpFoolProofInput = document.createElement('input');
-            rtpFoolProofInput.type = 'number';
-            rtpFoolProofInput.min = '0';
-            rtpFoolProofInput.step = '0.01';
-            rtpFoolProofCell.appendChild(rtpFoolProofInput);
-            row.appendChild(rtpFoolProofCell);
-
             slotMetaInputs.set(key, {
               bonusEl: bonusValue,
               suggestInput,
@@ -1043,19 +1133,6 @@ const ADMIN_PAGE_HTML = `<!doctype html>
             rtpFoolProofInput.addEventListener('input', () => updateSlotMetrics(key));
             baseWeightInput.addEventListener('input', () => updateSlotMetrics(key));
           } else {
-            const payoutCell = document.createElement('td');
-            payoutCell.className = 'payout-cell';
-            const payoutInput = document.createElement('input');
-            payoutInput.type = 'number';
-            payoutInput.min = '0';
-            payoutInput.step = '0.01';
-            payoutInput.className = 'payout-input';
-            payoutInput.dataset.slotKey = key;
-            payoutCell.appendChild(payoutInput);
-            row.appendChild(payoutCell);
-            slotPayoutInputs.set(key, payoutInput);
-            payoutInput.addEventListener('input', () => updateSlotMetrics(key));
-
             const bonusCell = document.createElement('td');
             bonusCell.className = 'metric-cell';
             const bonusValue = document.createElement('span');
@@ -1089,6 +1166,19 @@ const ADMIN_PAGE_HTML = `<!doctype html>
             rtpFoolProofInput.step = '0.01';
             rtpFoolProofCell.appendChild(rtpFoolProofInput);
             row.appendChild(rtpFoolProofCell);
+
+            const payoutCell = document.createElement('td');
+            payoutCell.className = 'payout-cell';
+            const payoutInput = document.createElement('input');
+            payoutInput.type = 'number';
+            payoutInput.min = '0';
+            payoutInput.step = '0.01';
+            payoutInput.className = 'payout-input';
+            payoutInput.dataset.slotKey = key;
+            payoutCell.appendChild(payoutInput);
+            row.appendChild(payoutCell);
+            slotPayoutInputs.set(key, payoutInput);
+            payoutInput.addEventListener('input', () => updateSlotMetrics(key));
 
             slotMetaInputs.set(key, {
               bonusEl: bonusValue,
@@ -1144,6 +1234,7 @@ const ADMIN_PAGE_HTML = `<!doctype html>
             targetBody.appendChild(row);
           }
         });
+        scheduleBonusRatioScrollbarUpdate();
       };
 
       const setBonusRatioInputs = (digitBonusRatios) => {
@@ -1191,6 +1282,7 @@ const ADMIN_PAGE_HTML = `<!doctype html>
         setSlotMetaInputs(config.digitPayouts.bySlotMeta);
         setBonusRatioInputs(config.digitBonusRatios);
         updateAllSlotMetrics();
+        scheduleBonusRatioScrollbarUpdate();
       };
 
       const loadConfig = async () => {
@@ -1353,6 +1445,7 @@ const ADMIN_PAGE_HTML = `<!doctype html>
         setStatus(loginStatus, 'Logging in...');
         const account = document.querySelector('#login-account').value.trim();
         const password = document.querySelector('#login-password').value.trim();
+        let data;
         try {
           const res = await fetch('/auth/login', {
             method: 'POST',
@@ -1363,16 +1456,31 @@ const ADMIN_PAGE_HTML = `<!doctype html>
             const detail = await res.json().catch(() => ({}));
             throw new Error(detail.message || 'Login failed');
           }
-          const data = await res.json();
-          token = data.accessToken;
-          localStorage.setItem(tokenKey, token);
-          setStatus(loginStatus, 'Login successful.');
-          setAuthState(true);
-          await loadConfig();
-          await loadRtp();
+          data = await res.json();
         } catch (error) {
           setStatus(loginStatus, error.message || 'Login failed', true);
+          return;
         }
+
+        if (!data || !data.accessToken) {
+          setStatus(loginStatus, 'Login failed: missing token', true);
+          return;
+        }
+        if (data.user && data.user.isAdmin === false) {
+          handleAuthFailure('Admin access required.');
+          return;
+        }
+
+        token = data.accessToken;
+        localStorage.setItem(tokenKey, token);
+        setStatus(loginStatus, 'Login successful.');
+        setAuthState(true);
+        loadConfig().catch((error) =>
+          setStatus(configStatus, error.message || 'Failed to load config', true),
+        );
+        loadRtp().catch((error) =>
+          setStatus(rtpStatus, error.message || 'Failed to load RTP', true),
+        );
       });
 
       configReload.addEventListener('click', async () => {
