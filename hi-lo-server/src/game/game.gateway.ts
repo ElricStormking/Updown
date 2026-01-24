@@ -206,7 +206,8 @@ export class GameGateway
       return;
     }
 
-    const { balanceUpdates, participants, ...publicStats } = event.payload.stats;
+    const { balanceUpdates, participants, ...publicStats } =
+      event.payload.stats;
 
     // Public broadcast: no per-user data
     this.server.emit(event.type, {
@@ -225,11 +226,16 @@ export class GameGateway
     try {
       await this.emitUserRoundSettlements(event.payload.roundId, participants);
     } catch (error) {
-      this.logger.warn(`round:user-settlement emit failed: ${this.unwrapError(error)}`);
+      this.logger.warn(
+        `round:user-settlement emit failed: ${this.unwrapError(error)}`,
+      );
     }
   }
 
-  private async emitUserRoundSettlements(roundId: number, participants: string[]) {
+  private async emitUserRoundSettlements(
+    roundId: number,
+    participants: string[],
+  ) {
     if (!participants.length) {
       return;
     }
@@ -261,7 +267,9 @@ export class GameGateway
         result: bet.result,
         payout: Number(bet.payout),
         createdAt: bet.createdAt.toISOString(),
-        lockedPrice: bet.round.lockedPrice ? Number(bet.round.lockedPrice) : null,
+        lockedPrice: bet.round.lockedPrice
+          ? Number(bet.round.lockedPrice)
+          : null,
         finalPrice: bet.round.finalPrice ? Number(bet.round.finalPrice) : null,
         winningSide: bet.round.winningSide,
         digitResult: bet.round.digitResult ?? null,

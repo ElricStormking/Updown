@@ -13,7 +13,10 @@ export class IntegrationResponseDto<T = null> {
     return response;
   }
 
-  static error<T = any>(errorCode: number, errorMessage: string): IntegrationResponseDto<T> {
+  static error<T = any>(
+    errorCode: number,
+    errorMessage: string,
+  ): IntegrationResponseDto<T> {
     const response = new IntegrationResponseDto<T>();
     response.success = false;
     response.errorCode = errorCode;

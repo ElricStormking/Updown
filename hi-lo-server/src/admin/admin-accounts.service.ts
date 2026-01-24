@@ -1,0 +1,241 @@
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { AdminAccountStatus, Prisma } from '@prisma/client';
+import * as bcrypt from 'bcrypt';
+import { PrismaService } from '../prisma/prisma.service';
+import {
+  QueryAdminAccountsDto,
+  CreateAdminAccountDto,
+  UpdateAdminAccountDto,
+  QueryLoginRecordsDto,
+  AdminAccountResponseItem,
+  AdminLoginRecordResponseItem,
+} from './dto';
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+const parseDateOnly = (value?: string) => {
+  if (!value) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    throw new BadRequestException('Invalid date format (use YYYY-MM-DD)');
+  }
+  const date = new Date(`${value}T00:00:00.000Z`);
+  if (Number.isNaN(date.getTime())) {
+    throw new BadRequestException('Invalid date value');
+  }
+  return date;
+};
+
+@Injectable()
+export class AdminAccountsService {
+  private readonly saltRounds: number;
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly configService: ConfigService,
+  ) {
+    this.saltRounds = Number(
+      this.configService.get<number>('auth.saltRounds', { infer: true }) ?? 12,
+    );
+  }
+
+  async queryAccounts(dto: QueryAdminAccountsDto) {
+    const { page = 0, limit = 20, account, status } = dto;
+
+    const where: Prisma.AdminAccountWhereInput = {};
+    if (account) where.account = { contains: account, mode: 'insensitive' };
+    if (status) where.status = status;
+
+    const skip = page * limit;
+    const take = limit + 1;
+
+    const accounts = await this.prisma.adminAccount.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take,
+    });
+
+    const hasNext = accounts.length > limit;
+    const items: AdminAccountResponseItem[] = accounts
+      .slice(0, limit)
+      .map((a) => ({
+        id: a.id,
+        account: a.account,
+        status: a.status,
+        createdAt: a.createdAt.toISOString(),
+        updatedAt: a.updatedAt.toISOString(),
+      }));
+
+    return { page, limit, hasNext, items };
+  }
+
+  async createAccount(dto: CreateAdminAccountDto) {
+    const existing = await this.prisma.adminAccount.findUnique({
+      where: { account: dto.account },
+    });
+    if (existing) {
+      throw new BadRequestException('Account already exists');
+    }
+    const passwordHash = await bcrypt.hash(dto.password, this.saltRounds);
+    const account = await this.prisma.adminAccount.create({
+      data: {
+        account: dto.account,
+        password: passwordHash,
+        status: dto.status ?? AdminAccountStatus.ENABLED,
+      },
+    });
+    return {
+      id: account.id,
+      account: account.account,
+      status: account.status,
+      createdAt: account.createdAt.toISOString(),
+      updatedAt: account.updatedAt.toISOString(),
+    };
+  }
+
+  async updateAccount(id: string, dto: UpdateAdminAccountDto) {
+    const existing = await this.prisma.adminAccount.findUnique({
+      where: { id },
+    });
+    if (!existing) {
+      throw new NotFoundException('Admin account not found');
+    }
+    const data: Prisma.AdminAccountUpdateInput = {};
+    if (dto.password !== undefined) {
+      data.password = await bcrypt.hash(dto.password, this.saltRounds);
+    }
+    if (dto.status !== undefined) {
+      data.status = dto.status;
+    }
+
+    const account = await this.prisma.adminAccount.update({
+      where: { id },
+      data,
+    });
+    return {
+      id: account.id,
+      account: account.account,
+      status: account.status,
+      createdAt: account.createdAt.toISOString(),
+      updatedAt: account.updatedAt.toISOString(),
+    };
+  }
+
+  async getAccountById(id: string) {
+    const account = await this.prisma.adminAccount.findUnique({
+      where: { id },
+    });
+    if (!account) {
+      throw new NotFoundException('Admin account not found');
+    }
+    return {
+      id: account.id,
+      account: account.account,
+      status: account.status,
+      createdAt: account.createdAt.toISOString(),
+      updatedAt: account.updatedAt.toISOString(),
+    };
+  }
+
+  async queryLoginRecords(dto: QueryLoginRecordsDto) {
+    const { page = 0, limit = 20, start, end, account, result } = dto;
+    const startDate = parseDateOnly(start);
+    const endDate = parseDateOnly(end);
+    const endExclusive = endDate
+      ? new Date(endDate.getTime() + MS_PER_DAY)
+      : null;
+
+    const where: Prisma.AdminLoginRecordWhereInput = {};
+    if (startDate || endExclusive) {
+      where.loginTime = {};
+      if (startDate) where.loginTime.gte = startDate;
+      if (endExclusive) where.loginTime.lt = endExclusive;
+    }
+    if (account) {
+      where.admin = { account: { contains: account, mode: 'insensitive' } };
+    }
+    if (result !== undefined) {
+      where.result = result === 'true' || result === '1';
+    }
+
+    const skip = page * limit;
+    const take = limit + 1;
+
+    const records = await this.prisma.adminLoginRecord.findMany({
+      where,
+      include: { admin: { select: { account: true } } },
+      orderBy: { loginTime: 'desc' },
+      skip,
+      take,
+    });
+
+    const hasNext = records.length > limit;
+    const items: AdminLoginRecordResponseItem[] = records
+      .slice(0, limit)
+      .map((r) => ({
+        id: r.id,
+        account: r.admin.account,
+        result: r.result,
+        failureReason: r.failureReason,
+        loginTime: r.loginTime.toISOString(),
+      }));
+
+    return { page, limit, hasNext, items };
+  }
+
+  async recordLogin(
+    accountName: string,
+    success: boolean,
+    failureReason?: string,
+  ) {
+    const admin = await this.prisma.adminAccount.findUnique({
+      where: { account: accountName },
+    });
+    if (!admin) return;
+
+    await this.prisma.adminLoginRecord.create({
+      data: {
+        adminId: admin.id,
+        result: success,
+        failureReason: success ? null : failureReason,
+      },
+    });
+  }
+
+  async validateAdminLogin(accountName: string, password: string) {
+    const admin = await this.prisma.adminAccount.findUnique({
+      where: { account: accountName },
+    });
+
+    if (!admin) {
+      await this.recordLogin(accountName, false, 'Account not found');
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    if (admin.status !== AdminAccountStatus.ENABLED) {
+      await this.recordLogin(
+        accountName,
+        false,
+        `Account ${admin.status.toLowerCase()}`,
+      );
+      throw new UnauthorizedException(
+        `Account is ${admin.status.toLowerCase()}`,
+      );
+    }
+
+    const isValid = await bcrypt.compare(password, admin.password);
+    if (!isValid) {
+      await this.recordLogin(accountName, false, 'Invalid password');
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    await this.recordLogin(accountName, true);
+    return admin;
+  }
+}

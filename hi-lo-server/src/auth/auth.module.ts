@@ -19,7 +19,8 @@ import { JwtStrategy } from './strategies/jwt.strategy';
         secret: configService.get<string>('auth.jwtSecret') ?? 'change-me',
         signOptions: {
           // Cast to any to satisfy jsonwebtoken typings; runtime accepts string durations.
-          expiresIn: (configService.get<string>('auth.jwtExpiresIn') ?? '1h') as any,
+          expiresIn: (configService.get<string>('auth.jwtExpiresIn') ??
+            '1h') as any,
         },
       }),
     }),

@@ -93,7 +93,9 @@ export class HistoryService {
         result: bet.result,
         payout: Number(bet.payout),
         createdAt: bet.createdAt,
-        lockedPrice: bet.round.lockedPrice ? Number(bet.round.lockedPrice) : null,
+        lockedPrice: bet.round.lockedPrice
+          ? Number(bet.round.lockedPrice)
+          : null,
         finalPrice: bet.round.finalPrice ? Number(bet.round.finalPrice) : null,
         winningSide: bet.round.winningSide,
         digitResult: bet.round.digitResult ?? null,
@@ -122,8 +124,12 @@ export class HistoryService {
           result: bet.result,
           payout: Number(bet.payout),
           createdAt: bet.createdAt,
-          lockedPrice: bet.round.lockedPrice ? Number(bet.round.lockedPrice) : null,
-          finalPrice: bet.round.finalPrice ? Number(bet.round.finalPrice) : null,
+          lockedPrice: bet.round.lockedPrice
+            ? Number(bet.round.lockedPrice)
+            : null,
+          finalPrice: bet.round.finalPrice
+            ? Number(bet.round.finalPrice)
+            : null,
           winningSide: bet.round.winningSide,
           digitResult: bet.round.digitResult ?? null,
           digitSum: bet.round.digitSum ?? null,

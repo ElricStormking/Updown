@@ -50,7 +50,10 @@ export class GameConfigController {
       };
       sum: Record<number, number>;
       bySlot: Record<string, number>;
-      bySlotMeta: Record<string, { suggestWinPct: number; rtpFoolProofPct: number; totalCounts: number }>;
+      bySlotMeta: Record<
+        string,
+        { suggestWinPct: number; rtpFoolProofPct: number; totalCounts: number }
+      >;
     };
     digitBonusRatios: Record<string, { ratios: number[]; weights: number[] }>;
   }) {

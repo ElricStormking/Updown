@@ -17,7 +17,8 @@ import { WalletModule } from '../wallet/wallet.module';
       useFactory: (configService: ConfigService) => ({
         secret: configService.get<string>('auth.jwtSecret') ?? 'change-me',
         signOptions: {
-          expiresIn: (configService.get<string>('auth.jwtExpiresIn') ?? '1h') as any,
+          expiresIn: (configService.get<string>('auth.jwtExpiresIn') ??
+            '1h') as any,
         },
       }),
     }),

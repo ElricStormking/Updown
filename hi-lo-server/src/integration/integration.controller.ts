@@ -54,7 +54,10 @@ export class IntegrationController {
   }
 
   @Post('transfers')
-  async getTransferHistory(@Body() dto: GetTransferHistoryDto, @Req() req: any) {
+  async getTransferHistory(
+    @Body() dto: GetTransferHistoryDto,
+    @Req() req: any,
+  ) {
     const merchant: Merchant = req[MERCHANT_KEY];
     return this.integrationService.getTransferHistory(
       merchant,

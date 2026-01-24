@@ -26,7 +26,10 @@ import {
   type DigitBonusSlot,
 } from '../game/digit-bonus.utils';
 import { GameConfigService } from '../config/game-config.service';
-import type { DigitPayouts, GameConfigSnapshot } from '../config/game-config.defaults';
+import type {
+  DigitPayouts,
+  GameConfigSnapshot,
+} from '../config/game-config.defaults';
 
 type SumKey = keyof DigitPayouts['sum'];
 
@@ -124,9 +127,7 @@ export class BetsService {
           : new Prisma.Decimal(round.oddsDown);
     } else {
       if (dto.side) {
-        throw new BadRequestException(
-          'Bet side is not allowed for digit bets',
-        );
+        throw new BadRequestException('Bet side is not allowed for digit bets');
       }
       if (!dto.digitType) {
         throw new BadRequestException('Digit bet type is required');
@@ -182,7 +183,10 @@ export class BetsService {
     };
   }
 
-  async clearBetsForRound(userId: string, roundId: number): Promise<ClearedBetsPayload> {
+  async clearBetsForRound(
+    userId: string,
+    roundId: number,
+  ): Promise<ClearedBetsPayload> {
     const round = await this.prisma.round.findUnique({
       where: { id: roundId },
     });
@@ -226,7 +230,10 @@ export class BetsService {
 
     const userIds = await this.getSlipUsers(roundId);
     if (!userIds.length) {
-      await this.markCommittedRound(committedKey, this.getSlipTtlMs(round.lockTime, round.endTime));
+      await this.markCommittedRound(
+        committedKey,
+        this.getSlipTtlMs(round.lockTime, round.endTime),
+      );
       return;
     }
 
@@ -261,7 +268,9 @@ export class BetsService {
           const rows = items.map((item) => {
             if (item.betType === BetType.HILO) {
               if (!item.side) {
-                throw new BadRequestException('Missing side for Hi-Lo slip item');
+                throw new BadRequestException(
+                  'Missing side for Hi-Lo slip item',
+                );
               }
               const odds =
                 item.side === BetSide.UP
@@ -283,7 +292,9 @@ export class BetsService {
             }
 
             if (!item.digitType) {
-              throw new BadRequestException('Missing digitType for digit slip item');
+              throw new BadRequestException(
+                'Missing digitType for digit slip item',
+              );
             }
             const normalized = this.normalizeDigitBet(
               item.digitType,
@@ -311,7 +322,9 @@ export class BetsService {
       } catch (error) {
         // If wallet changed externally or any slip item is invalid, skip this user.
         const reason = error instanceof Error ? error.message : String(error);
-        this.logger.warn(`Slip commit skipped for user ${userId} round ${roundId}: ${reason}`);
+        this.logger.warn(
+          `Slip commit skipped for user ${userId} round ${roundId}: ${reason}`,
+        );
       } finally {
         // Always clear slip so it can't be committed later after lock.
         await this.clearSlip(userId, roundId);
@@ -319,7 +332,10 @@ export class BetsService {
     }
 
     await this.clearSlipUsers(roundId);
-    await this.markCommittedRound(committedKey, this.getSlipTtlMs(round.lockTime, round.endTime));
+    await this.markCommittedRound(
+      committedKey,
+      this.getSlipTtlMs(round.lockTime, round.endTime),
+    );
   }
 
   async settleRound(
@@ -417,13 +433,8 @@ export class BetsService {
                 ? bonusRatio
                 : isBonusSlot && factor > 1
                   ? payoutMultiplier * factor
-                : payoutMultiplier;
-            await this.processDigitWin(
-              tx,
-              bet,
-              boosted,
-              balanceUpdates,
-            );
+                  : payoutMultiplier;
+            await this.processDigitWin(tx, bet, boosted, balanceUpdates);
             winners += 1;
           } else {
             await this.markLoss(tx, bet.id);
@@ -553,7 +564,11 @@ export class BetsService {
     digitType: DigitBetType,
     selection: string | undefined,
     payouts: DigitPayouts,
-  ): { digitType: DigitBetType; selection: string | null; odds: Prisma.Decimal } {
+  ): {
+    digitType: DigitBetType;
+    selection: string | null;
+    odds: Prisma.Decimal;
+  } {
     const cleanSelection = selection?.trim();
     switch (digitType) {
       case DigitBetType.SMALL:
@@ -564,7 +579,8 @@ export class BetsService {
           throw new BadRequestException('Selection is not needed for this bet');
         }
         const sboePayout =
-          this.getSlotPayoutOverride(digitType, null, payouts) ?? payouts.smallBigOddEven;
+          this.getSlotPayoutOverride(digitType, null, payouts) ??
+          payouts.smallBigOddEven;
         return {
           digitType,
           selection: null,
@@ -575,7 +591,8 @@ export class BetsService {
           throw new BadRequestException('Selection is not needed for this bet');
         }
         const anyTriplePayout =
-          this.getSlotPayoutOverride(digitType, null, payouts) ?? payouts.anyTriple;
+          this.getSlotPayoutOverride(digitType, null, payouts) ??
+          payouts.anyTriple;
         return {
           digitType,
           selection: null,
@@ -584,7 +601,8 @@ export class BetsService {
       case DigitBetType.DOUBLE: {
         const normalized = this.normalizeDoubleSelection(cleanSelection);
         const doublePayout =
-          this.getSlotPayoutOverride(digitType, normalized, payouts) ?? payouts.double;
+          this.getSlotPayoutOverride(digitType, normalized, payouts) ??
+          payouts.double;
         return {
           digitType,
           selection: normalized,
@@ -594,7 +612,8 @@ export class BetsService {
       case DigitBetType.TRIPLE: {
         const normalized = this.normalizeTripleSelection(cleanSelection);
         const triplePayout =
-          this.getSlotPayoutOverride(digitType, normalized, payouts) ?? payouts.triple;
+          this.getSlotPayoutOverride(digitType, normalized, payouts) ??
+          payouts.triple;
         return {
           digitType,
           selection: normalized,
@@ -613,7 +632,8 @@ export class BetsService {
       case DigitBetType.SINGLE: {
         const normalized = this.normalizeSingleSelection(cleanSelection);
         const singlePayout =
-          this.getSlotPayoutOverride(digitType, normalized, payouts) ?? payouts.single.single;
+          this.getSlotPayoutOverride(digitType, normalized, payouts) ??
+          payouts.single.single;
         return {
           digitType,
           selection: normalized,
@@ -636,7 +656,11 @@ export class BetsService {
     return typeof value === 'number' && Number.isFinite(value) ? value : null;
   }
 
-  private scaleSinglePayout(base: number, target: number, defaultBase: number): number {
+  private scaleSinglePayout(
+    base: number,
+    target: number,
+    defaultBase: number,
+  ): number {
     if (!Number.isFinite(base)) return target;
     if (!Number.isFinite(defaultBase) || defaultBase <= 0) return target;
     return base * (target / defaultBase);
@@ -679,10 +703,7 @@ export class BetsService {
       throw new BadRequestException('Sum selection must be a number');
     }
     const sum = Number(selection);
-    if (
-      sum < DIGIT_SUM_RANGES.sumMin ||
-      sum > DIGIT_SUM_RANGES.sumMax
-    ) {
+    if (sum < DIGIT_SUM_RANGES.sumMin || sum > DIGIT_SUM_RANGES.sumMax) {
       throw new BadRequestException('Sum selection out of range');
     }
     if (!this.isSumKey(sum, payouts.sum)) {
@@ -725,31 +746,33 @@ export class BetsService {
         return !isTriple &&
           sum >= DIGIT_SUM_RANGES.small.min &&
           sum <= DIGIT_SUM_RANGES.small.max
-          ? slotPayout ?? payouts.smallBigOddEven
+          ? (slotPayout ?? payouts.smallBigOddEven)
           : null;
       case DigitBetType.BIG:
         return !isTriple &&
           sum >= DIGIT_SUM_RANGES.big.min &&
           sum <= DIGIT_SUM_RANGES.big.max
-          ? slotPayout ?? payouts.smallBigOddEven
+          ? (slotPayout ?? payouts.smallBigOddEven)
           : null;
       case DigitBetType.ODD:
         return !isTriple && sum % 2 === 1
-          ? slotPayout ?? payouts.smallBigOddEven
+          ? (slotPayout ?? payouts.smallBigOddEven)
           : null;
       case DigitBetType.EVEN:
         return !isTriple && sum % 2 === 0
-          ? slotPayout ?? payouts.smallBigOddEven
+          ? (slotPayout ?? payouts.smallBigOddEven)
           : null;
       case DigitBetType.ANY_TRIPLE:
-        return isTriple ? slotPayout ?? payouts.anyTriple : null;
+        return isTriple ? (slotPayout ?? payouts.anyTriple) : null;
       case DigitBetType.TRIPLE:
         return isTriple && selection === outcome.digits
-          ? slotPayout ?? payouts.triple
+          ? (slotPayout ?? payouts.triple)
           : null;
       case DigitBetType.DOUBLE: {
         const digit = selection[0];
-        return digit && countFor(digit) >= 2 ? slotPayout ?? payouts.double : null;
+        return digit && countFor(digit) >= 2
+          ? (slotPayout ?? payouts.double)
+          : null;
       }
       case DigitBetType.SUM: {
         const target = Number(selection);
@@ -769,11 +792,19 @@ export class BetsService {
         }
         if (count === 2) {
           const base = slotPayout ?? payouts.single.single;
-          return this.scaleSinglePayout(base, payouts.single.double, payouts.single.single);
+          return this.scaleSinglePayout(
+            base,
+            payouts.single.double,
+            payouts.single.single,
+          );
         }
         if (count === 3) {
           const base = slotPayout ?? payouts.single.single;
-          return this.scaleSinglePayout(base, payouts.single.triple, payouts.single.single);
+          return this.scaleSinglePayout(
+            base,
+            payouts.single.triple,
+            payouts.single.single,
+          );
         }
         return null;
       }
@@ -817,7 +848,10 @@ export class BetsService {
     return `DIGIT|${item.digitType ?? ''}|${item.selection ?? ''}`;
   }
 
-  private async getSlip(userId: string, roundId: number): Promise<BetSlipStored | null> {
+  private async getSlip(
+    userId: string,
+    roundId: number,
+  ): Promise<BetSlipStored | null> {
     const key = this.getSlipKey(userId, roundId);
     if (await this.isRedisOk()) {
       return await this.redis.getJson<BetSlipStored>(key);
@@ -938,7 +972,9 @@ export class BetsService {
     return slip;
   }
 
-  private getConfigForRound(round: { gameConfigSnapshot?: unknown | null }): GameConfigSnapshot {
+  private getConfigForRound(round: {
+    gameConfigSnapshot?: unknown | null;
+  }): GameConfigSnapshot {
     return this.gameConfigService.normalizeSnapshot(round.gameConfigSnapshot);
   }
 
@@ -964,4 +1000,3 @@ type BetSlipStored = {
   items: Record<string, BetSlipItem>;
   updatedAt: string;
 };
-

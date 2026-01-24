@@ -67,9 +67,39 @@ async function seedDemoUser() {
   return user;
 }
 
+async function seedAdminUser() {
+  const account = process.env.SEED_ADMIN_ACCOUNT ?? 'design';
+  const password = process.env.SEED_ADMIN_PASSWORD ?? 'design1234';
+  const saltRounds = Number(process.env.PASSWORD_SALT_ROUNDS ?? 12);
+
+  const passwordHash = await bcrypt.hash(password, saltRounds);
+
+  const user = await prisma.user.upsert({
+    where: { email: account },
+    update: {
+      password: passwordHash,
+    },
+    create: {
+      email: account,
+      password: passwordHash,
+      wallet: {
+        create: {
+          balance: new Prisma.Decimal(0),
+          currency: 'USDT',
+        },
+      },
+    },
+  });
+
+  console.log(`✅ Seeded admin user ${user.email}`);
+
+  return user;
+}
+
 async function main() {
   await seedTestMerchant();
   await seedDemoUser();
+  await seedAdminUser();
 }
 
 main()

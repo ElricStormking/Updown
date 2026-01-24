@@ -5,7 +5,13 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { BetSide, DigitBetType, Prisma, Round, RoundStatus } from '@prisma/client';
+import {
+  BetSide,
+  DigitBetType,
+  Prisma,
+  Round,
+  RoundStatus,
+} from '@prisma/client';
 import { Subject } from 'rxjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { BinancePriceService } from '../binance/binance.service';
@@ -112,7 +118,12 @@ export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
         const key = buildDigitBonusKey(slot);
         const entry = config.digitBonusRatios?.[key];
         const bonusRatio = entry
-          ? pickBonusRatioWithChance(entry.ratios, entry.weights, Math.random, bonusChanceTotal)
+          ? pickBonusRatioWithChance(
+              entry.ratios,
+              entry.weights,
+              Math.random,
+              bonusChanceTotal,
+            )
           : null;
         if (bonusRatio !== null && bonusRatio !== undefined) {
           bonusSlots.push({ ...slot, bonusRatio });
@@ -270,7 +281,8 @@ export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
 
     const finalPrice = await this.fetchLatestPrice();
     const locked = this.currentRound.lockedPrice ?? finalPrice;
-    const digitOutcome = finalPrice !== null ? getDigitOutcome(finalPrice) : null;
+    const digitOutcome =
+      finalPrice !== null ? getDigitOutcome(finalPrice) : null;
     const digitResult = digitOutcome?.digits ?? null;
     const digitSum = digitOutcome?.sum ?? null;
     let winningSide: BetSide | null = null;
@@ -403,21 +415,38 @@ export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
-  private parseBonusSlots(
-    value: unknown,
-  ): Array<{ digitType: DigitBetType; selection: string | null; bonusRatio?: number | null }> {
+  private parseBonusSlots(value: unknown): Array<{
+    digitType: DigitBetType;
+    selection: string | null;
+    bonusRatio?: number | null;
+  }> {
     if (!Array.isArray(value)) return [];
     const allowed = new Set(Object.values(DigitBetType));
-    const slots: Array<{ digitType: DigitBetType; selection: string | null; bonusRatio?: number | null }> = [];
+    const slots: Array<{
+      digitType: DigitBetType;
+      selection: string | null;
+      bonusRatio?: number | null;
+    }> = [];
     for (const item of value) {
       if (!item || typeof item !== 'object') continue;
-      const digitType = (item as any).digitType as unknown;
-      const selection = (item as any).selection;
-      const bonusRatio = (item as any).bonusRatio;
-      if (typeof digitType !== 'string' || !allowed.has(digitType as DigitBetType)) continue;
-      if (selection !== null && selection !== undefined && typeof selection !== 'string') continue;
+      const digitType = item.digitType as unknown;
+      const selection = item.selection;
+      const bonusRatio = item.bonusRatio;
+      if (
+        typeof digitType !== 'string' ||
+        !allowed.has(digitType as DigitBetType)
+      )
+        continue;
+      if (
+        selection !== null &&
+        selection !== undefined &&
+        typeof selection !== 'string'
+      )
+        continue;
       const ratio =
-        typeof bonusRatio === 'number' && Number.isFinite(bonusRatio) ? bonusRatio : null;
+        typeof bonusRatio === 'number' && Number.isFinite(bonusRatio)
+          ? bonusRatio
+          : null;
       slots.push({
         digitType: digitType as DigitBetType,
         selection: selection ?? null,

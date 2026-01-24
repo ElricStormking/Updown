@@ -82,6 +82,8 @@ export class MerchantAuthGuard implements CanActivate {
   }
 
   private sendError(response: any, errorCode: number, errorMessage: string) {
-    response.status(200).json(IntegrationResponseDto.error(errorCode, errorMessage));
+    response
+      .status(200)
+      .json(IntegrationResponseDto.error(errorCode, errorMessage));
   }
 }

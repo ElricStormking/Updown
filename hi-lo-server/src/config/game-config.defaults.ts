@@ -19,7 +19,10 @@ export interface DigitPayouts {
   };
   sum: Record<number, number>;
   bySlot: Record<string, number>;
-  bySlotMeta: Record<string, { suggestWinPct: number; rtpFoolProofPct: number; totalCounts: number }>;
+  bySlotMeta: Record<
+    string,
+    { suggestWinPct: number; rtpFoolProofPct: number; totalCounts: number }
+  >;
 }
 
 export type DigitBonusRatioEntry = {
@@ -43,7 +46,6 @@ export interface GameConfigSnapshot {
   digitPayouts: DigitPayouts;
   digitBonusRatios: DigitBonusRatios;
 }
-
 
 const buildSumPayouts = () => {
   const sum: Record<number, number> = {};
@@ -97,7 +99,10 @@ const computeDigitSumSuggestWinPct = (selection: string | null) => {
   return (count / 1000) * 100;
 };
 
-const getDefaultSuggestWinPct = (digitType: DigitBetType, selection: string | null) => {
+const getDefaultSuggestWinPct = (
+  digitType: DigitBetType,
+  selection: string | null,
+) => {
   switch (digitType) {
     case DigitBetType.SMALL:
     case DigitBetType.BIG:
@@ -121,7 +126,10 @@ const getDefaultSuggestWinPct = (digitType: DigitBetType, selection: string | nu
 };
 
 const buildDefaultSlotPayoutMeta = () => {
-  const meta: Record<string, { suggestWinPct: number; rtpFoolProofPct: number; totalCounts: number }> = {};
+  const meta: Record<
+    string,
+    { suggestWinPct: number; rtpFoolProofPct: number; totalCounts: number }
+  > = {};
   getAllDigitBetSlots().forEach((slot) => {
     meta[buildDigitBonusKey(slot)] = {
       suggestWinPct: getDefaultSuggestWinPct(slot.digitType, slot.selection),
@@ -177,48 +185,113 @@ export const buildDefaultDigitBonusRatios = (): DigitBonusRatios => {
       .map((slot) => buildDigitBonusKey(slot));
 
   setDefaults(
-    [buildDigitBonusKey({ digitType: DigitBetType.ANY_TRIPLE, selection: null })],
+    [
+      buildDigitBonusKey({
+        digitType: DigitBetType.ANY_TRIPLE,
+        selection: null,
+      }),
+    ],
     [100, 168, 200, 300, 500],
     [3300, 3000, 2700, 2600, 2500],
   );
 
-  setDefaults(byType(DigitBetType.DOUBLE), [50, 88, 100, 128, 168], [
-    3519, 2037, 1852, 1852, 1852,
-  ]);
-  setDefaults(byType(DigitBetType.TRIPLE), [888, 1000, 1500, 2000, 2500], [
-    5000, 5000, 5000, 5000, 5000,
-  ]);
-  setDefaults(byType(DigitBetType.SINGLE), [50, 68, 88, 100, 128], [
-    100, 100, 100, 100, 50,
-  ]);
+  setDefaults(
+    byType(DigitBetType.DOUBLE),
+    [50, 88, 100, 128, 168],
+    [3519, 2037, 1852, 1852, 1852],
+  );
+  setDefaults(
+    byType(DigitBetType.TRIPLE),
+    [888, 1000, 1500, 2000, 2500],
+    [5000, 5000, 5000, 5000, 5000],
+  );
+  setDefaults(
+    byType(DigitBetType.SINGLE),
+    [50, 68, 88, 100, 128],
+    [100, 100, 100, 100, 50],
+  );
 
   const sumDefaults: Record<number, { ratios: number[]; weights: number[] }> = {
-    1: { ratios: [300, 500, 777, 888, 1000], weights: [4000, 4000, 3667, 3667, 3667] },
-    2: { ratios: [200, 388, 500, 666, 1000], weights: [2167, 2000, 2000, 2000, 1833] },
-    3: { ratios: [88, 200, 388, 666, 888], weights: [1500, 1500, 1500, 1500, 1400] },
-    4: { ratios: [88, 168, 200, 300, 500], weights: [2000, 2000, 2000, 1667, 1667] },
-    5: { ratios: [50, 88, 168, 300, 500], weights: [1190, 1190, 1190, 1190, 1190] },
+    1: {
+      ratios: [300, 500, 777, 888, 1000],
+      weights: [4000, 4000, 3667, 3667, 3667],
+    },
+    2: {
+      ratios: [200, 388, 500, 666, 1000],
+      weights: [2167, 2000, 2000, 2000, 1833],
+    },
+    3: {
+      ratios: [88, 200, 388, 666, 888],
+      weights: [1500, 1500, 1500, 1500, 1400],
+    },
+    4: {
+      ratios: [88, 168, 200, 300, 500],
+      weights: [2000, 2000, 2000, 1667, 1667],
+    },
+    5: {
+      ratios: [50, 88, 168, 300, 500],
+      weights: [1190, 1190, 1190, 1190, 1190],
+    },
     6: { ratios: [50, 88, 168, 300, 500], weights: [821, 821, 821, 821, 821] },
     7: { ratios: [50, 88, 168, 200, 250], weights: [917, 917, 917, 917, 917] },
     8: { ratios: [50, 88, 168, 200, 250], weights: [667, 667, 667, 667, 667] },
-    9: { ratios: [25, 50, 88, 128, 168], weights: [1000, 1000, 1000, 1000, 1000] },
-    10: { ratios: [25, 50, 88, 128, 168], weights: [1063, 1063, 1063, 1063, 1063] },
+    9: {
+      ratios: [25, 50, 88, 128, 168],
+      weights: [1000, 1000, 1000, 1000, 1000],
+    },
+    10: {
+      ratios: [25, 50, 88, 128, 168],
+      weights: [1063, 1063, 1063, 1063, 1063],
+    },
     11: { ratios: [25, 50, 88, 128, 168], weights: [971, 971, 971, 971, 971] },
-    12: { ratios: [20, 30, 50, 68, 88], weights: [1233, 1233, 1233, 1233, 1233] },
-    13: { ratios: [20, 30, 50, 68, 88], weights: [1333, 1333, 1333, 1333, 1333] },
-    14: { ratios: [20, 30, 50, 68, 88], weights: [1333, 1333, 1333, 1333, 1333] },
-    15: { ratios: [20, 30, 50, 68, 88], weights: [1233, 1233, 1233, 1233, 1233] },
+    12: {
+      ratios: [20, 30, 50, 68, 88],
+      weights: [1233, 1233, 1233, 1233, 1233],
+    },
+    13: {
+      ratios: [20, 30, 50, 68, 88],
+      weights: [1333, 1333, 1333, 1333, 1333],
+    },
+    14: {
+      ratios: [20, 30, 50, 68, 88],
+      weights: [1333, 1333, 1333, 1333, 1333],
+    },
+    15: {
+      ratios: [20, 30, 50, 68, 88],
+      weights: [1233, 1233, 1233, 1233, 1233],
+    },
     16: { ratios: [25, 50, 88, 128, 168], weights: [971, 971, 971, 971, 971] },
-    17: { ratios: [25, 50, 88, 128, 168], weights: [1063, 1063, 1063, 1063, 1063] },
-    18: { ratios: [25, 50, 88, 128, 168], weights: [1000, 1000, 1000, 1000, 1000] },
+    17: {
+      ratios: [25, 50, 88, 128, 168],
+      weights: [1063, 1063, 1063, 1063, 1063],
+    },
+    18: {
+      ratios: [25, 50, 88, 128, 168],
+      weights: [1000, 1000, 1000, 1000, 1000],
+    },
     19: { ratios: [50, 88, 168, 200, 250], weights: [667, 667, 667, 667, 667] },
     20: { ratios: [50, 88, 168, 200, 250], weights: [917, 917, 917, 917, 917] },
     21: { ratios: [50, 88, 168, 300, 500], weights: [821, 821, 821, 821, 821] },
-    22: { ratios: [50, 88, 168, 300, 500], weights: [1190, 1190, 1190, 1190, 1190] },
-    23: { ratios: [88, 168, 200, 300, 500], weights: [2000, 2000, 2000, 1667, 1667] },
-    24: { ratios: [88, 200, 388, 666, 888], weights: [1500, 1500, 1500, 1500, 1400] },
-    25: { ratios: [200, 388, 500, 666, 1000], weights: [2167, 2000, 2000, 2000, 1833] },
-    26: { ratios: [300, 500, 777, 888, 1000], weights: [4000, 4000, 3667, 3667, 3667] },
+    22: {
+      ratios: [50, 88, 168, 300, 500],
+      weights: [1190, 1190, 1190, 1190, 1190],
+    },
+    23: {
+      ratios: [88, 168, 200, 300, 500],
+      weights: [2000, 2000, 2000, 1667, 1667],
+    },
+    24: {
+      ratios: [88, 200, 388, 666, 888],
+      weights: [1500, 1500, 1500, 1500, 1400],
+    },
+    25: {
+      ratios: [200, 388, 500, 666, 1000],
+      weights: [2167, 2000, 2000, 2000, 1833],
+    },
+    26: {
+      ratios: [300, 500, 777, 888, 1000],
+      weights: [4000, 4000, 3667, 3667, 3667],
+    },
   };
 
   slots

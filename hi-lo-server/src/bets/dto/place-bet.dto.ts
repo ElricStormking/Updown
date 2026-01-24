@@ -1,4 +1,11 @@
-import { IsEnum, IsInt, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import {
+  IsEnum,
+  IsInt,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Min,
+} from 'class-validator';
 import { BetSide, BetType, DigitBetType } from '@prisma/client';
 
 export class PlaceBetDto {

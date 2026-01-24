@@ -1,4 +1,12 @@
-import { Body, Controller, Delete, Param, ParseIntPipe, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Param,
+  ParseIntPipe,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { AuthUser } from '../common/interfaces/auth-user.interface';
@@ -34,7 +42,10 @@ export class BetsController {
     @CurrentUser() user: AuthUser,
     @Param('roundId', ParseIntPipe) roundId: number,
   ) {
-    const result = await this.betsService.clearBetsForRound(user.userId, roundId);
+    const result = await this.betsService.clearBetsForRound(
+      user.userId,
+      roundId,
+    );
     return {
       roundId: result.roundId,
       cleared: result.cleared,

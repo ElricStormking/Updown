@@ -17,8 +17,10 @@ export const DEFAULT_BONUS_SLOT_CHANCE_TOTAL = 100000;
 export const buildDigitBonusKey = (slot: DigitBonusSlot) =>
   `${slot.digitType}|${slot.selection ?? ''}`;
 
-export const buildDigitBetKey = (digitType: DigitBetType, selection: string | null) =>
-  `${digitType}|${selection ?? ''}`;
+export const buildDigitBetKey = (
+  digitType: DigitBetType,
+  selection: string | null,
+) => `${digitType}|${selection ?? ''}`;
 
 export const isBonusDigitBet = (
   digitType: DigitBetType | null,
@@ -119,7 +121,18 @@ export const getAllDigitBetSlots = (): DigitBonusSlot[] => {
     slots.push({ digitType: DigitBetType.SINGLE, selection: d });
   }
 
-  for (const d of ['00', '11', '22', '33', '44', '55', '66', '77', '88', '99']) {
+  for (const d of [
+    '00',
+    '11',
+    '22',
+    '33',
+    '44',
+    '55',
+    '66',
+    '77',
+    '88',
+    '99',
+  ]) {
     slots.push({ digitType: DigitBetType.DOUBLE, selection: d });
   }
 
@@ -161,4 +174,3 @@ export const pickRandomDigitBonusSlots = (
 
   return all.slice(all.length - slotCount);
 };
-

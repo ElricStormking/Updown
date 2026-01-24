@@ -25,7 +25,8 @@ export const IntegrationErrorMessages: Record<number, string> = {
   [IntegrationErrorCodes.INSUFFICIENT_BALANCE]: 'Insufficient balance',
   [IntegrationErrorCodes.DUPLICATE_ORDER_NUMBER]: 'Duplicate order number',
   [IntegrationErrorCodes.INVALID_TRANSFER_TYPE]: 'Invalid transfer type',
-  [IntegrationErrorCodes.INVALID_PAGE_SIZE]: 'Page size must be between 1 and 100',
+  [IntegrationErrorCodes.INVALID_PAGE_SIZE]:
+    'Page size must be between 1 and 100',
   [IntegrationErrorCodes.INVALID_PAGE_NUMBER]: 'Invalid page number',
   [IntegrationErrorCodes.INTERNAL_ERROR]: 'Internal server error',
 };

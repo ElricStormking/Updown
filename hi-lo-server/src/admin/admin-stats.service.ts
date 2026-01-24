@@ -47,7 +47,9 @@ export class AdminStatsService {
   async getDailyRtp(start?: string, end?: string) {
     const startDate = parseDateOnly(start);
     const endDate = parseDateOnly(end);
-    const endExclusive = endDate ? new Date(endDate.getTime() + MS_PER_DAY) : null;
+    const endExclusive = endDate
+      ? new Date(endDate.getTime() + MS_PER_DAY)
+      : null;
 
     const filters: Prisma.Sql[] = [
       Prisma.sql`b."result" != ${BetResult.PENDING}::"BetResult"`,

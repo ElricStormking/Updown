@@ -80,4 +80,3 @@ describe('digit-bonus.utils', () => {
     expect(ratio).toBe(4);
   });
 });
-

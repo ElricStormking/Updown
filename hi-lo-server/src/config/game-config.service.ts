@@ -76,7 +76,10 @@ export class GameConfigService {
       return defaults;
     }
 
-    const digitPayouts = this.mergeDigitPayouts(raw.digitPayouts, defaults.digitPayouts);
+    const digitPayouts = this.mergeDigitPayouts(
+      raw.digitPayouts,
+      defaults.digitPayouts,
+    );
     const digitBonusRatios = this.mergeDigitBonusRatios(
       raw.digitBonusRatios,
       defaults.digitBonusRatios,
@@ -86,19 +89,30 @@ export class GameConfigService {
       defaults.bonusSlotChanceTotal,
     );
     const configVersion =
-      typeof raw.configVersion === 'string' ? raw.configVersion : defaults.configVersion;
+      typeof raw.configVersion === 'string'
+        ? raw.configVersion
+        : defaults.configVersion;
 
     return {
       configVersion,
-      bettingDurationMs: toNumber(raw.bettingDurationMs, defaults.bettingDurationMs),
-      resultDurationMs: toNumber(raw.resultDurationMs, defaults.resultDurationMs),
+      bettingDurationMs: toNumber(
+        raw.bettingDurationMs,
+        defaults.bettingDurationMs,
+      ),
+      resultDurationMs: toNumber(
+        raw.resultDurationMs,
+        defaults.resultDurationMs,
+      ),
       resultDisplayDurationMs: toNumber(
         raw.resultDisplayDurationMs,
         defaults.resultDisplayDurationMs,
       ),
       minBetAmount: toNumber(raw.minBetAmount, defaults.minBetAmount),
       maxBetAmount: toNumber(raw.maxBetAmount, defaults.maxBetAmount),
-      payoutMultiplierUp: toNumber(raw.payoutMultiplierUp, defaults.payoutMultiplierUp),
+      payoutMultiplierUp: toNumber(
+        raw.payoutMultiplierUp,
+        defaults.payoutMultiplierUp,
+      ),
       payoutMultiplierDown: toNumber(
         raw.payoutMultiplierDown,
         defaults.payoutMultiplierDown,
@@ -117,15 +131,24 @@ export class GameConfigService {
     const digitPayouts = this.parseDigitPayouts(input.digitPayouts);
     const digitBonusRatios = this.parseDigitBonusRatios(input.digitBonusRatios);
     const config: GameConfigSnapshot = {
-      bettingDurationMs: requireNumber(input.bettingDurationMs, 'bettingDurationMs'),
-      resultDurationMs: requireNumber(input.resultDurationMs, 'resultDurationMs'),
+      bettingDurationMs: requireNumber(
+        input.bettingDurationMs,
+        'bettingDurationMs',
+      ),
+      resultDurationMs: requireNumber(
+        input.resultDurationMs,
+        'resultDurationMs',
+      ),
       resultDisplayDurationMs: requireNumber(
         input.resultDisplayDurationMs,
         'resultDisplayDurationMs',
       ),
       minBetAmount: requireNumber(input.minBetAmount, 'minBetAmount'),
       maxBetAmount: requireNumber(input.maxBetAmount, 'maxBetAmount'),
-      payoutMultiplierUp: requireNumber(input.payoutMultiplierUp, 'payoutMultiplierUp'),
+      payoutMultiplierUp: requireNumber(
+        input.payoutMultiplierUp,
+        'payoutMultiplierUp',
+      ),
       payoutMultiplierDown: requireNumber(
         input.payoutMultiplierDown,
         'payoutMultiplierDown',
@@ -153,7 +176,10 @@ export class GameConfigService {
     const data = this.toRecordData(config);
 
     const saved = existing
-      ? await this.prisma.gameConfig.update({ where: { id: existing.id }, data })
+      ? await this.prisma.gameConfig.update({
+          where: { id: existing.id },
+          data,
+        })
       : await this.prisma.gameConfig.create({ data });
 
     const next = this.fromRecord(saved);
@@ -205,17 +231,20 @@ export class GameConfigService {
 
     const sum: Record<number, number> = {};
     for (const key of Object.keys(defaults.sum)) {
-      sum[Number(key)] = requireNumber(
-        sumRaw[key],
-        `digitPayouts.sum.${key}`,
-      );
+      sum[Number(key)] = requireNumber(sumRaw[key], `digitPayouts.sum.${key}`);
     }
 
     const bySlot = this.parseSlotPayouts(raw.bySlot, defaults.bySlot, raw);
-    const bySlotMeta = this.parseSlotPayoutMeta(raw.bySlotMeta, defaults.bySlotMeta);
+    const bySlotMeta = this.parseSlotPayoutMeta(
+      raw.bySlotMeta,
+      defaults.bySlotMeta,
+    );
 
     return {
-      smallBigOddEven: requireNumber(raw.smallBigOddEven, 'digitPayouts.smallBigOddEven'),
+      smallBigOddEven: requireNumber(
+        raw.smallBigOddEven,
+        'digitPayouts.smallBigOddEven',
+      ),
       anyTriple: requireNumber(raw.anyTriple, 'digitPayouts.anyTriple'),
       double: requireNumber(raw.double, 'digitPayouts.double'),
       triple: requireNumber(raw.triple, 'digitPayouts.triple'),
@@ -230,7 +259,10 @@ export class GameConfigService {
     };
   }
 
-  private mergeDigitPayouts(raw: unknown, fallback: DigitPayouts): DigitPayouts {
+  private mergeDigitPayouts(
+    raw: unknown,
+    fallback: DigitPayouts,
+  ): DigitPayouts {
     if (!isRecord(raw)) {
       return fallback;
     }
@@ -244,7 +276,10 @@ export class GameConfigService {
     }
 
     const bySlot = this.mergeSlotPayouts(raw.bySlot, fallback.bySlot, raw);
-    const bySlotMeta = this.mergeSlotPayoutMeta(raw.bySlotMeta, fallback.bySlotMeta);
+    const bySlotMeta = this.mergeSlotPayoutMeta(
+      raw.bySlotMeta,
+      fallback.bySlotMeta,
+    );
 
     return {
       smallBigOddEven: toNumber(raw.smallBigOddEven, fallback.smallBigOddEven),
@@ -271,10 +306,18 @@ export class GameConfigService {
     const result: Record<string, number> = {};
     for (const [key, fallbackValue] of Object.entries(fallback)) {
       if (rawRecord && rawRecord[key] !== undefined) {
-        result[key] = requireNumber(rawRecord[key], `digitPayouts.bySlot.${key}`);
+        result[key] = requireNumber(
+          rawRecord[key],
+          `digitPayouts.bySlot.${key}`,
+        );
         continue;
       }
-      result[key] = this.resolveLegacySlotPayout(key, legacy, fallbackValue, true);
+      result[key] = this.resolveLegacySlotPayout(
+        key,
+        legacy,
+        fallbackValue,
+        true,
+      );
     }
     return result;
   }
@@ -291,20 +334,33 @@ export class GameConfigService {
         result[key] = toNumber(rawRecord[key], fallbackValue);
         continue;
       }
-      result[key] = this.resolveLegacySlotPayout(key, legacy, fallbackValue, false);
+      result[key] = this.resolveLegacySlotPayout(
+        key,
+        legacy,
+        fallbackValue,
+        false,
+      );
     }
     return result;
   }
 
   private parseSlotPayoutMeta(
     raw: unknown,
-    fallback: Record<string, { suggestWinPct: number; rtpFoolProofPct: number; totalCounts: number }>,
-  ): Record<string, { suggestWinPct: number; rtpFoolProofPct: number; totalCounts: number }> {
+    fallback: Record<
+      string,
+      { suggestWinPct: number; rtpFoolProofPct: number; totalCounts: number }
+    >,
+  ): Record<
+    string,
+    { suggestWinPct: number; rtpFoolProofPct: number; totalCounts: number }
+  > {
     if (!isRecord(raw)) {
       return this.cloneSlotPayoutMeta(fallback);
     }
-    const result: Record<string, { suggestWinPct: number; rtpFoolProofPct: number; totalCounts: number }> =
-      {};
+    const result: Record<
+      string,
+      { suggestWinPct: number; rtpFoolProofPct: number; totalCounts: number }
+    > = {};
     for (const [key, entry] of Object.entries(fallback)) {
       const rawEntry = raw[key];
       result[key] = this.normalizeSlotMetaEntry(rawEntry, entry, true);
@@ -314,13 +370,21 @@ export class GameConfigService {
 
   private mergeSlotPayoutMeta(
     raw: unknown,
-    fallback: Record<string, { suggestWinPct: number; rtpFoolProofPct: number; totalCounts: number }>,
-  ): Record<string, { suggestWinPct: number; rtpFoolProofPct: number; totalCounts: number }> {
+    fallback: Record<
+      string,
+      { suggestWinPct: number; rtpFoolProofPct: number; totalCounts: number }
+    >,
+  ): Record<
+    string,
+    { suggestWinPct: number; rtpFoolProofPct: number; totalCounts: number }
+  > {
     if (!isRecord(raw)) {
       return this.cloneSlotPayoutMeta(fallback);
     }
-    const result: Record<string, { suggestWinPct: number; rtpFoolProofPct: number; totalCounts: number }> =
-      {};
+    const result: Record<
+      string,
+      { suggestWinPct: number; rtpFoolProofPct: number; totalCounts: number }
+    > = {};
     for (const [key, entry] of Object.entries(fallback)) {
       const rawEntry = raw[key];
       result[key] = this.normalizeSlotMetaEntry(rawEntry, entry, false);
@@ -330,7 +394,11 @@ export class GameConfigService {
 
   private normalizeSlotMetaEntry(
     raw: unknown,
-    fallback: { suggestWinPct: number; rtpFoolProofPct: number; totalCounts: number },
+    fallback: {
+      suggestWinPct: number;
+      rtpFoolProofPct: number;
+      totalCounts: number;
+    },
     strict: boolean,
   ) {
     if (!isRecord(raw)) {
@@ -350,10 +418,15 @@ export class GameConfigService {
   }
 
   private cloneSlotPayoutMeta(
-    source: Record<string, { suggestWinPct: number; rtpFoolProofPct: number; totalCounts: number }>,
+    source: Record<
+      string,
+      { suggestWinPct: number; rtpFoolProofPct: number; totalCounts: number }
+    >,
   ) {
-    const result: Record<string, { suggestWinPct: number; rtpFoolProofPct: number; totalCounts: number }> =
-      {};
+    const result: Record<
+      string,
+      { suggestWinPct: number; rtpFoolProofPct: number; totalCounts: number }
+    > = {};
     for (const [key, entry] of Object.entries(source)) {
       result[key] = { ...entry };
     }
@@ -374,7 +447,10 @@ export class GameConfigService {
       case 'ODD':
       case 'EVEN':
       case 'BIG':
-        return getNumber(legacy.smallBigOddEven, 'digitPayouts.smallBigOddEven');
+        return getNumber(
+          legacy.smallBigOddEven,
+          'digitPayouts.smallBigOddEven',
+        );
       case 'ANY_TRIPLE':
         return getNumber(legacy.anyTriple, 'digitPayouts.anyTriple');
       case 'DOUBLE':
@@ -410,7 +486,10 @@ export class GameConfigService {
     if (raw.bonusSlotChanceTotal !== undefined) {
       return raw.bonusSlotChanceTotal;
     }
-    if (isRecord(raw.digitPayouts) && raw.digitPayouts.bonusSlotChanceTotal !== undefined) {
+    if (
+      isRecord(raw.digitPayouts) &&
+      raw.digitPayouts.bonusSlotChanceTotal !== undefined
+    ) {
       return raw.digitPayouts.bonusSlotChanceTotal;
     }
     return undefined;
@@ -488,7 +567,10 @@ export class GameConfigService {
     updatedAt: Date;
   }): GameConfigSnapshot {
     const defaults = this.getDefaultConfig();
-    const digitPayouts = this.mergeDigitPayouts(record.digitPayouts, defaults.digitPayouts);
+    const digitPayouts = this.mergeDigitPayouts(
+      record.digitPayouts,
+      defaults.digitPayouts,
+    );
     const digitBonusRatios = this.mergeDigitBonusRatios(
       this.extractDigitBonusRatiosSource(record.digitPayouts),
       defaults.digitBonusRatios,
@@ -523,7 +605,8 @@ export class GameConfigService {
       sum[key] = value;
     }
 
-    const bonusRatios: Record<string, { ratios: number[]; weights: number[] }> = {};
+    const bonusRatios: Record<string, { ratios: number[]; weights: number[] }> =
+      {};
     for (const [key, entry] of Object.entries(digitBonusRatios)) {
       bonusRatios[key] = {
         ratios: entry.ratios.slice(),
@@ -535,8 +618,10 @@ export class GameConfigService {
     for (const [key, value] of Object.entries(payouts.bySlot)) {
       bySlot[key] = value;
     }
-    const bySlotMeta: Record<string, { suggestWinPct: number; rtpFoolProofPct: number; totalCounts: number }> =
-      {};
+    const bySlotMeta: Record<
+      string,
+      { suggestWinPct: number; rtpFoolProofPct: number; totalCounts: number }
+    > = {};
     for (const [key, value] of Object.entries(payouts.bySlotMeta)) {
       bySlotMeta[key] = {
         suggestWinPct: value.suggestWinPct,
