@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Put, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Put, Query, UseGuards } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AppConfig } from './configuration';
 import { DIGIT_SUM_RANGES } from '../game/digit-bet.constants';
@@ -15,16 +15,32 @@ export class GameConfigController {
   ) {}
 
   @Get('game')
-  async getGameConfig() {
-    const config = await this.gameConfigService.getActiveConfig();
-    return this.buildResponse(config);
+  async getGameConfig(@Query('merchantId') merchantId?: string) {
+    const config = await this.gameConfigService.getActiveConfig(merchantId || null);
+    return this.buildResponse(config, merchantId || null);
   }
 
   @UseGuards(JwtAuthGuard, AdminGuard)
   @Put('game')
-  async updateGameConfig(@Body() dto: UpdateGameConfigDto) {
-    const config = await this.gameConfigService.updateFromInput(dto);
-    return this.buildResponse(config);
+  async updateGameConfig(
+    @Body() dto: UpdateGameConfigDto,
+    @Query('merchantId') merchantId?: string,
+  ) {
+    const config = await this.gameConfigService.updateFromInput(dto, merchantId || null);
+    return this.buildResponse(config, merchantId || null);
+  }
+
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  @Get('game/merchants')
+  async listMerchantConfigs() {
+    return this.gameConfigService.listMerchantConfigs();
+  }
+
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  @Delete('game/merchant/:merchantId')
+  async deleteConfigForMerchant(@Param('merchantId') merchantId: string) {
+    await this.gameConfigService.deleteConfigForMerchant(merchantId);
+    return { success: true, message: `Config for merchant ${merchantId} deleted` };
   }
 
   private buildResponse(config: {
@@ -56,8 +72,9 @@ export class GameConfigController {
       >;
     };
     digitBonusRatios: Record<string, { ratios: number[]; weights: number[] }>;
-  }) {
+  }, merchantId: string | null) {
     return {
+      merchantId: merchantId ?? null,
       configVersion: config.configVersion ?? null,
       bettingDurationMs: config.bettingDurationMs,
       resultDurationMs: config.resultDurationMs,

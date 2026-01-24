@@ -29,6 +29,11 @@ type CacheEntry = {
   expiresAt: number;
 };
 
+type MerchantCacheEntry = {
+  value: GameConfigSnapshot;
+  expiresAt: number;
+};
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
@@ -48,6 +53,7 @@ const requireNumber = (value: unknown, label: string) => {
 @Injectable()
 export class GameConfigService {
   private cache: CacheEntry | null = null;
+  private merchantCache: Map<string, MerchantCacheEntry> = new Map();
   private readonly cacheTtlMs = 3000;
 
   constructor(private readonly prisma: PrismaService) {}
@@ -56,18 +62,56 @@ export class GameConfigService {
     return buildDefaultGameConfig();
   }
 
-  async getActiveConfig(): Promise<GameConfigSnapshot> {
+  async getActiveConfig(merchantId?: string | null): Promise<GameConfigSnapshot> {
     const now = Date.now();
+
+    // If merchantId is provided, get merchant-specific config
+    if (merchantId) {
+      const cached = this.merchantCache.get(merchantId);
+      if (cached && cached.expiresAt > now) {
+        return cached.value;
+      }
+
+      const record = await this.prisma.gameConfig.findUnique({
+        where: { merchantId },
+      });
+
+      if (record) {
+        const config = this.fromRecord(record);
+        this.merchantCache.set(merchantId, { value: config, expiresAt: now + this.cacheTtlMs });
+        return config;
+      }
+
+      // Fall back to global config if no merchant-specific config exists
+    }
+
+    // Global config (merchantId = null)
     if (this.cache && this.cache.expiresAt > now) {
       return this.cache.value;
     }
 
     const record = await this.prisma.gameConfig.findFirst({
+      where: { merchantId: null },
       orderBy: { updatedAt: 'desc' },
     });
     const config = record ? this.fromRecord(record) : this.getDefaultConfig();
     this.cache = { value: config, expiresAt: now + this.cacheTtlMs };
     return config;
+  }
+
+  async getMerchantConfig(merchantId: string): Promise<GameConfigSnapshot | null> {
+    const record = await this.prisma.gameConfig.findUnique({
+      where: { merchantId },
+    });
+    return record ? this.fromRecord(record) : null;
+  }
+
+  async listMerchantConfigs(): Promise<Array<{ merchantId: string | null; updatedAt: Date }>> {
+    const records = await this.prisma.gameConfig.findMany({
+      select: { merchantId: true, updatedAt: true },
+      orderBy: { updatedAt: 'desc' },
+    });
+    return records;
   }
 
   normalizeSnapshot(raw: unknown): GameConfigSnapshot {
@@ -127,7 +171,7 @@ export class GameConfigService {
     };
   }
 
-  async updateFromInput(input: GameConfigInput): Promise<GameConfigSnapshot> {
+  async updateFromInput(input: GameConfigInput, merchantId?: string | null): Promise<GameConfigSnapshot> {
     const digitPayouts = this.parseDigitPayouts(input.digitPayouts);
     const digitBonusRatios = this.parseDigitBonusRatios(input.digitBonusRatios);
     const config: GameConfigSnapshot = {
@@ -166,25 +210,61 @@ export class GameConfigService {
     };
 
     this.validateConfig(config);
-    return this.updateConfig(config);
+    return this.updateConfig(config, merchantId);
   }
 
-  async updateConfig(config: GameConfigSnapshot): Promise<GameConfigSnapshot> {
-    const existing = await this.prisma.gameConfig.findFirst({
-      orderBy: { updatedAt: 'desc' },
-    });
+  async updateConfig(config: GameConfigSnapshot, merchantId?: string | null): Promise<GameConfigSnapshot> {
     const data = this.toRecordData(config);
 
-    const saved = existing
-      ? await this.prisma.gameConfig.update({
-          where: { id: existing.id },
-          data,
-        })
-      : await this.prisma.gameConfig.create({ data });
+    let saved;
+    if (merchantId) {
+      // Merchant-specific config: upsert by merchantId
+      saved = await this.prisma.gameConfig.upsert({
+        where: { merchantId },
+        update: data,
+        create: { ...data, merchantId },
+      });
+      // Invalidate merchant cache
+      this.merchantCache.delete(merchantId);
+    } else {
+      // Global config (merchantId = null)
+      const existing = await this.prisma.gameConfig.findFirst({
+        where: { merchantId: null },
+        orderBy: { updatedAt: 'desc' },
+      });
+
+      saved = existing
+        ? await this.prisma.gameConfig.update({
+            where: { id: existing.id },
+            data,
+          })
+        : await this.prisma.gameConfig.create({ data: { ...data, merchantId: null } });
+
+      // Invalidate global cache
+      this.cache = null;
+    }
 
     const next = this.fromRecord(saved);
-    this.cache = { value: next, expiresAt: Date.now() + this.cacheTtlMs };
+
+    if (merchantId) {
+      this.merchantCache.set(merchantId, { value: next, expiresAt: Date.now() + this.cacheTtlMs });
+    } else {
+      this.cache = { value: next, expiresAt: Date.now() + this.cacheTtlMs };
+    }
+
     return next;
+  }
+
+  async copyConfigToMerchant(merchantId: string, sourceConfig?: GameConfigSnapshot): Promise<GameConfigSnapshot> {
+    const config = sourceConfig ?? await this.getActiveConfig();
+    return this.updateConfig(config, merchantId);
+  }
+
+  async deleteConfigForMerchant(merchantId: string): Promise<void> {
+    await this.prisma.gameConfig.deleteMany({
+      where: { merchantId },
+    });
+    this.merchantCache.delete(merchantId);
   }
 
   private validateConfig(config: GameConfigSnapshot) {

@@ -165,6 +165,15 @@ export const ADMIN_PAGE_HTML = `<!doctype html>
         <div class="tab-content active" id="tab-config">
           <section class="section">
             <h2>Game Configuration</h2>
+            <div class="filters" style="margin-bottom: 1.5rem;">
+              <label>Select Merchant
+                <select id="cfg-merchant-select">
+                  <option value="">Global (Default)</option>
+                </select>
+              </label>
+              <button type="button" id="cfg-copy-global" class="secondary small">Copy from Global</button>
+              <button type="button" id="cfg-delete-merchant" class="secondary small" style="display:none;">Delete Merchant Config</button>
+            </div>
             <form id="config-form">
               <div class="grid">
                 <label>Betting duration (ms)<input id="cfg-betting-duration" type="number" min="0" step="100" /></label>
@@ -473,6 +482,7 @@ export const ADMIN_PAGE_HTML = `<!doctype html>
           token = data.accessToken;
           localStorage.setItem(tokenKey, token);
           setAuthState(true);
+          loadMerchantList();
           loadConfig();
           initDateDefaults();
         } catch (err) {
@@ -489,10 +499,31 @@ export const ADMIN_PAGE_HTML = `<!doctype html>
       // Config
       const configForm = $('#config-form');
       const configStatus = $('#config-status');
-      const loadConfig = async () => {
+      const cfgMerchantSelect = $('#cfg-merchant-select');
+      const cfgCopyGlobal = $('#cfg-copy-global');
+      const cfgDeleteMerchant = $('#cfg-delete-merchant');
+      let selectedMerchantId = '';
+
+      const loadMerchantList = async () => {
+        try {
+          const merchants = await apiFetch('/admin/merchants?limit=100');
+          cfgMerchantSelect.innerHTML = '<option value="">Global (Default)</option>';
+          merchants.items.forEach(m => {
+            const opt = document.createElement('option');
+            opt.value = m.merchantId;
+            opt.textContent = m.merchantId + ' - ' + m.name;
+            cfgMerchantSelect.appendChild(opt);
+          });
+        } catch (err) {
+          console.error('Failed to load merchants:', err);
+        }
+      };
+
+      const loadConfig = async (merchantId = '') => {
         setStatus(configStatus, 'Loading...');
         try {
-          const cfg = await apiFetch('/config/game');
+          const url = merchantId ? '/config/game?merchantId=' + encodeURIComponent(merchantId) : '/config/game';
+          const cfg = await apiFetch(url);
           $('#cfg-betting-duration').value = cfg.bettingDurationMs;
           $('#cfg-result-duration').value = cfg.resultDurationMs;
           $('#cfg-result-display-duration').value = cfg.resultDisplayDurationMs;
@@ -502,17 +533,68 @@ export const ADMIN_PAGE_HTML = `<!doctype html>
           $('#cfg-max-bet').value = cfg.maxBetAmount;
           $('#cfg-payout-up').value = cfg.payoutMultiplierUp;
           $('#cfg-payout-down').value = cfg.payoutMultiplierDown;
-          setStatus(configStatus, 'Loaded.');
+          cfgDeleteMerchant.style.display = merchantId ? 'inline-block' : 'none';
+          setStatus(configStatus, merchantId ? 'Loaded config for ' + merchantId + '.' : 'Loaded global config.');
         } catch (err) {
           setStatus(configStatus, err.message, true);
         }
       };
-      $('#config-reload')?.addEventListener('click', loadConfig);
+
+      cfgMerchantSelect?.addEventListener('change', (e) => {
+        selectedMerchantId = e.target.value;
+        loadConfig(selectedMerchantId);
+      });
+
+      cfgCopyGlobal?.addEventListener('click', async () => {
+        if (!selectedMerchantId) {
+          alert('Please select a merchant first.');
+          return;
+        }
+        if (!confirm('Copy global config to merchant ' + selectedMerchantId + '?')) return;
+        setStatus(configStatus, 'Copying...');
+        try {
+          const globalCfg = await apiFetch('/config/game');
+          await apiFetch('/config/game?merchantId=' + encodeURIComponent(selectedMerchantId), {
+            method: 'PUT',
+            body: JSON.stringify({
+              bettingDurationMs: globalCfg.bettingDurationMs,
+              resultDurationMs: globalCfg.resultDurationMs,
+              resultDisplayDurationMs: globalCfg.resultDisplayDurationMs,
+              priceSnapshotInterval: globalCfg.priceSnapshotInterval,
+              bonusSlotChanceTotal: globalCfg.bonusSlotChanceTotal,
+              minBetAmount: globalCfg.minBetAmount,
+              maxBetAmount: globalCfg.maxBetAmount,
+              payoutMultiplierUp: globalCfg.payoutMultiplierUp,
+              payoutMultiplierDown: globalCfg.payoutMultiplierDown,
+            }),
+          });
+          loadConfig(selectedMerchantId);
+          setStatus(configStatus, 'Copied global config to ' + selectedMerchantId + '.');
+        } catch (err) {
+          setStatus(configStatus, err.message, true);
+        }
+      });
+
+      cfgDeleteMerchant?.addEventListener('click', async () => {
+        if (!selectedMerchantId) return;
+        if (!confirm('Delete config for merchant ' + selectedMerchantId + '? It will fall back to global config.')) return;
+        setStatus(configStatus, 'Deleting...');
+        try {
+          await apiFetch('/config/game/merchant/' + encodeURIComponent(selectedMerchantId), { method: 'DELETE' });
+          setStatus(configStatus, 'Deleted config for ' + selectedMerchantId + '. Now showing global config.');
+          loadConfig(selectedMerchantId);
+        } catch (err) {
+          setStatus(configStatus, err.message, true);
+        }
+      });
+
+      $('#config-reload')?.addEventListener('click', () => loadConfig(selectedMerchantId));
       configForm?.addEventListener('submit', async (e) => {
         e.preventDefault();
         setStatus(configStatus, 'Saving...');
         try {
-          await apiFetch('/config/game', {
+          const url = selectedMerchantId ? '/config/game?merchantId=' + encodeURIComponent(selectedMerchantId) : '/config/game';
+          await apiFetch(url, {
             method: 'PUT',
             body: JSON.stringify({
               bettingDurationMs: Number($('#cfg-betting-duration').value),
@@ -526,7 +608,7 @@ export const ADMIN_PAGE_HTML = `<!doctype html>
               payoutMultiplierDown: Number($('#cfg-payout-down').value),
             }),
           });
-          setStatus(configStatus, 'Saved.');
+          setStatus(configStatus, selectedMerchantId ? 'Saved config for ' + selectedMerchantId + '.' : 'Saved global config.');
         } catch (err) {
           setStatus(configStatus, err.message, true);
         }
@@ -849,6 +931,7 @@ export const ADMIN_PAGE_HTML = `<!doctype html>
 
       setAuthState(Boolean(token));
       if (token) {
+        loadMerchantList();
         loadConfig();
         initDateDefaults();
       }
