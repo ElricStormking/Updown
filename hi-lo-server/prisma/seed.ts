@@ -3,7 +3,34 @@ import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 
-async function main() {
+async function seedTestMerchant() {
+  const merchantId = process.env.SEED_MERCHANT_ID ?? 'TEST_MERCHANT';
+  const merchantName = process.env.SEED_MERCHANT_NAME ?? 'Test Casino';
+  const hashKey = process.env.SEED_MERCHANT_HASH_KEY ?? 'dGVzdGhhc2hrZXkxMjM0NTY3ODkwYWI=';
+
+  const merchant = await prisma.merchant.upsert({
+    where: { merchantId },
+    update: {
+      name: merchantName,
+      hashKey,
+    },
+    create: {
+      merchantId,
+      name: merchantName,
+      hashKey,
+      isActive: true,
+    },
+  });
+
+  console.log(
+    `✅ Seeded merchant ${merchant.merchantId} (${merchant.name})`,
+  );
+  console.log(`   Hash Key: ${merchant.hashKey}`);
+
+  return merchant;
+}
+
+async function seedDemoUser() {
   const account = process.env.SEED_USER_ACCOUNT ?? 'demo_account';
   const password = process.env.SEED_USER_PASSWORD ?? 'changeme';
   const saltRounds = Number(process.env.PASSWORD_SALT_ROUNDS ?? 12);
@@ -19,7 +46,7 @@ async function main() {
       password: passwordHash,
     },
     create: {
-      email: account, // store account identifier in email column
+      email: account,
       password: passwordHash,
       wallet: {
         create: {
@@ -36,6 +63,13 @@ async function main() {
   console.log(
     `✅ Seeded user ${user.email} (account) with wallet balance ${user.wallet?.balance}`,
   );
+
+  return user;
+}
+
+async function main() {
+  await seedTestMerchant();
+  await seedDemoUser();
 }
 
 main()

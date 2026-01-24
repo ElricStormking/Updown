@@ -44,6 +44,12 @@ export const configuration = () => ({
     playerLimit: Number(process.env.PLAYER_BET_HISTORY_LIMIT ?? 100),
     roundLimit: Number(process.env.ROUND_HISTORY_LIMIT ?? 100),
   },
+  integration: {
+    timestampToleranceSec: Number(
+      process.env.INTEGRATION_TIMESTAMP_TOLERANCE_SEC ?? 10,
+    ),
+    gameUrl: process.env.INTEGRATION_GAME_URL ?? 'https://game.example.com',
+  },
 });
 
 export type AppConfig = ReturnType<typeof configuration>;

@@ -15,6 +15,7 @@ import { BinanceModule } from './binance/binance.module';
 import { GameModule } from './game/game.module';
 import { BetsModule } from './bets/bets.module';
 import { HistoryModule } from './history/history.module';
+import { IntegrationModule } from './integration/integration.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { HistoryModule } from './history/history.module';
     BetsModule,
     HistoryModule,
     GameModule,
+    IntegrationModule,
   ],
   controllers: [AppController],
   providers: [AppService],

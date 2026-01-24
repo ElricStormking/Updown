@@ -249,6 +249,12 @@ export class BetsService {
         continue;
       }
 
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { merchantId: true },
+      });
+      const merchantId = user?.merchantId ?? null;
+
       try {
         await this.prisma.$transaction(async (tx) => {
           // Create Bet rows in a batch for this user/round.
@@ -264,6 +270,7 @@ export class BetsService {
               return {
                 userId,
                 roundId,
+                merchantId,
                 betType: BetType.HILO,
                 side: item.side,
                 digitType: null,
@@ -286,6 +293,7 @@ export class BetsService {
             return {
               userId,
               roundId,
+              merchantId,
               betType: BetType.DIGIT,
               side: null,
               digitType: normalized.digitType,

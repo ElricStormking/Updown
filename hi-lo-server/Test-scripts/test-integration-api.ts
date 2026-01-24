@@ -1,0 +1,245 @@
+import * as crypto from 'crypto';
+
+const CONFIG = {
+  merchantId: process.env.MERCHANT_ID ?? 'TEST_MERCHANT',
+  hashKey: process.env.HASH_KEY ?? 'dGVzdGhhc2hrZXkxMjM0NTY3ODkwYWI=',
+  apiBaseUrl: process.env.API_BASE_URL ?? 'http://localhost:4001',
+};
+
+function generateSignature(params: string[], hashKey: string): string {
+  const data = params.join('&') + '&' + hashKey;
+  return crypto.createHash('sha256').update(data).digest('hex');
+}
+
+function getTimestamp(): number {
+  return Math.floor(Date.now() / 1000);
+}
+
+function formatDateForSignature(date: Date): string {
+  const pad = (n: number, len: number = 2) => n.toString().padStart(len, '0');
+  return (
+    date.getUTCFullYear().toString() +
+    pad(date.getUTCMonth() + 1) +
+    pad(date.getUTCDate()) +
+    pad(date.getUTCHours()) +
+    pad(date.getUTCMinutes()) +
+    pad(date.getUTCSeconds()) +
+    pad(date.getUTCMilliseconds(), 3)
+  );
+}
+
+async function makeRequest(endpoint: string, body: Record<string, any>) {
+  const url = `${CONFIG.apiBaseUrl}${endpoint}`;
+  console.log('\n--- Request ---');
+  console.log(`POST ${url}`);
+  console.log('Body:', JSON.stringify(body, null, 2));
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await response.json();
+    console.log('\n--- Response ---');
+    console.log('Status:', response.status);
+    console.log('Body:', JSON.stringify(data, null, 2));
+    return data;
+  } catch (error) {
+    console.error('\n--- Error ---');
+    console.error(error);
+  }
+}
+
+async function createAccount(account: string) {
+  const timestamp = getTimestamp();
+  const params = [CONFIG.merchantId, account, timestamp.toString()];
+  const hash = generateSignature(params, CONFIG.hashKey);
+
+  await makeRequest('/integration/account/create', {
+    merchantId: CONFIG.merchantId,
+    account,
+    timestamp,
+    hash,
+  });
+}
+
+async function transfer(account: string, type: number, amount: number, orderNo: string) {
+  const timestamp = getTimestamp();
+  const params = [
+    CONFIG.merchantId,
+    account,
+    type.toString(),
+    amount.toString(),
+    timestamp.toString(),
+  ];
+  const hash = generateSignature(params, CONFIG.hashKey);
+
+  await makeRequest('/integration/transfer', {
+    merchantId: CONFIG.merchantId,
+    account,
+    orderNo,
+    type,
+    amount,
+    timestamp,
+    hash,
+  });
+}
+
+async function launchGame(account: string) {
+  const timestamp = getTimestamp();
+  const params = [CONFIG.merchantId, account, timestamp.toString()];
+  const hash = generateSignature(params, CONFIG.hashKey);
+
+  await makeRequest('/integration/launch', {
+    merchantId: CONFIG.merchantId,
+    account,
+    timestamp,
+    hash,
+  });
+}
+
+async function getBetHistory(startDate?: string) {
+  const timestamp = getTimestamp();
+  const start = startDate ? new Date(startDate) : new Date('2026-01-01T00:00:00Z');
+  const formattedTime = formatDateForSignature(start);
+  const pageSize = 10;
+  const pageNumber = 1;
+
+  const params = [
+    CONFIG.merchantId,
+    formattedTime,
+    pageSize.toString(),
+    pageNumber.toString(),
+    timestamp.toString(),
+  ];
+  const hash = generateSignature(params, CONFIG.hashKey);
+
+  await makeRequest('/integration/bets', {
+    merchantId: CONFIG.merchantId,
+    startBetTime: start.toISOString(),
+    pageSize,
+    pageNumber,
+    timestamp,
+    hash,
+  });
+}
+
+async function getTransferHistory(startDate?: string) {
+  const timestamp = getTimestamp();
+  const start = startDate ? new Date(startDate) : new Date('2026-01-01T00:00:00Z');
+  const formattedTime = formatDateForSignature(start);
+  const pageSize = 10;
+  const pageNumber = 1;
+
+  const params = [
+    CONFIG.merchantId,
+    formattedTime,
+    pageSize.toString(),
+    pageNumber.toString(),
+    timestamp.toString(),
+  ];
+  const hash = generateSignature(params, CONFIG.hashKey);
+
+  await makeRequest('/integration/transfers', {
+    merchantId: CONFIG.merchantId,
+    startTime: start.toISOString(),
+    pageSize,
+    pageNumber,
+    timestamp,
+    hash,
+  });
+}
+
+function printUsage() {
+  console.log(`
+Integration API Test Helper
+
+Usage: npx ts-node scripts/test-integration-api.ts <command> [args]
+
+Commands:
+  create-account <account>                    Create a new player account
+  transfer-in <account> <amount> <orderNo>    Deposit funds to player
+  transfer-out <account> <amount> <orderNo>   Withdraw funds from player
+  launch <account>                            Get game launch URL
+  bet-history [startDate]                     Get bet history
+  transfer-history [startDate]                Get transfer history
+
+Environment Variables:
+  MERCHANT_ID   - Merchant ID (default: TEST_MERCHANT)
+  HASH_KEY      - Merchant hash key (default: test key)
+  API_BASE_URL  - API base URL (default: http://localhost:4000)
+
+Examples:
+  npx ts-node scripts/test-integration-api.ts create-account player001
+  npx ts-node scripts/test-integration-api.ts transfer-in player001 100 ORDER001
+  npx ts-node scripts/test-integration-api.ts transfer-out player001 50 ORDER002
+  npx ts-node scripts/test-integration-api.ts launch player001
+  npx ts-node scripts/test-integration-api.ts bet-history 2026-01-01
+  npx ts-node scripts/test-integration-api.ts transfer-history
+`);
+}
+
+async function main() {
+  // Debug: show raw arguments
+  console.log('Raw argv:', process.argv);
+  
+  const [, , command, ...args] = process.argv;
+
+  console.log('Parsed command:', command);
+  console.log('Parsed args:', args);
+  console.log('Config:', {
+    merchantId: CONFIG.merchantId,
+    hashKey: CONFIG.hashKey.substring(0, 10) + '...',
+    apiBaseUrl: CONFIG.apiBaseUrl,
+  });
+
+  switch (command) {
+    case 'create-account':
+      if (!args[0]) {
+        console.error('Error: account name required');
+        console.error('Usage: npx ts-node Test-scripts/test-integration-api.ts create-account <account>');
+        process.exit(1);
+      }
+      await createAccount(args[0]);
+      break;
+
+    case 'transfer-in':
+      if (!args[0] || !args[1] || !args[2]) {
+        console.error('Error: account, amount, and orderNo required');
+        process.exit(1);
+      }
+      await transfer(args[0], 0, Number(args[1]), args[2]);
+      break;
+
+    case 'transfer-out':
+      if (!args[0] || !args[1] || !args[2]) {
+        console.error('Error: account, amount, and orderNo required');
+        process.exit(1);
+      }
+      await transfer(args[0], 1, Number(args[1]), args[2]);
+      break;
+
+    case 'launch':
+      if (!args[0]) {
+        console.error('Error: account name required');
+        process.exit(1);
+      }
+      await launchGame(args[0]);
+      break;
+
+    case 'bet-history':
+      await getBetHistory(args[0]);
+      break;
+
+    case 'transfer-history':
+      await getTransferHistory(args[0]);
+      break;
+
+    default:
+      printUsage();
+      break;
+  }
+}
+
+main().catch(console.error);
