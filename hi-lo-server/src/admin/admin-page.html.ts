@@ -505,8 +505,10 @@ export const ADMIN_PAGE_HTML = `<!doctype html>
       let selectedMerchantId = '';
 
       const loadMerchantList = async () => {
+        if (!cfgMerchantSelect || !token) return;
         try {
           const merchants = await apiFetch('/admin/merchants?limit=100');
+          if (!merchants || !merchants.items) return;
           cfgMerchantSelect.innerHTML = '<option value="">Global (Default)</option>';
           merchants.items.forEach(m => {
             const opt = document.createElement('option');

@@ -31,9 +31,9 @@ import {
   UpdateAdminAccountDto,
   QueryLoginRecordsDto,
 } from './dto';
-import { ADMIN_PAGE_HTML as ADMIN_PAGE_HTML_NEW } from './admin-page.html';
+import { ADMIN_PAGE_HTML } from './admin-page.html';
 
-const ADMIN_PAGE_HTML = `<!doctype html>
+const _OLD_ADMIN_PAGE_HTML_REMOVED = `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
