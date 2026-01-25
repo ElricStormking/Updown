@@ -31,9 +31,10 @@ import {
   UpdateAdminAccountDto,
   QueryLoginRecordsDto,
 } from './dto';
-import { ADMIN_PAGE_HTML } from './admin-page.html';
+// Using inline HTML with full bonus ratio tables
+// import { ADMIN_PAGE_HTML } from './admin-page.html';
 
-const _OLD_ADMIN_PAGE_HTML_REMOVED = `<!doctype html>
+const ADMIN_PAGE_HTML = `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -548,6 +549,18 @@ const _OLD_ADMIN_PAGE_HTML_REMOVED = `<!doctype html>
         <div class="tab-content active" id="tab-config">
       <section class="section" id="config-section">
         <h2>Game Configuration</h2>
+        <div class="grid" style="margin-bottom: 1rem;">
+          <label>
+            Select Merchant
+            <select id="cfg-merchant-select">
+              <option value="">Global (Default)</option>
+            </select>
+          </label>
+          <div style="display: flex; gap: 0.5rem; align-items: flex-end;">
+            <button type="button" id="cfg-copy-global" class="secondary small">Copy from Global</button>
+            <button type="button" id="cfg-delete-merchant" class="secondary small" style="display:none;">Delete Merchant Config</button>
+          </div>
+        </div>
         <form id="config-form">
           <div class="grid">
             <label>
@@ -1626,11 +1639,98 @@ const _OLD_ADMIN_PAGE_HTML_REMOVED = `<!doctype html>
         scheduleBonusRatioScrollbarUpdate();
       };
 
-      const loadConfig = async () => {
+      // Merchant selector elements
+      const cfgMerchantSelect = document.getElementById('cfg-merchant-select');
+      const cfgCopyGlobal = document.getElementById('cfg-copy-global');
+      const cfgDeleteMerchant = document.getElementById('cfg-delete-merchant');
+      let selectedMerchantId = '';
+
+      const loadMerchantList = async () => {
+        if (!cfgMerchantSelect || !token) return;
+        try {
+          const merchants = await apiFetch('/admin/merchants?limit=100');
+          if (!merchants || !merchants.items) return;
+          cfgMerchantSelect.innerHTML = '<option value="">Global (Default)</option>';
+          merchants.items.forEach(m => {
+            const opt = document.createElement('option');
+            opt.value = m.merchantId;
+            opt.textContent = m.merchantId + ' - ' + m.name;
+            cfgMerchantSelect.appendChild(opt);
+          });
+        } catch (err) {
+          console.error('Failed to load merchants:', err);
+        }
+      };
+
+      const loadConfig = async (merchantId) => {
+        const mid = merchantId !== undefined ? merchantId : selectedMerchantId;
         setStatus(configStatus, 'Loading...');
-        const config = await apiFetch('/config/game');
+        const url = mid ? '/config/game?merchantId=' + encodeURIComponent(mid) : '/config/game';
+        const config = await apiFetch(url);
         setConfigForm(config);
-        setStatus(configStatus, 'Loaded.');
+        if (cfgDeleteMerchant) cfgDeleteMerchant.style.display = mid ? 'inline-block' : 'none';
+        setStatus(configStatus, mid ? 'Loaded config for ' + mid + '.' : 'Loaded global config.');
+      };
+
+      if (cfgMerchantSelect) {
+        cfgMerchantSelect.addEventListener('change', (e) => {
+          selectedMerchantId = e.target.value;
+          loadConfig(selectedMerchantId).catch(err => setStatus(configStatus, err.message, true));
+        });
+      }
+
+      if (cfgCopyGlobal) {
+        cfgCopyGlobal.addEventListener('click', async () => {
+          if (!selectedMerchantId) {
+            alert('Please select a merchant first.');
+            return;
+          }
+          if (!confirm('Copy global config to merchant ' + selectedMerchantId + '?')) return;
+          setStatus(configStatus, 'Copying...');
+          try {
+            const globalCfg = await apiFetch('/config/game');
+            const payload = buildConfigPayloadFromConfig(globalCfg);
+            await apiFetch('/config/game?merchantId=' + encodeURIComponent(selectedMerchantId), {
+              method: 'PUT',
+              body: JSON.stringify(payload),
+            });
+            await loadConfig(selectedMerchantId);
+            setStatus(configStatus, 'Copied global config to ' + selectedMerchantId + '.');
+          } catch (err) {
+            setStatus(configStatus, err.message || 'Copy failed', true);
+          }
+        });
+      }
+
+      if (cfgDeleteMerchant) {
+        cfgDeleteMerchant.addEventListener('click', async () => {
+          if (!selectedMerchantId) return;
+          if (!confirm('Delete config for merchant ' + selectedMerchantId + '? It will fall back to global config.')) return;
+          setStatus(configStatus, 'Deleting...');
+          try {
+            await apiFetch('/config/game/merchant/' + encodeURIComponent(selectedMerchantId), { method: 'DELETE' });
+            setStatus(configStatus, 'Deleted config for ' + selectedMerchantId + '. Now showing global config.');
+            await loadConfig(selectedMerchantId);
+          } catch (err) {
+            setStatus(configStatus, err.message || 'Delete failed', true);
+          }
+        });
+      }
+
+      const buildConfigPayloadFromConfig = (config) => {
+        return {
+          bettingDurationMs: config.bettingDurationMs,
+          resultDurationMs: config.resultDurationMs,
+          resultDisplayDurationMs: config.resultDisplayDurationMs,
+          priceSnapshotInterval: config.priceSnapshotInterval,
+          bonusSlotChanceTotal: config.bonusSlotChanceTotal,
+          minBetAmount: config.minBetAmount,
+          maxBetAmount: config.maxBetAmount,
+          payoutMultiplierUp: config.payoutMultiplierUp,
+          payoutMultiplierDown: config.payoutMultiplierDown,
+          digitPayouts: config.digitPayouts,
+          digitBonusRatios: config.digitBonusRatios,
+        };
       };
 
       const buildConfigPayload = () => {
@@ -1816,6 +1916,7 @@ const _OLD_ADMIN_PAGE_HTML_REMOVED = `<!doctype html>
         localStorage.setItem(tokenKey, token);
         setStatus(loginStatus, 'Login successful.');
         setAuthState(true);
+        loadMerchantList().catch(err => console.error('Failed to load merchants:', err));
         loadConfig().catch((error) =>
           setStatus(configStatus, error.message || 'Failed to load config', true),
         );
@@ -1826,7 +1927,7 @@ const _OLD_ADMIN_PAGE_HTML_REMOVED = `<!doctype html>
 
       configReload.addEventListener('click', async () => {
         try {
-          await loadConfig();
+          await loadConfig(selectedMerchantId);
         } catch (error) {
           setStatus(configStatus, error.message || 'Failed to load config', true);
         }
@@ -1837,12 +1938,13 @@ const _OLD_ADMIN_PAGE_HTML_REMOVED = `<!doctype html>
         try {
           setStatus(configStatus, 'Saving...');
           const payload = buildConfigPayload();
-          const res = await apiFetch('/config/game', {
+          const url = selectedMerchantId ? '/config/game?merchantId=' + encodeURIComponent(selectedMerchantId) : '/config/game';
+          const res = await apiFetch(url, {
             method: 'PUT',
             body: JSON.stringify(payload),
           });
           setConfigForm(res);
-          setStatus(configStatus, 'Saved. Changes apply next round.');
+          setStatus(configStatus, selectedMerchantId ? 'Saved config for ' + selectedMerchantId + '. Changes apply next round.' : 'Saved global config. Changes apply next round.');
         } catch (error) {
           setStatus(configStatus, error.message || 'Failed to save config', true);
         }
@@ -1866,6 +1968,7 @@ const _OLD_ADMIN_PAGE_HTML_REMOVED = `<!doctype html>
       initDefaults();
       setAuthState(Boolean(token));
       if (token) {
+        loadMerchantList().catch(err => console.error('Failed to load merchants:', err));
         loadConfig().catch((error) => setStatus(configStatus, error.message || 'Failed to load config', true));
         loadRtp().catch((error) => setStatus(rtpStatus, error.message || 'Failed to load RTP', true));
       }

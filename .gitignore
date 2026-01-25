@@ -6,6 +6,7 @@ dist/
 *.env
 .DS_Store
 .vscode/
+.cursor/
 hi-lo-client/node_modules/
 hi-lo-client/dist/
 hi-lo-server/node_modules/
