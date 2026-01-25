@@ -12,6 +12,7 @@ import {
   DigitBetType,
   Prisma,
   RoundStatus,
+  WalletTxType,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
@@ -317,7 +318,16 @@ export class BetsService {
           });
 
           await tx.bet.createMany({ data: rows });
-          await this.walletService.adjustBalance(userId, total.mul(-1), tx);
+          await this.walletService.adjustBalance(
+            userId,
+            total.mul(-1),
+            {
+              type: WalletTxType.BET,
+              merchantId,
+              referenceId: `slip:${roundId}:${userId}`,
+            },
+            tx,
+          );
         });
       } catch (error) {
         // If wallet changed externally or any slip item is invalid, skip this user.
@@ -485,6 +495,11 @@ export class BetsService {
     const wallet = await this.walletService.adjustBalance(
       bet.userId,
       bet.amount,
+      {
+        type: WalletTxType.CANCEL,
+        merchantId: bet.merchantId ?? undefined,
+        referenceId: bet.id,
+      },
       tx,
     );
     updates.push({
@@ -509,6 +524,11 @@ export class BetsService {
     const wallet = await this.walletService.adjustBalance(
       bet.userId,
       payout,
+      {
+        type: WalletTxType.PAYOUT,
+        merchantId: bet.merchantId ?? undefined,
+        referenceId: bet.id,
+      },
       tx,
     );
     updates.push({
@@ -534,6 +554,11 @@ export class BetsService {
     const wallet = await this.walletService.adjustBalance(
       bet.userId,
       payout,
+      {
+        type: WalletTxType.PAYOUT,
+        merchantId: bet.merchantId ?? undefined,
+        referenceId: bet.id,
+      },
       tx,
     );
     updates.push({

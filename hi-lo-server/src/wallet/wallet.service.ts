@@ -3,8 +3,14 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, Wallet } from '@prisma/client';
+import { Prisma, Wallet, WalletTxType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+
+interface WalletAdjustmentMeta {
+  type: WalletTxType;
+  referenceId?: string | null;
+  merchantId?: string | null;
+}
 
 @Injectable()
 export class WalletService {
@@ -47,6 +53,7 @@ export class WalletService {
   async adjustBalance(
     userId: string,
     amount: Prisma.Decimal | number,
+    meta: WalletAdjustmentMeta,
     tx?: Prisma.TransactionClient,
   ) {
     const client = tx ?? this.prisma;
@@ -57,6 +64,8 @@ export class WalletService {
     if (numericAmount.eq(0)) {
       return wallet;
     }
+
+    const balanceBefore = wallet.balance;
 
     if (numericAmount.lt(0)) {
       const debit = numericAmount.abs();
@@ -84,10 +93,21 @@ export class WalletService {
       if (!updated) {
         throw new NotFoundException('Wallet not found');
       }
+      await client.walletTransaction.create({
+        data: {
+          userId,
+          merchantId: meta.merchantId ?? undefined,
+          type: meta.type,
+          referenceId: meta.referenceId ?? null,
+          balanceBefore,
+          amount: numericAmount,
+          balanceAfter: updated.balance,
+        },
+      });
       return updated;
     }
 
-    return client.wallet.update({
+    const updated = await client.wallet.update({
       where: { id: wallet.id },
       data: {
         balance: {
@@ -95,5 +115,17 @@ export class WalletService {
         },
       },
     });
+    await client.walletTransaction.create({
+      data: {
+        userId,
+        merchantId: meta.merchantId ?? undefined,
+        type: meta.type,
+        referenceId: meta.referenceId ?? null,
+        balanceBefore,
+        amount: numericAmount,
+        balanceAfter: updated.balance,
+      },
+    });
+    return updated;
   }
 }

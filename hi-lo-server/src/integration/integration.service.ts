@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { Merchant, Prisma } from '@prisma/client';
+import { Merchant, Prisma, WalletTxType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { WalletService } from '../wallet/wallet.service';
 import {
@@ -156,14 +156,21 @@ export class IntegrationService {
       const amountDecimal = new Prisma.Decimal(amount);
       const adjustAmount = type === 0 ? amountDecimal : amountDecimal.mul(-1);
 
+      const txType =
+        type === 0 ? WalletTxType.TRANSFER_IN : WalletTxType.TRANSFER_OUT;
       const result = await this.prisma.$transaction(async (tx) => {
+        const visibleId = this.generateTransferId();
         const wallet = await this.walletService.adjustBalance(
           user.id,
           adjustAmount,
+          {
+            type: txType,
+            merchantId: merchant.merchantId,
+            referenceId: visibleId,
+          },
           tx,
         );
 
-        const visibleId = this.generateTransferId();
         await tx.transfer.create({
           data: {
             visibleId,
