@@ -42,6 +42,7 @@ export interface GameConfigSnapshot {
   payoutMultiplierUp: number;
   payoutMultiplierDown: number;
   priceSnapshotInterval: number;
+  bonusModeEnabled: boolean;
   bonusSlotChanceTotal: number;
   digitPayouts: DigitPayouts;
   digitBonusRatios: DigitBonusRatios;
@@ -320,6 +321,7 @@ export const buildDefaultGameConfig = (): GameConfigSnapshot => ({
   payoutMultiplierUp: Number(gameConfig.payoutMultiplierUp),
   payoutMultiplierDown: Number(gameConfig.payoutMultiplierDown),
   priceSnapshotInterval: Number(gameConfig.priceSnapshotInterval),
+  bonusModeEnabled: Boolean(gameConfig.digitBonus?.enabled),
   bonusSlotChanceTotal: DEFAULT_BONUS_SLOT_CHANCE_TOTAL,
   digitPayouts: buildDefaultDigitPayouts(),
   digitBonusRatios: buildDefaultDigitBonusRatios(),

@@ -169,7 +169,12 @@ const socket = createGameSocket(
           const bets = res.data;
           const stake = bets.reduce((sum, b) => sum + b.amount, 0);
           const payout = bets.reduce((sum, b) => sum + b.payout, 0);
-          const net = payout - stake;
+          const winningPayout = bets
+            .filter((b) => b.result === 'WIN')
+            .reduce((sum, b) => sum + b.payout, 0);
+          const losingStake = bets
+            .filter((b) => b.result === 'LOSE')
+            .reduce((sum, b) => sum + b.amount, 0);
 
           updateState({
             lastRoundBets: bets,
@@ -179,8 +184,7 @@ const socket = createGameSocket(
 
           scene.setPlayerPayout(payload.roundId, stake, payout);
           if (stake <= 0) scene.setRoundOutcome(payload.roundId, 'SKIPPED');
-          else if (net > 0) scene.setRoundOutcome(payload.roundId, 'WIN');
-          else if (net === 0) scene.setRoundOutcome(payload.roundId, 'PUSH');
+          else if (winningPayout > losingStake) scene.setRoundOutcome(payload.roundId, 'WIN');
           else scene.setRoundOutcome(payload.roundId, 'LOSE');
           scene.setWinningBets(payload.roundId, bets);
         } catch {
@@ -201,14 +205,18 @@ const socket = createGameSocket(
         payload.totals.payout,
       );
 
-      // Outcome is derived from server-settled totals (not client-side rules)
-      const { stake, net } = payload.totals;
+      // Outcome is derived from server-settled bets (payout vs losing stake)
+      const { stake } = payload.totals;
+      const winningPayout = payload.bets
+        .filter((b) => b.result === 'WIN')
+        .reduce((sum, b) => sum + b.payout, 0);
+      const losingStake = payload.bets
+        .filter((b) => b.result === 'LOSE')
+        .reduce((sum, b) => sum + b.amount, 0);
       if (stake <= 0) {
         scene.setRoundOutcome(payload.roundId, 'SKIPPED');
-      } else if (net > 0) {
+      } else if (winningPayout > losingStake) {
         scene.setRoundOutcome(payload.roundId, 'WIN');
-      } else if (net === 0) {
-        scene.setRoundOutcome(payload.roundId, 'PUSH');
       } else {
         scene.setRoundOutcome(payload.roundId, 'LOSE');
       }
@@ -281,47 +289,8 @@ async function refreshConfig() {
   }
 }
 
-async function handlePlaceHiLoBet(side: BetSide) {
-  if (!state.token) {
-    throw new Error('You must login first.');
-  }
-  if (!state.currentRound) {
-    throw new Error('Waiting for next round to begin.');
-  }
-  if (state.currentRound.status !== 'BETTING') {
-    throw new Error('Not Betting Phase');
-  }
-  if (new Date(state.currentRound.lockTime).getTime() <= Date.now()) {
-    throw new Error('Not Betting Phase');
-  }
-
-  const tokenValue = state.selectedTokenValue;
-  const amount = clampAmount(tokenValue);
-  if (amount !== tokenValue) {
-    throw new Error('Token value outside betting limits');
-  }
-  if (state.walletBalance < getTotalPlacedStake() + amount) {
-    throw new Error('Insufficient balance');
-  }
-  try {
-    await api.placeBet(state.token, {
-      roundId: state.currentRound.id,
-      side,
-      amount,
-    });
-    const nextPlacement = addTokenPlacement(
-      buildHiLoBetKey(side),
-      tokenValue,
-    );
-    updateState({ selectedSide: side });
-    scene.setPlayerBet(
-      side,
-      getPlacementTotal(nextPlacement),
-    );
-  } catch (error) {
-    throw new Error(extractBetErrorMessage(error));
-  }
-  await refreshPlayerData();
+async function handlePlaceHiLoBet(_side: BetSide) {
+  throw new Error('Hi-Lo betting is disabled.');
 }
 
 async function handlePlaceDigitBet(selection: {

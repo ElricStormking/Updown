@@ -53,6 +53,7 @@ export class GameConfigController {
     payoutMultiplierUp: number;
     payoutMultiplierDown: number;
     priceSnapshotInterval: number;
+    bonusModeEnabled: boolean;
     bonusSlotChanceTotal: number;
     digitPayouts: {
       smallBigOddEven: number;
@@ -84,6 +85,7 @@ export class GameConfigController {
       payoutMultiplierUp: config.payoutMultiplierUp,
       payoutMultiplierDown: config.payoutMultiplierDown,
       priceSnapshotInterval: config.priceSnapshotInterval,
+      bonusModeEnabled: config.bonusModeEnabled,
       bonusSlotChanceTotal: config.bonusSlotChanceTotal,
       historyLimits: {
         player: this.configService.getOrThrow<number>('history.playerLimit', {
@@ -105,9 +107,10 @@ export class GameConfigController {
         ranges: DIGIT_SUM_RANGES,
       },
       digitBonusRatios: config.digitBonusRatios,
-      digitBonus: this.configService.getOrThrow('game.digitBonus', {
-        infer: true,
-      }),
+      digitBonus: {
+        ...this.configService.getOrThrow('game.digitBonus', { infer: true }),
+        enabled: config.bonusModeEnabled,
+      },
     };
   }
 }

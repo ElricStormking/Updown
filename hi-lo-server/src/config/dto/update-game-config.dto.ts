@@ -1,4 +1,4 @@
-import { IsInt, IsNumber, IsObject, IsOptional, Min } from 'class-validator';
+import { IsBoolean, IsInt, IsNumber, IsObject, IsOptional, Min } from 'class-validator';
 
 export class UpdateGameConfigDto {
   @IsInt()
@@ -32,6 +32,10 @@ export class UpdateGameConfigDto {
   @IsInt()
   @Min(1)
   priceSnapshotInterval: number;
+
+  @IsOptional()
+  @IsBoolean()
+  bonusModeEnabled?: boolean;
 
   @IsInt()
   @Min(1)

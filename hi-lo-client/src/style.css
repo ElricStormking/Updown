@@ -236,12 +236,6 @@ html {
   font-size: 0.82rem;
 }
 
-.stats-dock-last9 .stats-hilo {
-  width: 22px;
-  height: 22px;
-  border-radius: 7px;
-  font-size: 0.72rem;
-}
 
 .control-panel {
   background: rgba(9, 14, 20, 0.9);
@@ -303,8 +297,7 @@ html {
   font-size: 0.9rem;
 }
 
-#auth-form button,
-.side {
+#auth-form button {
   cursor: pointer;
   border: none;
   border-radius: 6px;
@@ -324,44 +317,6 @@ html {
   gap: 0.5rem;
 }
 
-.hilo-trend {
-  --up-color: #00e5ff;
-  --down-color: #ff3bd6;
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.25rem 0.1rem;
-}
-
-.hilo-trend-label {
-  font-size: 0.8rem;
-  font-weight: 700;
-  letter-spacing: 0.01em;
-  opacity: 0.95;
-  white-space: nowrap;
-}
-
-.hilo-trend-label--up {
-  color: var(--up-color);
-}
-
-.hilo-trend-label--down {
-  color: var(--down-color);
-}
-
-.hilo-trend-track {
-  height: 10px;
-  border-radius: 999px;
-  background: linear-gradient(
-    90deg,
-    var(--up-color) 0,
-    var(--up-color) var(--up-pct),
-    var(--down-color) var(--up-pct),
-    var(--down-color) 100%
-  );
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
-}
 
 .token-bar {
   display: flex;
@@ -931,36 +886,6 @@ html {
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.stats-hilo {
-  width: 24px;
-  height: 24px;
-  border-radius: 8px;
-  display: grid;
-  place-items: center;
-  font-weight: 900;
-  letter-spacing: 0.06em;
-  font-size: 0.75rem;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  margin-top: 0.15rem;
-}
-
-.stats-hilo--up {
-  background: rgba(0, 255, 178, 0.22);
-  border-color: rgba(0, 255, 178, 0.4);
-  color: rgba(0, 255, 178, 0.95);
-}
-
-.stats-hilo--down {
-  background: rgba(255, 118, 117, 0.22);
-  border-color: rgba(255, 118, 117, 0.4);
-  color: rgba(255, 118, 117, 0.95);
-}
-
-.stats-hilo--none {
-  background: rgba(178, 190, 195, 0.12);
-  border-color: rgba(178, 190, 195, 0.25);
-  color: rgba(223, 230, 233, 0.75);
-}
 
 .stats-last16 {
   display: grid;
@@ -1519,40 +1444,6 @@ html {
   gap: 0.2rem;
 }
 
-.side-buttons {
-  display: flex;
-  gap: 0.75rem;
-}
-
-.side {
-  flex: 1;
-  background: rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.95);
-  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.35), 0 0 10px rgba(0, 0, 0, 0.35);
-  transition: background 0.2s, transform 0.1s ease, box-shadow 0.1s ease;
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.35rem;
-}
-
-.side[data-side='UP'] {
-  border: 1px solid rgba(0, 255, 178, 0.3);
-}
-
-.side[data-side='DOWN'] {
-  border: 1px solid rgba(255, 118, 117, 0.3);
-}
-
-.side.active {
-  background: #00ffb2;
-  color: #ffffff;
-  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.45), 0 0 10px rgba(0, 0, 0, 0.3);
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.14),
-    0 10px 22px rgba(0, 0, 0, 0.35);
-}
 
 .wallet {
   font-size: 1rem;
@@ -1748,28 +1639,6 @@ li {
     padding: 0.75rem;
   }
 
-  .hilo-trend {
-    padding: 0.35rem 0.1rem 0.15rem;
-  }
-
-  .side-buttons {
-    gap: 0.5rem;
-  }
-
-  .side {
-    padding: 0.6rem;
-    font-size: 0.95rem;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-  }
-
-  .side[data-side='UP'] {
-    background: rgba(0, 255, 178, 0.12);
-  }
-
-  .side[data-side='DOWN'] {
-    background: rgba(255, 118, 117, 0.12);
-  }
 
   .token-bar {
     padding: 0.5rem;

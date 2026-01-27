@@ -19,6 +19,7 @@ export interface GameConfigInput {
   payoutMultiplierUp: number;
   payoutMultiplierDown: number;
   priceSnapshotInterval: number;
+  bonusModeEnabled?: unknown;
   bonusSlotChanceTotal?: unknown;
   digitPayouts: unknown;
   digitBonusRatios?: unknown;
@@ -128,6 +129,7 @@ export class GameConfigService {
       raw.digitBonusRatios,
       defaults.digitBonusRatios,
     );
+    const bonusModeEnabled = this.extractBonusModeEnabledSource(raw);
     const bonusSlotChanceTotal = toNumber(
       this.extractBonusSlotChanceTotalSource(raw),
       defaults.bonusSlotChanceTotal,
@@ -165,6 +167,7 @@ export class GameConfigService {
         raw.priceSnapshotInterval,
         defaults.priceSnapshotInterval,
       ),
+      bonusModeEnabled,
       bonusSlotChanceTotal,
       digitPayouts,
       digitBonusRatios,
@@ -174,6 +177,10 @@ export class GameConfigService {
   async updateFromInput(input: GameConfigInput, merchantId?: string | null): Promise<GameConfigSnapshot> {
     const digitPayouts = this.parseDigitPayouts(input.digitPayouts);
     const digitBonusRatios = this.parseDigitBonusRatios(input.digitBonusRatios);
+    const bonusModeEnabled = this.parseBonusModeEnabled(
+      input.bonusModeEnabled,
+      true,
+    );
     const config: GameConfigSnapshot = {
       bettingDurationMs: requireNumber(
         input.bettingDurationMs,
@@ -201,6 +208,7 @@ export class GameConfigService {
         input.priceSnapshotInterval,
         'priceSnapshotInterval',
       ),
+      bonusModeEnabled,
       bonusSlotChanceTotal: requireNumber(
         input.bonusSlotChanceTotal,
         'bonusSlotChanceTotal',
@@ -292,6 +300,16 @@ export class GameConfigService {
     if (config.bonusSlotChanceTotal <= 0) {
       throw new BadRequestException('bonusSlotChanceTotal must be > 0');
     }
+  }
+
+  private parseBonusModeEnabled(value: unknown, fallback: boolean) {
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'string') {
+      const normalized = value.trim().toLowerCase();
+      if (normalized === 'true') return true;
+      if (normalized === 'false') return false;
+    }
+    return fallback;
   }
 
   private parseDigitPayouts(raw: unknown): DigitPayouts {
@@ -575,6 +593,19 @@ export class GameConfigService {
     return undefined;
   }
 
+  private extractBonusModeEnabledSource(raw: unknown): boolean {
+    if (!isRecord(raw)) {
+      return this.getDefaultConfig().bonusModeEnabled;
+    }
+    if (raw.bonusModeEnabled !== undefined) {
+      return this.parseBonusModeEnabled(raw.bonusModeEnabled, this.getDefaultConfig().bonusModeEnabled);
+    }
+    if (isRecord(raw.digitPayouts) && raw.digitPayouts.bonusModeEnabled !== undefined) {
+      return this.parseBonusModeEnabled(raw.digitPayouts.bonusModeEnabled, this.getDefaultConfig().bonusModeEnabled);
+    }
+    return this.getDefaultConfig().bonusModeEnabled;
+  }
+
   private parseDigitBonusRatios(raw: unknown): DigitBonusRatios {
     const defaults = buildDefaultDigitBonusRatios();
     return this.mergeDigitBonusRatios(raw, defaults);
@@ -655,6 +686,10 @@ export class GameConfigService {
       this.extractDigitBonusRatiosSource(record.digitPayouts),
       defaults.digitBonusRatios,
     );
+    const bonusModeEnabled = this.parseBonusModeEnabled(
+      this.extractBonusModeEnabledSource(record.digitPayouts),
+      defaults.bonusModeEnabled,
+    );
     const bonusSlotChanceTotal = toNumber(
       this.extractBonusSlotChanceTotalSource(record.digitPayouts),
       defaults.bonusSlotChanceTotal,
@@ -669,6 +704,7 @@ export class GameConfigService {
       payoutMultiplierUp: Number(record.payoutMultiplierUp),
       payoutMultiplierDown: Number(record.payoutMultiplierDown),
       priceSnapshotInterval: record.priceSnapshotInterval,
+      bonusModeEnabled,
       bonusSlotChanceTotal,
       digitPayouts,
       digitBonusRatios,
@@ -678,6 +714,7 @@ export class GameConfigService {
   private toJsonDigitPayouts(
     payouts: DigitPayouts,
     digitBonusRatios: DigitBonusRatios,
+    bonusModeEnabled: boolean,
     bonusSlotChanceTotal?: number,
   ): Prisma.InputJsonValue {
     const sum: Record<string, number> = {};
@@ -715,6 +752,7 @@ export class GameConfigService {
       anyTriple: payouts.anyTriple,
       double: payouts.double,
       triple: payouts.triple,
+      bonusModeEnabled,
       bonusSlotChanceTotal,
       single: {
         single: payouts.single.single,
@@ -741,6 +779,7 @@ export class GameConfigService {
       digitPayouts: this.toJsonDigitPayouts(
         config.digitPayouts,
         config.digitBonusRatios,
+        config.bonusModeEnabled,
         config.bonusSlotChanceTotal,
       ),
     };

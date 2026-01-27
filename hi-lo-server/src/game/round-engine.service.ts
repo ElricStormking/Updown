@@ -106,7 +106,7 @@ export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
     const oddsUp = config.payoutMultiplierUp;
     const oddsDown = config.payoutMultiplierDown;
 
-    const bonusEnabled = Boolean(this.digitBonusConfig?.enabled);
+    const bonusEnabled = Boolean(config.bonusModeEnabled);
     const bonusFactor = Number(this.digitBonusConfig?.payoutFactor ?? 1);
     const bonusSlots: DigitBonusSlot[] = [];
     if (bonusEnabled) {

@@ -32,9 +32,6 @@ let tokenOptionsEl: HTMLDivElement | null = null;
 let tokenOptionButtons: HTMLButtonElement[] = [];
 let tokenBarMenuBtn: HTMLButtonElement | null = null;
 let tokenBarClearBtn: HTMLButtonElement | null = null;
-let hiLoTrendEl: HTMLDivElement | null = null;
-let hiLoTrendUpEl: HTMLSpanElement | null = null;
-let hiLoTrendDownEl: HTMLSpanElement | null = null;
 let statsDockEl: HTMLDivElement | null = null;
 let statsDockTabBtn: HTMLButtonElement | null = null;
 let statsDockPanelEl: HTMLDivElement | null = null;
@@ -243,21 +240,6 @@ export const initControls = (handlers: ControlHandlers) => {
                 </button>
               </div>
             </div>
-            <div class="hilo-trend" id="hilo-trend" style="--up-pct: 50%;">
-              <span class="hilo-trend-label hilo-trend-label--up" id="hilo-trend-up">--% Up</span>
-              <div class="hilo-trend-track" aria-label="Last 10 rounds up/down percentage"></div>
-              <span class="hilo-trend-label hilo-trend-label--down" id="hilo-trend-down">--% Down</span>
-            </div>
-            <div class="side-buttons">
-              <button type="button" data-side="UP" data-bet-key="HILO|UP" class="side bet-space active">
-                <span class="bet-label" data-i18n="hilo.up"></span>
-                <span class="token-stack"></span>
-              </button>
-              <button type="button" data-side="DOWN" data-bet-key="HILO|DOWN" class="side bet-space">
-                <span class="bet-label" data-i18n="hilo.down"></span>
-                <span class="token-stack"></span>
-              </button>
-            </div>
             <div class="bet-hint" data-i18n="ui.tapToPlace"></div>
           </div>
           <section class="digit-bets">
@@ -453,9 +435,6 @@ export const initControls = (handlers: ControlHandlers) => {
   tokenOptionsEl = root.querySelector('#token-options');
   tokenBarMenuBtn = root.querySelector('#token-bar-menu');
   tokenBarClearBtn = root.querySelector('#token-bar-clear');
-  hiLoTrendEl = root.querySelector('#hilo-trend');
-  hiLoTrendUpEl = root.querySelector('#hilo-trend-up');
-  hiLoTrendDownEl = root.querySelector('#hilo-trend-down');
   statsDockEl = root.querySelector('#stats-dock');
   statsDockTabBtn = root.querySelector('#stats-dock-tab');
   statsDockPanelEl = root.querySelector('#stats-dock-panel');
@@ -756,17 +735,16 @@ export const initControls = (handlers: ControlHandlers) => {
     const gameContainer = root.querySelector<HTMLDivElement>('#game-container');
     const layout = root.querySelector<HTMLDivElement>('.layout');
     const controlPanel = root.querySelector<HTMLDivElement>('.control-panel');
-    const sideButtons = root.querySelector<HTMLDivElement>('.side-buttons');
     const betControls = root.querySelector<HTMLDivElement>('.bet-controls');
     const betHint = root.querySelector<HTMLDivElement>('.bet-hint');
-    if (!gameContainer || !layout || !controlPanel || !sideButtons) {
+    if (!gameContainer || !layout || !controlPanel) {
       return;
     }
 
     const isMobile = typeof window !== 'undefined' && window.innerWidth <= 720;
 
     if (isMobile) {
-      // Move the Phaser canvas BELOW the UP/DOWN buttons but ABOVE the "Tap a bet space..." hint.
+      // Move the Phaser canvas above the bet hint in the stacked mobile layout.
       const isAlreadyInPlace =
         !!betControls &&
         !!betHint &&
@@ -777,9 +755,10 @@ export const initControls = (handlers: ControlHandlers) => {
       if (!isAlreadyInPlace) {
         if (betHint && betControls) {
           betHint.insertAdjacentElement('beforebegin', gameContainer);
+        } else if (betControls) {
+          betControls.appendChild(gameContainer);
         } else {
-          // Fallback: keep it below the buttons inside whatever parent we have.
-          sideButtons.insertAdjacentElement('afterend', gameContainer);
+          layout.insertBefore(gameContainer, controlPanel);
         }
         window.dispatchEvent(new Event('app:layout:shown'));
       }
@@ -799,25 +778,8 @@ export const initControls = (handlers: ControlHandlers) => {
   }
 
   [upBtn, downBtn].forEach((button) => {
-    button?.addEventListener('click', async () => {
-      const side = button.dataset.side as BetSide;
-      updateState({ selectedSide: side });
-      if (!state.token) {
-        setStatus('Login before placing bets', true);
-        return;
-      }
-      try {
-        button.classList.add('bet-space--flash');
-        setTimeout(() => button.classList.remove('bet-space--flash'), 250);
-        setStatus('Sending bet...');
-        await handlers.onPlaceHiLoBet(side);
-        setStatus('Bet placed!');
-      } catch (error) {
-        setStatus(
-          error instanceof Error ? error.message : 'Bet rejected',
-          true,
-        );
-      }
+    button?.addEventListener('click', () => {
+      setStatus('Hi-Lo betting is disabled.', true);
     });
   });
 
@@ -881,11 +843,7 @@ const celebrateWinningBetSlots = (nextState: typeof state) => {
     .filter((bet) => bet.betType === 'DIGIT' && bet.result === 'WIN' && bet.digitType)
     .map((bet) => `${bet.digitType}|${bet.selection ?? ''}`);
 
-  const hiloWinSides = nextState.lastRoundBets
-    .filter((bet) => bet.betType === 'HILO' && bet.result === 'WIN' && bet.side)
-    .map((bet) => bet.side);
-
-  const signature = `${settledRoundId}|${digitWinKeys.slice().sort().join(',')}|${hiloWinSides.slice().sort().join(',')}`;
+  const signature = `${settledRoundId}|${digitWinKeys.slice().sort().join(',')}`;
   if (signature === lastWinCelebrateSignature) return;
   lastWinCelebrateSignature = signature;
 
@@ -906,15 +864,7 @@ const celebrateWinningBetSlots = (nextState: typeof state) => {
     });
   }
 
-  // HILO button celebration
-  if (hiloWinSides.includes('UP')) {
-    upBtn?.classList.add('bet-space--win-celebrate');
-    setTimeout(() => upBtn?.classList.remove('bet-space--win-celebrate'), durationMs);
-  }
-  if (hiloWinSides.includes('DOWN')) {
-    downBtn?.classList.add('bet-space--win-celebrate');
-    setTimeout(() => downBtn?.classList.remove('bet-space--win-celebrate'), durationMs);
-  }
+  // Hi-Lo buttons are not used in this UI variant.
 };
 
 const render = (nextState: typeof state) => {
@@ -949,11 +899,9 @@ const render = (nextState: typeof state) => {
   }
 
   renderHistoryLists(nextState);
-  renderHiLoTrend(nextState);
   renderStatistics(nextState);
   renderBettingHistory(nextState);
   refreshTokenSelection(nextState);
-  refreshSideButtons();
   refreshDigitHighlights(nextState);
   celebrateWinningBetSlots(nextState);
   renderTokenPlacements(nextState);
@@ -983,25 +931,6 @@ const applyI18n = (lang: LanguageCode) => {
   tokenBarMenuBtn?.setAttribute('title', t(lang, 'ui.menu'));
 
   // History modal title is data-i18n; but keep empty state localized too by rerender.
-};
-
-const renderHiLoTrend = (nextState: typeof state) => {
-  if (!hiLoTrendEl || !hiLoTrendUpEl || !hiLoTrendDownEl) return;
-
-  const last10 = nextState.roundHistory
-    .filter((round) => round.winningSide === 'UP' || round.winningSide === 'DOWN')
-    .slice(0, 10);
-
-  const upCount = last10.filter((r) => r.winningSide === 'UP').length;
-  const downCount = last10.filter((r) => r.winningSide === 'DOWN').length;
-  const total = upCount + downCount;
-
-  const upPct = total > 0 ? Math.round((upCount / total) * 100) : 50;
-  const downPct = 100 - upPct;
-
-  hiLoTrendEl.style.setProperty('--up-pct', `${upPct}%`);
-  hiLoTrendUpEl.textContent = `${upPct}% ${t(nextState.language, 'hilo.up')}`;
-  hiLoTrendDownEl.textContent = `${downPct}% ${t(nextState.language, 'hilo.down')}`;
 };
 
 type SumBucket = 'SMALL' | 'BIG' | 'TRIPLE';
@@ -1053,19 +982,12 @@ const renderStatistics = (nextState: typeof state) => {
           const sumLabel =
             typeof round.digitSum === 'number' ? String(round.digitSum) : '--';
 
-          const hiLo =
-            round.winningSide === 'UP'
-              ? { cls: 'stats-hilo--up', text: 'U' }
-              : round.winningSide === 'DOWN'
-                ? { cls: 'stats-hilo--down', text: 'D' }
-                : { cls: 'stats-hilo--none', text: '-' };
           return `
             <div class="stats-col" title="Round #${round.id}">
               <div class="stats-sum">${sumLabel}</div>
               <div class="stats-digit">${d0}</div>
               <div class="stats-digit">${d1}</div>
               <div class="stats-digit">${d2}</div>
-              <div class="stats-hilo ${hiLo.cls}" title="HiLo ${round.winningSide ?? 'N/A'}">${hiLo.text}</div>
             </div>
           `;
         })
@@ -1219,7 +1141,7 @@ const renderBettingHistory = (nextState: typeof state) => {
   bettingHistoryPageLabelEl.textContent = String(nextState.betHistoryPage + 1);
 
   const locale = getLocaleForLang(nextState.language);
-  const rows = nextState.betHistoryPageItems;
+  const rows = nextState.betHistoryPageItems.filter((bet) => bet.betType === 'DIGIT');
   if (!rows.length) {
     bettingHistoryListEl.innerHTML = `<div class="betting-history-empty">No history yet.</div>`;
     return;
@@ -1262,13 +1184,11 @@ const renderBettingHistory = (nextState: typeof state) => {
 const renderHistoryLists = (nextState: typeof state) => {
   if (betListEl) {
     betListEl.innerHTML = nextState.betHistory
+      .filter((bet) => bet.betType === 'DIGIT')
       .slice(0, 10)
       .map(
         (bet) => {
-          const label =
-            bet.betType === 'DIGIT'
-              ? `${bet.digitType ?? 'DIGIT'} ${bet.selection ?? ''}`.trim()
-              : bet.side ?? 'HILO';
+          const label = `${bet.digitType ?? 'DIGIT'} ${bet.selection ?? ''}`.trim();
           return `<li>#${bet.roundId} - ${label} - ${bet.amount.toFixed(
             2,
           )} - ${bet.result}</li>`;
@@ -1281,18 +1201,16 @@ const renderHistoryLists = (nextState: typeof state) => {
     roundListEl.innerHTML = nextState.roundHistory
       .slice(0, 10)
       .map(
-        (round) =>
-          `<li>#${round.id} - ${round.winningSide ?? 'TBD'} - ${round.finalPrice ?? '?'}</li>`,
+        (round) => {
+          const digits = round.digitResult && /^\d{3}$/.test(round.digitResult)
+            ? round.digitResult
+            : '---';
+          const sum = typeof round.digitSum === 'number' ? round.digitSum : '--';
+          return `<li>#${round.id} - ${digits} (sum ${sum})</li>`;
+        },
       )
       .join('');
   }
-};
-
-const refreshSideButtons = () => {
-  [upBtn, downBtn].forEach((button) => {
-    if (!button) return;
-    button.classList.toggle('active', button.dataset.side === state.selectedSide);
-  });
 };
 
 const refreshTokenSelection = (nextState: typeof state) => {

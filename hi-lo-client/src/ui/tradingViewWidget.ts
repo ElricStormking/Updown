@@ -6,8 +6,6 @@ import {
   LineSeries,
   type IChartApi,
   type ISeriesApi,
-  type IPriceLine,
-  LineStyle,
   type Time,
   type UTCTimestamp,
 } from 'lightweight-charts';
@@ -24,8 +22,6 @@ let lastPlottedTime: number | null = null; // seconds, in 0.5s increments
 let lastPlottedPrice: number | null = null;
 let points: Array<{ time: UTCTimestamp; value: number }> = [];
 let lockedPrice: number | null = null;
-let lockedAxisLabelLine: IPriceLine | null = null;
-let lockedSegmentSeries: ISeriesApi<'Line'> | null = null;
 let roundLockSec: number | null = null;
 let roundEndSec: number | null = null;
 let lockedBadgeEl: HTMLDivElement | null = null;
@@ -114,7 +110,7 @@ function ensureChart() {
   // We'll control the visible price range manually to keep the scale tight.
   chart.priceScale('right').setAutoScale(false);
 
-  // If we already have a locked price (set before the chart initialized), draw it now.
+  // If we already have a lock signal (set before the chart initialized), show it now.
   if (lockedPrice !== null) {
     void setLockedPrice(lockedPrice);
   }
@@ -154,9 +150,6 @@ function updatePriceScaleRange(latestPrice: number) {
   // Keep the visible range aligned to PRICE_LABEL_INTERVAL boundaries.
   const last = snapNearest(latestPrice);
   const values = points.map((p) => Math.round(p.value));
-  if (lockedPrice !== null) {
-    values.push(Math.round(lockedPrice));
-  }
   const min = Math.min(...values);
   const max = Math.max(...values);
 
@@ -206,74 +199,23 @@ export function setRoundTiming(lockTimeIso: string, endTimeIso: string) {
   }
 }
 
-// Show/hide the locked price overlay during the locked phase.
+// Show/hide the locked badge during the locked phase.
 export function setLockedPrice(nextLockedPrice: number | null) {
   lockedPrice = typeof nextLockedPrice === 'number' ? nextLockedPrice : null;
   ensureChart();
   if (!series || !chart) return;
 
   if (lockedPrice === null) {
-    if (lockedAxisLabelLine) {
-      series.removePriceLine(lockedAxisLabelLine);
-      lockedAxisLabelLine = null;
-    }
-    if (lockedSegmentSeries) {
-      chart.removeSeries(lockedSegmentSeries);
-      lockedSegmentSeries = null;
-    }
     if (lockedBadgeEl) {
       lockedBadgeEl.style.display = 'none';
     }
     return;
   }
 
-  // Axis label (no full-width line)
-  if (!lockedAxisLabelLine) {
-    lockedAxisLabelLine = series.createPriceLine({
-      price: lockedPrice,
-      color: '#ff9f1a',
-      lineWidth: 3,
-      lineStyle: LineStyle.Solid,
-      lineVisible: false,
-      axisLabelVisible: true,
-      title: '',
-      axisLabelColor: '#ff9f1a',
-      axisLabelTextColor: '#0b1b2a',
-    });
-  } else {
-    lockedAxisLabelLine.applyOptions({ price: lockedPrice });
-  }
-
   if (lockedBadgeEl) {
-    lockedBadgeEl.textContent = `LOCKED • ${Math.round(lockedPrice)}`;
+    lockedBadgeEl.textContent = 'LOCKED';
     lockedBadgeEl.style.display = 'block';
   }
-
-  // Time-bounded segment: starts exactly at lockTime and extends to endTime (future), i.e. "draw in advance"
-  if (roundLockSec === null || roundEndSec === null) {
-    return;
-  }
-
-  const start = Math.min(roundLockSec, roundEndSec);
-  const end = Math.max(roundLockSec, roundEndSec);
-
-  if (!lockedSegmentSeries) {
-    lockedSegmentSeries = chart.addSeries(LineSeries, {
-      color: '#ff9f1a',
-      lineWidth: 4,
-      lineStyle: LineStyle.Solid,
-      lineType: 0, // LineType.Simple
-      lastValueVisible: false,
-      priceLineVisible: false,
-      // keep same formatting as main series
-      priceFormat: { type: 'price', precision: 0, minMove: 1 },
-    }) as ISeriesApi<'Line'>;
-  }
-
-  lockedSegmentSeries.setData([
-    { time: start as UTCTimestamp, value: lockedPrice },
-    { time: end as UTCTimestamp, value: lockedPrice },
-  ]);
 }
 
 // Feed this from the server price stream. We sample at 2Hz (every 0.5s).

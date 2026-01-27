@@ -1,0 +1,454 @@
+{
+    "section1": {
+        "files": [
+            {
+                "url": "assets/main_screen/main_screen_UI/3N_box.png",
+                "type": "image",
+                "key": "3N_box"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/bg.png",
+                "type": "image",
+                "key": "bg"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/bg_light.png",
+                "type": "image",
+                "key": "bg_light"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/bg_line_left.png",
+                "type": "image",
+                "key": "bg_line_left"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/bg_line_right.png",
+                "type": "image",
+                "key": "bg_line_right"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/box_amount.png",
+                "type": "image",
+                "key": "box_amount"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/box_round.png",
+                "type": "image",
+                "key": "box_round"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/button_any triple.png",
+                "type": "image",
+                "key": "button_any triple"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/button_big.png",
+                "type": "image",
+                "key": "button_big"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/button_even.png",
+                "type": "image",
+                "key": "button_even"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/button_odd.png",
+                "type": "image",
+                "key": "button_odd"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/button_small.png",
+                "type": "image",
+                "key": "button_small"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/chip_10.png",
+                "type": "image",
+                "key": "chip_10"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/chip_100.png",
+                "type": "image",
+                "key": "chip_100"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/chip_150.png",
+                "type": "image",
+                "key": "chip_150"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/chip_200.png",
+                "type": "image",
+                "key": "chip_200"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/chip_300.png",
+                "type": "image",
+                "key": "chip_300"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/chip_50.png",
+                "type": "image",
+                "key": "chip_50"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/chip_500.png",
+                "type": "image",
+                "key": "chip_500"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/logo_combi3.png",
+                "type": "image",
+                "key": "logo_combi3"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/number_0.png",
+                "type": "image",
+                "key": "number_0"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/number_00.png",
+                "type": "image",
+                "key": "number_00"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/number_000.png",
+                "type": "image",
+                "key": "number_000"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/number_1.png",
+                "type": "image",
+                "key": "number_1"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/number_11.png",
+                "type": "image",
+                "key": "number_11"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/number_111.png",
+                "type": "image",
+                "key": "number_111"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/number_2.png",
+                "type": "image",
+                "key": "number_2"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/number_22.png",
+                "type": "image",
+                "key": "number_22"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/number_222.png",
+                "type": "image",
+                "key": "number_222"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/number_3.png",
+                "type": "image",
+                "key": "number_3"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/number_33.png",
+                "type": "image",
+                "key": "number_33"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/number_333.png",
+                "type": "image",
+                "key": "number_333"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/number_4.png",
+                "type": "image",
+                "key": "number_4"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/number_44.png",
+                "type": "image",
+                "key": "number_44"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/number_444.png",
+                "type": "image",
+                "key": "number_444"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/number_5.png",
+                "type": "image",
+                "key": "number_5"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/number_55.png",
+                "type": "image",
+                "key": "number_55"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/number_555.png",
+                "type": "image",
+                "key": "number_555"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/number_6.png",
+                "type": "image",
+                "key": "number_6"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/number_66.png",
+                "type": "image",
+                "key": "number_66"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/number_666.png",
+                "type": "image",
+                "key": "number_666"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/number_7.png",
+                "type": "image",
+                "key": "number_7"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/number_77.png",
+                "type": "image",
+                "key": "number_77"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/number_777.png",
+                "type": "image",
+                "key": "number_777"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/number_8.png",
+                "type": "image",
+                "key": "number_8"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/number_88.png",
+                "type": "image",
+                "key": "number_88"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/number_888.png",
+                "type": "image",
+                "key": "number_888"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/number_9.png",
+                "type": "image",
+                "key": "number_9"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/number_99.png",
+                "type": "image",
+                "key": "number_99"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/number_999.png",
+                "type": "image",
+                "key": "number_999"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/number_sum_03.png",
+                "type": "image",
+                "key": "number_sum_03"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/number_sum_04.png",
+                "type": "image",
+                "key": "number_sum_04"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/number_sum_05.png",
+                "type": "image",
+                "key": "number_sum_05"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/number_sum_06.png",
+                "type": "image",
+                "key": "number_sum_06"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/number_sum_07.png",
+                "type": "image",
+                "key": "number_sum_07"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/number_sum_08.png",
+                "type": "image",
+                "key": "number_sum_08"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/number_sum_09.png",
+                "type": "image",
+                "key": "number_sum_09"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/number_sum_10.png",
+                "type": "image",
+                "key": "number_sum_10"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/number_sum_11.png",
+                "type": "image",
+                "key": "number_sum_11"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/number_sum_12.png",
+                "type": "image",
+                "key": "number_sum_12"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/number_sum_13.png",
+                "type": "image",
+                "key": "number_sum_13"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/number_sum_14.png",
+                "type": "image",
+                "key": "number_sum_14"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/number_sum_15.png",
+                "type": "image",
+                "key": "number_sum_15"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/number_sum_16.png",
+                "type": "image",
+                "key": "number_sum_16"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/number_sum_17.png",
+                "type": "image",
+                "key": "number_sum_17"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/number_sum_18.png",
+                "type": "image",
+                "key": "number_sum_18"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/number_sum_19.png",
+                "type": "image",
+                "key": "number_sum_19"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/number_sum_20.png",
+                "type": "image",
+                "key": "number_sum_20"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/number_sum_21.png",
+                "type": "image",
+                "key": "number_sum_21"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/number_sum_22.png",
+                "type": "image",
+                "key": "number_sum_22"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/number_sum_23.png",
+                "type": "image",
+                "key": "number_sum_23"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/number_sum_24.png",
+                "type": "image",
+                "key": "number_sum_24"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/number_sum_25.png",
+                "type": "image",
+                "key": "number_sum_25"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/number_sum_26.png",
+                "type": "image",
+                "key": "number_sum_26"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/number_sum_27.png",
+                "type": "image",
+                "key": "number_sum_27"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/odd_box_left.png",
+                "type": "image",
+                "key": "odd_box_left"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/odd_box_mid.png",
+                "type": "image",
+                "key": "odd_box_mid"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/odd_box_right.png",
+                "type": "image",
+                "key": "odd_box_right"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/setting.png",
+                "type": "image",
+                "key": "setting"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/time.png",
+                "type": "image",
+                "key": "time"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/title_bigbox_purple.png",
+                "type": "image",
+                "key": "title_bigbox_purple"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/title_bigbox_yellow.png",
+                "type": "image",
+                "key": "title_bigbox_yellow"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/title_on_double.png",
+                "type": "image",
+                "key": "title_on_double"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/title_on_single.png",
+                "type": "image",
+                "key": "title_on_single"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/title_on_triple.png",
+                "type": "image",
+                "key": "title_on_triple"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/title_sum.png",
+                "type": "image",
+                "key": "title_sum"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/token_bar_box.png",
+                "type": "image",
+                "key": "token_bar_box"
+            },
+            {
+                "url": "assets/main_screen/main_screen_UI/token_bar_clean.png",
+                "type": "image",
+                "key": "token_bar_clean"
+            }
+        ]
+    },
+    "meta": {
+        "app": "Phaser Editor 2D - Asset Pack Editor",
+        "contentType": "phasereditor2d.pack.core.AssetContentType",
+        "url": "https://phasereditor2d.com",
+        "version": 2,
+        "showAllFilesInBlocks": false,
+        "visible": true
+    }
+}

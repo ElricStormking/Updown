@@ -82,6 +82,7 @@ export interface GameConfig {
   payoutMultiplierUp: number;
   payoutMultiplierDown: number;
   priceSnapshotInterval: number;
+  bonusModeEnabled?: boolean;
   bonusSlotChanceTotal?: number;
   historyLimits: {
     player: number;

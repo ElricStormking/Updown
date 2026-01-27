@@ -42,14 +42,9 @@ export class HiLoScene extends Phaser.Scene {
   // -- Betting Phase UI --
   private bettingUI!: Phaser.GameObjects.Container;
   private bettingLabel!: Phaser.GameObjects.Text;
-  private oddsContainer!: Phaser.GameObjects.Container;
-  private oddsUpText!: Phaser.GameObjects.Text;
-  private oddsDownText!: Phaser.GameObjects.Text;
 
   // -- Pending Phase UI --
   private pendingUI!: Phaser.GameObjects.Container;
-  private lockedPriceText!: Phaser.GameObjects.Text;
-  private lockedPriceLabel!: Phaser.GameObjects.Text;
   private comparisonLine!: Phaser.GameObjects.Rectangle;
   private playerBetCard!: Phaser.GameObjects.Container;
   private playerBetStatusText!: Phaser.GameObjects.Text;
@@ -336,40 +331,7 @@ export class HiLoScene extends Phaser.Scene {
       color: '#00b894',
       fontStyle: 'bold'
     }).setOrigin(0.5).setLetterSpacing(1);
-
-    // Odds
-    this.oddsContainer = this.add.container(0, 30);
-    
-    // UP Odds
-    const upBg = this.add.graphics();
-    upBg.fillStyle(0x00b894, 0.1);
-    upBg.fillRoundedRect(-140, -20, 120, 40, 8);
-    upBg.lineStyle(1, 0x00b894, 0.5);
-    upBg.strokeRoundedRect(-140, -20, 120, 40, 8);
-    
-    this.oddsUpText = this.add.text(-80, 0, `${t(this.language, 'hilo.up')} 1.95x`, {
-      fontFamily: 'Rajdhani',
-      fontSize: '18px',
-      color: '#00b894',
-      fontStyle: 'bold'
-    }).setOrigin(0.5);
-
-    // DOWN Odds
-    const downBg = this.add.graphics();
-    downBg.fillStyle(0xd63031, 0.1);
-    downBg.fillRoundedRect(20, -20, 120, 40, 8);
-    downBg.lineStyle(1, 0xd63031, 0.5);
-    downBg.strokeRoundedRect(20, -20, 120, 40, 8);
-
-    this.oddsDownText = this.add.text(80, 0, `${t(this.language, 'hilo.down')} 1.95x`, {
-      fontFamily: 'Rajdhani',
-      fontSize: '18px',
-      color: '#d63031',
-      fontStyle: 'bold'
-    }).setOrigin(0.5);
-
-    this.oddsContainer.add([upBg, downBg, this.oddsUpText, this.oddsDownText]);
-    this.bettingUI.add([this.bettingLabel, this.oddsContainer]);
+    this.bettingUI.add([this.bettingLabel]);
 
     // Pulse animation for label
     this.tweens.add({
@@ -383,20 +345,6 @@ export class HiLoScene extends Phaser.Scene {
 
   private createPendingUI() {
     this.pendingUI = this.add.container(this.cx, this.cy + this.phaseOffsetY);
-
-    // Locked Price
-    this.lockedPriceLabel = this.add.text(0, -40, t(this.language, 'scene.lockedPrice'), {
-      fontFamily: 'Rajdhani',
-      fontSize: '12px',
-      color: '#636e72',
-      fontStyle: 'bold'
-    }).setOrigin(0.5);
-
-    this.lockedPriceText = this.add.text(0, -20, '00000.00', {
-      fontFamily: 'Roboto Mono',
-      fontSize: '24px',
-      color: '#dfe6e9'
-    }).setOrigin(0.5);
 
     // Comparison Line (Bar between Locked and Player Bet)
     this.comparisonLine = this.add.rectangle(0, 10, 2, 40, 0x636e72).setOrigin(0.5, 0);
@@ -421,7 +369,7 @@ export class HiLoScene extends Phaser.Scene {
     }).setOrigin(0.5);
 
     this.playerBetCard.add([this.playerBetBg, this.playerBetStatusText, this.playerBetDetailsText]);
-    this.pendingUI.add([this.lockedPriceLabel, this.lockedPriceText, this.comparisonLine, this.playerBetCard]);
+    this.pendingUI.add([this.comparisonLine, this.playerBetCard]);
   }
 
   private createFooter() {
@@ -543,7 +491,6 @@ export class HiLoScene extends Phaser.Scene {
     // Static labels
     if (this.priceLabel) this.priceLabel.setText(t(this.language, 'scene.bitcoinPrice'));
     if (this.bettingLabel) this.bettingLabel.setText(t(this.language, 'scene.placeBets'));
-    if (this.lockedPriceLabel) this.lockedPriceLabel.setText(t(this.language, 'scene.lockedPrice'));
     if (this.balanceLabelText) this.balanceLabelText.setText(t(this.language, 'scene.walletBalance'));
 
     // Round-dependent labels
@@ -551,8 +498,6 @@ export class HiLoScene extends Phaser.Scene {
       this.roundIdText.setText(`${t(this.language, 'scene.roundPrefix')} #${this.round.id}`);
       if (this.round.status === 'BETTING') {
         this.drawStatusBadge(0x00b894, t(this.language, 'scene.betsOpen'));
-        this.oddsUpText.setText(`${t(this.language, 'hilo.up')} ${this.round.oddsUp.toFixed(2)}x`);
-        this.oddsDownText.setText(`${t(this.language, 'hilo.down')} ${this.round.oddsDown.toFixed(2)}x`);
       } else if (this.round.status === 'RESULT_PENDING') {
         this.drawStatusBadge(0xe17055, t(this.language, 'scene.locked'));
       }
@@ -599,10 +544,6 @@ export class HiLoScene extends Phaser.Scene {
     if (state.status === 'BETTING') {
       this.drawStatusBadge(0x00b894, t(this.language, 'scene.betsOpen'));
       this.transitionToPhase('betting');
-      
-      // Update Odds
-      this.oddsUpText.setText(`${t(this.language, 'hilo.up')} ${state.oddsUp.toFixed(2)}x`);
-      this.oddsDownText.setText(`${t(this.language, 'hilo.down')} ${state.oddsDown.toFixed(2)}x`);
 
       // Reset Player Data
       this.playerBetSide = undefined;
@@ -615,10 +556,6 @@ export class HiLoScene extends Phaser.Scene {
     } else if (state.status === 'RESULT_PENDING') {
       this.drawStatusBadge(0xe17055, t(this.language, 'scene.locked'));
       this.transitionToPhase('pending');
-      
-      if (state.lockedPrice) {
-        this.lockedPriceText.setText(state.lockedPrice.toFixed(2));
-      }
     } else {
        this.drawStatusBadge(0x0984e3, 'COMPLETED');
        // No specific UI for completed, waiting for next round or results overlay
@@ -759,9 +696,6 @@ export class HiLoScene extends Phaser.Scene {
 
     const wins = bets.filter((b) => b.result === 'WIN');
     const labels = wins.map((b) => {
-      if (b.betType === 'HILO') {
-        return b.side ? `HILO ${b.side}` : 'HILO';
-      }
       if (!b.digitType) return 'DIGIT';
       const sel = b.selection ?? '';
       switch (b.digitType) {
@@ -857,13 +791,12 @@ export class HiLoScene extends Phaser.Scene {
     else this.resultTitleText.setColor('#b2bec3');
 
     // Stats
-    const locked = payload.lockedPrice?.toFixed(2) ?? '--';
     const final = payload.finalPrice?.toFixed(2) ?? '--';
     
     const statsText = this.add.text(
       0,
       -25,
-      `${t(this.language, 'scene.lockedLabel')}: ${locked}\n${t(this.language, 'scene.finalLabel')}:  ${final}`,
+      `${t(this.language, 'scene.finalLabel')}:  ${final}`,
       {
       fontFamily: 'Roboto Mono',
       fontSize: '24px',
@@ -882,9 +815,6 @@ export class HiLoScene extends Phaser.Scene {
       extraLines.push(
         `DIGITS: ${digitResult}${digitSum !== null ? `  SUM: ${digitSum}` : ''}`,
       );
-    }
-    if (payload.winningSide) {
-      extraLines.push(`HILO WINNER: ${payload.winningSide}`);
     }
 
     if (extraLines.length) {
