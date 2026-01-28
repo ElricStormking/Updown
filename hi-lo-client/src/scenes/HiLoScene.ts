@@ -1,63 +1,98 @@
 import Phaser from 'phaser';
 import type {
-  BetSide,
   DigitBetType,
+  GameConfig,
   PriceUpdate,
   RoundLockPayload,
   RoundResultPayload,
   RoundStatePayload,
 } from '../types';
 import { getInitialLanguage, t, type LanguageCode } from '../i18n';
+import { setStatus } from '../ui/domControls';
+import { state, subscribe } from '../state/gameState';
+
+type BetHandlers = {
+  onSelectToken: (value: number) => void;
+  onClearTokens: () => Promise<void> | void;
+  onPlaceDigitBet: (selection: {
+    digitType: DigitBetType;
+    selection?: string;
+  }) => Promise<void> | void;
+  onOpenSettings?: () => void;
+};
+
+const formatPayoutRatio = (value: number) => {
+  if (!Number.isFinite(value)) return '--';
+  const rounded = Math.round(value * 100) / 100;
+  const asStr = rounded.toFixed(2).replace(/\.?0+$/, '');
+  return `${asStr}:1`;
+};
+
+const DEFAULT_SUM_PAYOUTS: Record<number, number> = {
+  1: 130,
+  2: 70,
+  3: 40,
+  4: 26,
+  5: 18,
+  6: 14,
+  7: 12,
+  8: 10,
+  9: 9,
+  10: 8,
+  11: 8,
+  12: 8,
+  13: 7,
+  14: 7,
+  15: 8,
+  16: 8,
+  17: 8,
+  18: 9,
+  19: 10,
+  20: 12,
+  21: 14,
+  22: 18,
+  23: 26,
+  24: 40,
+  25: 70,
+  26: 130,
+};
 
 export class HiLoScene extends Phaser.Scene {
   private language: LanguageCode = getInitialLanguage();
   private uiReady = false;
-  // -- Containers --
-  private mainContainer!: Phaser.GameObjects.Container;
-  private phaseContainer!: Phaser.GameObjects.Container; // Groups betting/pending/result UI
-  private backgroundContainer!: Phaser.GameObjects.Container;
+  private handlers: BetHandlers | null = null;
+
+  private round?: RoundStatePayload;
+  private lastPrice?: PriceUpdate;
+
+  private priceText?: Phaser.GameObjects.Text;
+  private priceArrowText?: Phaser.GameObjects.Text;
+  private priceLabelText?: Phaser.GameObjects.Text;
+  private priceTextY = 465;
+  private timerText?: Phaser.GameObjects.Text;
+  private roundText?: Phaser.GameObjects.Text;
+  private statusText?: Phaser.GameObjects.Text;
+  private balanceText?: Phaser.GameObjects.Text;
+  private oddsLeftText?: Phaser.GameObjects.Text;
+  private oddsCenterText?: Phaser.GameObjects.Text;
+  private oddsRightText?: Phaser.GameObjects.Text;
+  private lastResultDigits: Phaser.GameObjects.Image[] = [];
+  private roundDigitsText?: Phaser.GameObjects.Text;
+
+  private chipButtons = new Map<number, { image: Phaser.GameObjects.Image; baseScale: number }>();
+  private betTargets = new Map<string, Phaser.GameObjects.Image>();
+  private tokenSprites = new Map<string, Phaser.GameObjects.Container>();
+  private oddsTextByKey = new Map<string, Phaser.GameObjects.Text>();
+  private baseOddsByKey = new Map<string, number>();
+  private bonusOddsByKey = new Map<string, number>();
+  private bonusTweens = new Map<string, Phaser.Tweens.Tween>();
+  private winnerTweens = new Map<string, Phaser.Tweens.Tween>();
+  private bonusEmitters = new Map<string, Phaser.GameObjects.Particles.ParticleEmitter>();
+
+  private clearTokensButton?: Phaser.GameObjects.Image;
+  private settingButton?: Phaser.GameObjects.Image;
+
   private resultOverlay?: Phaser.GameObjects.Container;
-
-  // -- Background --
-  private grid?: Phaser.GameObjects.TileSprite;
-  private vignette?: Phaser.GameObjects.Rectangle;
-  private particles?: Phaser.GameObjects.Particles.ParticleEmitter;
-
-  // -- Top Bar --
-  private roundIdText!: Phaser.GameObjects.Text;
-  private statusBadge!: Phaser.GameObjects.Container;
-  private statusText!: Phaser.GameObjects.Text;
-  private statusBg!: Phaser.GameObjects.Graphics;
-  private connectionDot!: Phaser.GameObjects.Arc;
-
-  // -- Center Stage (Price) --
-  private priceContainer!: Phaser.GameObjects.Container;
-  private priceText!: Phaser.GameObjects.Text;
-  private arrowText!: Phaser.GameObjects.Text;
-  private priceLabel!: Phaser.GameObjects.Text;
-  private timerRing!: Phaser.GameObjects.Graphics;
-  private timerText!: Phaser.GameObjects.Text;
-  private centerCardBg!: Phaser.GameObjects.Graphics;
-
-  // -- Betting Phase UI --
-  private bettingUI!: Phaser.GameObjects.Container;
-  private bettingLabel!: Phaser.GameObjects.Text;
-
-  // -- Pending Phase UI --
-  private pendingUI!: Phaser.GameObjects.Container;
-  private comparisonLine!: Phaser.GameObjects.Rectangle;
-  private playerBetCard!: Phaser.GameObjects.Container;
-  private playerBetStatusText!: Phaser.GameObjects.Text;
-  private playerBetDetailsText!: Phaser.GameObjects.Text;
-  private playerBetBg!: Phaser.GameObjects.Graphics;
-
-  // -- Footer (History) --
-  private footerContainer!: Phaser.GameObjects.Container;
-  private balanceLabelText!: Phaser.GameObjects.Text;
-  private balanceText!: Phaser.GameObjects.Text;
-  // We'll implement a simple placeholder for history or remove if not fed data yet.
-
-  // -- Result Overlay --
   private resultTitleText?: Phaser.GameObjects.Text;
   private resultPayoutText?: Phaser.GameObjects.Text;
   private resultWinnersText?: Phaser.GameObjects.Text;
@@ -65,584 +100,876 @@ export class HiLoScene extends Phaser.Scene {
   private resultRoundId?: number;
   private resultDisplayDurationMs = 8000;
 
-  // -- State --
-  private round?: RoundStatePayload;
-  private lastPrice?: PriceUpdate;
-  private playerBetSide?: BetSide;
-  private playerBetLockedPrice: number | null = null;
-  private playerBetAmount: number | null = null;
-  private playerDigitSelections: Array<{
-    digitType: DigitBetType;
-    selection: string | null;
-  }> = [];
-
-  private ringRadius = 130;
-  private ringThickness = 6;
-  private priceFontSize = 56;
-  private timerFontSize = 22;
-  private priceLabelFontSize = 14;
-  private arrowFontSize = 32;
-  private priceLabelOffsetY = -60;
-  private timerTextOffsetY = 70;
-  private centerCardWidth = 400;
-  private centerCardHeight = 280;
-  private centerCardRadius = 24;
-  private centerCardYOffset = -40;
-  private phaseOffsetY = 100;
-  
-  private cx = 0;
-  private cy = 0;
+  private unsubscribeState?: () => void;
+  private statusListener?: (event: Event) => void;
 
   constructor() {
     super('HiLoScene');
   }
 
+  setBetHandlers(handlers: BetHandlers) {
+    this.handlers = handlers;
+  }
+
   preload() {
     this.cameras.main.setBackgroundColor('#050505');
+    this.load.setPath('main_screen_UI');
+    const loadImage = (key: string, file = `${key}.png`) => {
+      this.load.image(key, encodeURI(file));
+    };
+
+    [
+      'bg',
+      'bg_light',
+      'bg_line_left',
+      'bg_line_right',
+      'logo_combi3',
+      '3N_box',
+      'time',
+      'box_round',
+      'box_amount',
+      'odd_box_left',
+      'odd_box_mid',
+      'odd_box_right',
+      'button_small',
+      'button_odd',
+      'button_any triple',
+      'button_even',
+      'button_big',
+      'title_bigbox_yellow',
+      'title_bigbox_purple',
+      'title_on_double',
+      'title_on_triple',
+      'title_on_single',
+      'title_sum',
+      'token_bar_box',
+      'token_bar_clean',
+      'setting',
+      'chip_10',
+      'chip_50',
+      'chip_100',
+      'chip_150',
+      'chip_200',
+      'chip_300',
+      'chip_500',
+    ].forEach((key) => loadImage(key));
+
+    for (let i = 0; i <= 9; i += 1) {
+      loadImage(`number_${i}`);
+      loadImage(`number_${i}${i}`);
+      loadImage(`number_${i}${i}${i}`);
+    }
+
+    for (let sum = 3; sum <= 27; sum += 1) {
+      loadImage(`number_sum_${String(sum).padStart(2, '0')}`);
+    }
   }
 
   create() {
-    this.cx = this.scale.width / 2;
-    this.cy = this.scale.height / 2;
-    this.setLayoutMetrics();
+    this.createMainLayout();
 
-    // 1. Background
-    this.createBackground();
-
-    // 2. Main Structure
-    this.mainContainer = this.add.container(0, 0);
-    this.phaseContainer = this.add.container(0, 0);
-    
-    // 3. Top Bar
-    this.createTopBar();
-
-    // 4. Center Card (The "Hero")
-    this.createCenterCard();
-
-    // 5. Phase UIs
-    this.createBettingUI();
-    this.createPendingUI();
-    
-    // 6. Footer
-    this.createFooter();
-    this.createBalanceDisplay();
-
-    // Assemble
-    this.phaseContainer.add([this.bettingUI, this.pendingUI]);
-    this.mainContainer.add([this.priceContainer, this.phaseContainer]);
-    
-    // Initial State
-    this.bettingUI.setVisible(false);
-    this.pendingUI.setVisible(false);
-    this.bettingUI.setAlpha(0);
-    this.pendingUI.setAlpha(0);
-
-    // UI is now constructed; allow live language updates and apply current language.
     this.uiReady = true;
     this.setLanguage(this.language);
-  }
+    this.applyConfigOdds(state.config);
+    this.syncSelectedToken(state.selectedTokenValue);
+    this.syncTokenPlacements(state.tokenPlacements);
+    this.syncActiveSelections(state.digitSelections);
+    this.syncDigitResult(state.lastDigitResult);
+    this.syncBalance(state.walletBalance);
 
-  private setLayoutMetrics() {
-    const isCompact = this.scale.width <= 420;
-    if (!isCompact) {
-      return;
+    this.unsubscribeState = subscribe((nextState) => {
+      this.applyConfigOdds(nextState.config);
+      this.syncSelectedToken(nextState.selectedTokenValue);
+      this.syncTokenPlacements(nextState.tokenPlacements);
+      this.syncActiveSelections(nextState.digitSelections);
+      this.syncDigitResult(nextState.lastDigitResult);
+      this.syncBalance(nextState.walletBalance);
+    });
+
+    if (typeof window !== 'undefined') {
+      this.statusListener = (event) => {
+        const detail = (event as CustomEvent<{ message: string; isError?: boolean }>)
+          .detail;
+        if (!detail) return;
+        this.statusText?.setText(detail.message);
+        this.statusText?.setColor(detail.isError ? '#ff7675' : '#00ffb2');
+      };
+      window.addEventListener('app:status', this.statusListener);
     }
 
-    const isShort = this.scale.height <= 260;
-    const minDim = Math.min(this.scale.width, this.scale.height);
-    const radiusFactor = isShort ? 0.36 : 0.42;
-    const maxRadius = isShort ? 110 : 160;
-    const minRadius = isShort ? 60 : 90;
-
-    this.ringRadius = Math.round(minDim * radiusFactor);
-    this.ringRadius = Math.max(minRadius, Math.min(maxRadius, this.ringRadius));
-    this.ringThickness = isShort ? 5 : 7;
-    this.priceFontSize = Math.round(this.ringRadius * (isShort ? 0.4 : 0.45));
-    this.timerFontSize = Math.round(this.ringRadius * (isShort ? 0.2 : 0.18));
-    this.priceLabelFontSize = isShort
-      ? Math.max(10, Math.round(this.ringRadius * 0.14))
-      : 14;
-    this.arrowFontSize = Math.round(
-      this.ringRadius * (isShort ? 0.18 : 0.22),
-    );
-    this.priceLabelOffsetY = Math.round(
-      -this.ringRadius * (isShort ? 0.55 : 0.45),
-    );
-    this.timerTextOffsetY = Math.round(
-      this.ringRadius * (isShort ? 0.52 : 0.55),
-    );
-
-    this.centerCardWidth = Math.min(400, Math.round(this.scale.width - 24));
-    const desiredCardHeight = Math.round(
-      this.ringRadius * (isShort ? 2.1 : 1.7),
-    );
-    const availableHeight = Math.round(this.scale.height - 16);
-    const minCardHeight = isShort
-      ? Math.min(150, availableHeight)
-      : 240;
-    this.centerCardHeight = Math.min(
-      300,
-      Math.min(availableHeight, Math.max(minCardHeight, desiredCardHeight)),
-    );
-    this.centerCardRadius = 20;
-    this.centerCardYOffset = isShort ? -10 : -30;
-    this.phaseOffsetY = Math.round(
-      this.ringRadius * (isShort ? 0.95 : 1.05),
-    );
-  }
-
-  private createBackground() {
-    this.backgroundContainer = this.add.container(0, 0);
-
-    // Grid
-    const gridGraphics = this.make.graphics({ x: 0, y: 0, add: false } as any);
-    gridGraphics.lineStyle(1, 0x1a2639, 1.0);
-    gridGraphics.strokeRect(0, 0, 60, 60);
-    gridGraphics.generateTexture('gridTexture', 60, 60);
-
-    this.grid = this.add.tileSprite(this.cx, this.cy, this.scale.width, this.scale.height, 'gridTexture')
-      .setAlpha(0.2)
-      .setTint(0x0984e3); // Blue tint
-    
-    // Vignette (Radial Gradient simulation with alpha)
-    const vignetteOverlay = this.add.graphics();
-    vignetteOverlay.fillGradientStyle(0x000000, 0x000000, 0x000000, 0x000000, 0, 0, 0.8, 0.8);
-    vignetteOverlay.fillRect(0, 0, this.scale.width, this.scale.height);
-    
-    this.backgroundContainer.add([this.grid, vignetteOverlay]);
-  }
-
-  private createTopBar() {
-    // Round ID
-    this.roundIdText = this.add.text(
-      30,
-      30,
-      `${t(this.language, 'scene.roundPrefix')} #--`,
-      {
-      fontFamily: 'Rajdhani',
-      fontSize: '24px',
-      color: '#dfe6e9',
-      fontStyle: 'bold'
-      },
-    ).setOrigin(0, 0.5);
-
-    // Status Badge (Top Right)
-    this.statusBadge = this.add.container(this.scale.width - 130, 30);
-    this.statusBg = this.add.graphics();
-    
-    this.connectionDot = this.add.circle(-45, 0, 4, 0xffffff);
-    
-    this.statusText = this.add.text(0, 0, t(this.language, 'scene.connecting'), {
-      fontFamily: 'Rajdhani',
-      fontSize: '16px',
-      color: '#ffffff',
-      fontStyle: 'bold'
-    }).setOrigin(0.5);
-
-    this.statusBadge.add([this.statusBg, this.connectionDot, this.statusText]);
-    this.drawStatusBadge(0x636e72, t(this.language, 'scene.connecting'));
-  }
-
-  private drawStatusBadge(color: number, text: string) {
-    this.statusBg.clear();
-    // No background fill, just text color and dot
-    this.connectionDot.setFillStyle(color);
-    this.statusText.setText(text).setColor('#ffffff');
-    
-    // Maybe a subtle pill background
-    this.statusBg.fillStyle(0x000000, 0.3);
-    this.statusBg.fillRoundedRect(-70, -15, 140, 30, 15);
-    this.statusBg.lineStyle(1, color, 0.6);
-    this.statusBg.strokeRoundedRect(-70, -15, 140, 30, 15);
-  }
-
-  private createCenterCard() {
-    this.priceContainer = this.add.container(
-      this.cx,
-      this.cy + this.centerCardYOffset,
-    );
-
-    // Card Background
-    this.centerCardBg = this.add.graphics();
-    this.centerCardBg.fillStyle(0x1e272e, 0.8);
-    this.centerCardBg.fillRoundedRect(
-      -this.centerCardWidth / 2,
-      -this.centerCardHeight / 2,
-      this.centerCardWidth,
-      this.centerCardHeight,
-      this.centerCardRadius,
-    );
-    this.centerCardBg.lineStyle(2, 0x2d3436, 1);
-    this.centerCardBg.strokeRoundedRect(
-      -this.centerCardWidth / 2,
-      -this.centerCardHeight / 2,
-      this.centerCardWidth,
-      this.centerCardHeight,
-      this.centerCardRadius,
-    );
-    // Note: We might hide this bg or make it very subtle, focusing on the timer ring
-
-    // Timer Ring (Behind everything)
-    this.timerRing = this.add.graphics();
-    this.timerText = this.add.text(0, this.timerTextOffsetY, '', {
-      fontFamily: 'Roboto Mono',
-      fontSize: `${this.timerFontSize}px`,
-      color: '#b2bec3',
-      fontStyle: 'bold',
-    }).setOrigin(0.5);
-
-    // Price Label
-    this.priceLabel = this.add.text(0, this.priceLabelOffsetY, t(this.language, 'scene.bitcoinPrice'), {
-      fontFamily: 'Rajdhani',
-      fontSize: `${this.priceLabelFontSize}px`,
-      color: '#636e72',
-      fontStyle: 'bold'
-    }).setOrigin(0.5).setLetterSpacing(2);
-
-    // Price Text
-    this.priceText = this.add.text(0, 0, '00000.00', {
-      fontFamily: 'Roboto Mono',
-      fontSize: `${this.priceFontSize}px`,
-      color: '#ffffff',
-      fontStyle: 'bold'
-    }).setOrigin(0.5);
-
-    // Arrow
-    this.arrowText = this.add.text(Math.round(this.ringRadius + 10), 0, '▲', {
-      fontSize: `${this.arrowFontSize}px`,
-      color: '#ffffff'
-    }).setOrigin(0.5).setAlpha(0);
-
-    this.priceContainer.add([
-      this.timerRing,
-      this.priceLabel,
-      this.priceText,
-      this.arrowText,
-      this.timerText,
-    ]);
-  }
-
-  private createBettingUI() {
-    this.bettingUI = this.add.container(this.cx, this.cy + this.phaseOffsetY);
-
-    this.bettingLabel = this.add.text(0, -20, t(this.language, 'scene.placeBets'), {
-      fontFamily: 'Rajdhani',
-      fontSize: '20px',
-      color: '#00b894',
-      fontStyle: 'bold'
-    }).setOrigin(0.5).setLetterSpacing(1);
-    this.bettingUI.add([this.bettingLabel]);
-
-    // Pulse animation for label
-    this.tweens.add({
-      targets: this.bettingLabel,
-      alpha: 0.6,
-      yoyo: true,
-      duration: 1000,
-      repeat: -1
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.unsubscribeState?.();
+      if (this.statusListener && typeof window !== 'undefined') {
+        window.removeEventListener('app:status', this.statusListener);
+      }
     });
   }
 
-  private createPendingUI() {
-    this.pendingUI = this.add.container(this.cx, this.cy + this.phaseOffsetY);
+  private createMainLayout() {
+    const addImage = (
+      x: number,
+      y: number,
+      key: string,
+      scaleX = 1,
+      scaleY = scaleX,
+    ) => this.add.image(x, y, key).setScale(scaleX, scaleY);
 
-    // Comparison Line (Bar between Locked and Player Bet)
-    this.comparisonLine = this.add.rectangle(0, 10, 2, 40, 0x636e72).setOrigin(0.5, 0);
+    addImage(534, 1343, 'bg', 1.1, 1.5);
 
-    // Player Bet Card
-    this.playerBetCard = this.add.container(0, 60);
-    
-    this.playerBetBg = this.add.graphics();
-    // Draw function will be dynamic based on win/lose
+    const buttonAnyTriple = addImage(543, 868, 'button_any triple', 0.75);
+    const buttonBig = addImage(950, 868, 'button_big', 0.75);
+    const buttonEven = addImage(739, 868, 'button_even', 0.75);
+    const buttonOdd = addImage(347, 868, 'button_odd', 0.75);
+    const buttonSmall = addImage(135, 868, 'button_small', 0.75);
 
-    this.playerBetStatusText = this.add.text(0, -10, '', {
-      fontFamily: 'Rajdhani',
-      fontSize: '24px',
-      fontStyle: 'bold',
-      color: '#ffffff'
-    }).setOrigin(0.5);
+    addImage(529, 1155, 'title_bigbox_yellow', 0.75);
+    addImage(535, 1014, 'title_on_double', 0.75);
+    addImage(530, 1372, 'title_bigbox_yellow', 0.75);
+    addImage(532, 1231, 'title_on_triple', 0.75);
+    addImage(531, 1600, 'title_bigbox_purple', 0.75);
+    addImage(536, 1459, 'title_sum', 0.75);
+    addImage(535, 1909, 'title_on_single', 0.75);
 
-    this.playerBetDetailsText = this.add.text(0, 14, '', {
-      fontFamily: 'Rajdhani',
-      fontSize: '14px',
-      color: '#b2bec3'
-    }).setOrigin(0.5);
+    const doubleDigits: Array<[string, number, number]> = [
+      ['00', 141, 1084],
+      ['11', 335, 1082],
+      ['22', 529, 1082],
+      ['33', 725, 1082],
+      ['44', 921, 1082],
+      ['55', 139, 1154],
+      ['66', 331, 1154],
+      ['77', 527, 1154],
+      ['88', 724, 1154],
+      ['99', 920, 1154],
+    ];
+    doubleDigits.forEach(([value, x, y]) => {
+      const image = addImage(Number(x), Number(y), `number_${value}`, 0.75);
+      this.registerDigitCell(image, 'DOUBLE', value);
+    });
 
-    this.playerBetCard.add([this.playerBetBg, this.playerBetStatusText, this.playerBetDetailsText]);
-    this.pendingUI.add([this.comparisonLine, this.playerBetCard]);
-  }
+    const tripleDigits: Array<[string, number, number]> = [
+      ['000', 138, 1311],
+      ['111', 331, 1311],
+      ['222', 526, 1311],
+      ['333', 724, 1311],
+      ['444', 922, 1311],
+      ['555', 138, 1383],
+      ['666', 331, 1383],
+      ['777', 528, 1382],
+      ['888', 725, 1383],
+      ['999', 921, 1382],
+    ];
+    tripleDigits.forEach(([value, x, y]) => {
+      const image = addImage(Number(x), Number(y), `number_${value}`, 0.75);
+      this.registerDigitCell(image, 'TRIPLE', value);
+    });
 
-  private createFooter() {
-    this.footerContainer = this.add.container(this.cx, this.scale.height - 40);
-    // Placeholder for history
-  }
+    const sumDigits: Array<[string, number, number]> = [
+      ['03', 140, 1536],
+      ['04', 335, 1536],
+      ['05', 532, 1536],
+      ['06', 730, 1536],
+      ['07', 924, 1536],
+      ['08', 140, 1613],
+      ['09', 335, 1613],
+      ['10', 532, 1613],
+      ['11', 730, 1613],
+      ['12', 924, 1613],
+      ['13', 140, 1688],
+      ['14', 335, 1688],
+      ['15', 532, 1688],
+      ['16', 730, 1688],
+      ['17', 924, 1688],
+      ['18', 140, 1761],
+      ['19', 335, 1761],
+      ['20', 532, 1761],
+      ['21', 730, 1761],
+      ['22', 924, 1761],
+      ['23', 140, 1833],
+      ['24', 335, 1833],
+      ['25', 532, 1833],
+      ['26', 730, 1833],
+      ['27', 924, 1833],
+    ];
+    sumDigits.forEach(([value, x, y]) => {
+      const selection = String(Number(value));
+      const image = addImage(Number(x), Number(y), `number_sum_${value}`, 0.75);
+      this.registerDigitCell(image, 'SUM', selection);
+    });
 
-  private createBalanceDisplay() {
-    const x = this.scale.width - 30;
-    const y = this.scale.height - 30;
+    const singleDigits: Array<[string, number, number]> = [
+      ['0', 137, 1987],
+      ['1', 333, 1987],
+      ['2', 533, 1987],
+      ['3', 729, 1987],
+      ['4', 925, 1987],
+      ['5', 137, 2060],
+      ['6', 333, 2060],
+      ['7', 533, 2060],
+      ['8', 729, 2060],
+      ['9', 925, 2060],
+    ];
+    singleDigits.forEach(([value, x, y]) => {
+      const image = addImage(Number(x), Number(y), `number_${value}`, 0.75);
+      this.registerDigitCell(image, 'SINGLE', value);
+    });
 
-    this.balanceLabelText = this.add.text(x, y - 30, t(this.language, 'scene.walletBalance'), {
-      fontFamily: 'Rajdhani',
-      fontSize: '12px',
-      color: '#636e72',
-      fontStyle: 'bold'
-    }).setOrigin(1, 0.5);
+    const useFloatingTokenBar = true;
+    if (!useFloatingTokenBar) {
+      addImage(534, 2219, 'token_bar_box', 0.75);
+      this.clearTokensButton = addImage(954, 2157, 'token_bar_clean', 0.75);
 
-    this.balanceText = this.add.text(x, y, '0.00 USDT', {
-      fontFamily: 'Roboto Mono',
-      fontSize: '28px',
-      color: '#00b894',
-      fontStyle: 'bold'
-    }).setOrigin(1, 0.5);
-  }
+      const chipPositions: Array<[number, number, number]> = [
+        [10, 234, 2224],
+        [100, 334, 2224],
+        [150, 434, 2224],
+        [200, 534, 2224],
+        [300, 634, 2224],
+        [50, 734, 2224],
+        [500, 834, 2224],
+      ];
+      chipPositions.forEach(([value, x, y]) => {
+        const image = addImage(x, y, `chip_${value}`, 0.65);
+        this.registerChipButton(value, image);
+      });
 
-  // -- Update Loop --
-
-  update() {
-    // Background animation
-    if (this.grid) {
-      this.grid.tilePositionY -= 0.2;
-      this.grid.tilePositionX += 0.1;
+      this.settingButton = addImage(1022, 2262, 'setting', 0.75);
     }
 
-    if (!this.round) return;
+    addImage(540, 973, 'bg_light', 0.72);
+    addImage(936, 115, 'bg_line_right', 0.7);
+    addImage(539, 66, 'logo_combi3', 0.7);
+    addImage(141, 115, 'bg_line_left', 0.7);
 
-    this.updateTimerRing();
-    this.updatePendingLogic();
+    addImage(420, 181, '3N_box', 0.7);
+    addImage(538, 181, '3N_box', 0.7);
+    addImage(655, 181, '3N_box', 0.7);
+
+    addImage(274, 209, 'time', 0.7);
+    addImage(130, 199, 'box_round', 0.7);
+    addImage(894, 200, 'box_amount', 0.7);
+
+    addImage(543, 743, 'odd_box_mid', 0.7);
+    addImage(277, 742, 'odd_box_left', 0.7);
+    addImage(808, 742, 'odd_box_right', 0.7);
+
+    this.oddsLeftText = this.add
+      .text(144, 733, '', {
+        fontFamily: 'Rajdhani',
+        fontSize: '18px',
+        color: '#f8fafc',
+        fontStyle: 'bold',
+      })
+      .setScale(1.3)
+      .setOrigin(0, 0.5);
+    this.oddsRightText = this.add
+      .text(664, 733, '', {
+        fontFamily: 'Rajdhani',
+        fontSize: '18px',
+        color: '#f8fafc',
+        fontStyle: 'bold',
+      })
+      .setScale(1.3)
+      .setOrigin(0, 0.5);
+    this.oddsCenterText = this.add
+      .text(520, 733, '', {
+        fontFamily: 'Rajdhani',
+        fontSize: '20px',
+        color: '#ffd166',
+        fontStyle: 'bold',
+      })
+      .setScale(1.3)
+      .setOrigin(0.5, 0.5);
+
+    this.roundText = this.add
+      .text(130, 199, `${t(this.language, 'scene.roundPrefix')} #--`, {
+        fontFamily: 'Rajdhani',
+        fontSize: '20px',
+        color: '#f8fafc',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5);
+
+    this.timerText = this.add
+      .text(320, 209, '--s', {
+        fontFamily: 'Roboto Mono',
+        fontSize: '20px',
+        color: '#00ffb2',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0, 0.5);
+
+    this.balanceText = this.add
+      .text(894, 200, '0.00 USDT', {
+        fontFamily: 'Roboto Mono',
+        fontSize: '20px',
+        color: '#00ffb2',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5);
+
+    this.statusText = this.add
+      .text(540, 260, t(this.language, 'scene.connecting'), {
+        fontFamily: 'Rajdhani',
+        fontSize: '18px',
+        color: '#b2bec3',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5);
+
+    this.priceLabelText = this.add
+      .text(540, 900, t(this.language, 'scene.bitcoinPrice'), {
+        fontFamily: 'Rajdhani',
+        fontSize: '18px',
+        color: '#cbd5f5',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5);
+
+    this.priceText = this.add
+      .text(540, this.priceTextY, '00000.00', {
+        fontFamily: 'Roboto Mono',
+        fontSize: '54px',
+        color: '#ffffff',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5);
+
+    this.priceArrowText = this.add
+      .text(720, this.priceTextY, '▲', {
+        fontFamily: 'Rajdhani',
+        fontSize: '30px',
+        color: '#ffffff',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5)
+      .setAlpha(0);
+
+    this.roundDigitsText = this.add
+      .text(538, 181, '0   0   0', {
+        fontFamily: 'Roboto Mono',
+        fontSize: '28px',
+        color: '#f8fafc',
+        fontStyle: 'bold',
+        align: 'center',
+      })
+      .setOrigin(0.5, 0.5);
+
+    this.registerBetButton(buttonSmall, 'SMALL');
+    this.registerBetButton(buttonOdd, 'ODD');
+    this.registerBetButton(buttonAnyTriple, 'ANY_TRIPLE');
+    this.registerBetButton(buttonEven, 'EVEN');
+    this.registerBetButton(buttonBig, 'BIG');
+
+    if (this.clearTokensButton) {
+      this.makeInteractive(this.clearTokensButton, () => this.handleClearTokens());
+    }
+    if (this.settingButton) {
+      this.makeInteractive(this.settingButton, () => this.openSettings());
+    }
+
+    this.compressBodyLayout(500, 0.82);
   }
 
-  private updateTimerRing() {
-    if (!this.round) return;
+  private compressBodyLayout(pivotY: number, scale: number) {
+    this.children.each((child) => {
+      const node = child as Phaser.GameObjects.GameObject & { y?: number };
+      if (typeof node.y !== 'number') return;
+      if (node.y < pivotY) return;
+      node.y = pivotY + (node.y - pivotY) * scale;
+    });
+  }
 
+  private buildDigitKey(digitType: DigitBetType, selection?: string) {
+    return `DIGIT|${digitType}|${selection ?? ''}`;
+  }
+
+  private makeInteractive(
+    image: Phaser.GameObjects.Image,
+    handler: () => void,
+  ) {
+    image.setInteractive({ useHandCursor: true });
+    image.on('pointerdown', handler);
+  }
+
+  private registerBetButton(image: Phaser.GameObjects.Image, digitType: DigitBetType) {
+    const key = this.buildDigitKey(digitType);
+    this.betTargets.set(key, image);
+    image.setData('baseScale', image.scaleX);
+    this.makeInteractive(image, () => this.handlePlaceDigitBet(digitType));
+    this.registerOddsText(key, image.x, image.y + 26, 14);
+  }
+
+  private registerDigitCell(
+    image: Phaser.GameObjects.Image,
+    digitType: DigitBetType,
+    selection: string,
+    oddsOffsetY = 22,
+  ) {
+    const key = this.buildDigitKey(digitType, selection);
+    this.betTargets.set(key, image);
+    image.setData('baseScale', image.scaleX);
+    this.makeInteractive(image, () =>
+      this.handlePlaceDigitBet(digitType, selection),
+    );
+    this.registerOddsText(key, image.x, image.y + oddsOffsetY, 12);
+  }
+
+  private registerChipButton(value: number, image: Phaser.GameObjects.Image) {
+    this.chipButtons.set(value, { image, baseScale: image.scaleX });
+    this.makeInteractive(image, () => this.handleSelectToken(value));
+  }
+
+  private registerOddsText(
+    key: string,
+    x: number,
+    y: number,
+    fontSize = 12,
+  ) {
+    const text = this.add
+      .text(x, y, '', {
+        fontFamily: 'Roboto Mono',
+        fontSize: `${fontSize}px`,
+        color: '#f8fafc',
+        fontStyle: 'bold',
+        align: 'center',
+      })
+      .setOrigin(0.5)
+      .setAlpha(0.9);
+    text.setDepth(6);
+    this.oddsTextByKey.set(key, text);
+  }
+
+  private handleSelectToken(value: number) {
+    if (!this.handlers?.onSelectToken) return;
+    this.handlers.onSelectToken(value);
+  }
+
+  private handleClearTokens() {
+    if (!this.handlers?.onClearTokens) return;
+    this.runHandler(() => this.handlers?.onClearTokens());
+  }
+
+  private openSettings() {
+    if (this.handlers?.onOpenSettings) {
+      this.handlers.onOpenSettings();
+      return;
+    }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('app:open-settings'));
+    }
+  }
+
+  private handlePlaceDigitBet(digitType: DigitBetType, selection?: string) {
+    if (!this.handlers?.onPlaceDigitBet) return;
+    this.runHandler(() =>
+      this.handlers?.onPlaceDigitBet({ digitType, selection }),
+    );
+  }
+
+  private runHandler(action: () => Promise<void> | void) {
+    try {
+      const result = action();
+      if (result && typeof (result as Promise<void>).then === 'function') {
+        (result as Promise<void>).catch((error) =>
+          setStatus(
+            error instanceof Error ? error.message : 'Action failed',
+            true,
+          ),
+        );
+      }
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'Action failed', true);
+    }
+  }
+
+  private applyConfigOdds(config?: GameConfig) {
+    const smallBigOdds = config?.digitPayouts?.smallBigOddEven ?? 1;
+    const anyTripleOdds = config?.digitPayouts?.anyTriple ?? 30;
+    const commonText = `${formatPayoutRatio(smallBigOdds)} LOSE IF ANY TRIPLE`;
+    this.oddsLeftText?.setText(commonText);
+    this.oddsRightText?.setText(commonText);
+    this.oddsCenterText?.setText(formatPayoutRatio(anyTripleOdds));
+    this.updateBaseOdds(config);
+    this.updateBonusOddsFromRound(this.round);
+  }
+
+  private updateBaseOdds(config?: GameConfig) {
+    const payouts = config?.digitPayouts;
+    const smallBig = payouts?.smallBigOddEven ?? 1;
+    const anyTriple = payouts?.anyTriple ?? 30;
+    const doubleOdds = payouts?.double ?? 1;
+    const tripleOdds = payouts?.triple ?? 1;
+    const singleOdds = payouts?.single?.single ?? 1;
+
+    this.baseOddsByKey.set(this.buildDigitKey('SMALL'), smallBig);
+    this.baseOddsByKey.set(this.buildDigitKey('BIG'), smallBig);
+    this.baseOddsByKey.set(this.buildDigitKey('ODD'), smallBig);
+    this.baseOddsByKey.set(this.buildDigitKey('EVEN'), smallBig);
+    this.baseOddsByKey.set(this.buildDigitKey('ANY_TRIPLE'), anyTriple);
+
+    ['00', '11', '22', '33', '44', '55', '66', '77', '88', '99'].forEach((value) => {
+      this.baseOddsByKey.set(this.buildDigitKey('DOUBLE', value), doubleOdds);
+    });
+
+    [
+      '000',
+      '111',
+      '222',
+      '333',
+      '444',
+      '555',
+      '666',
+      '777',
+      '888',
+      '999',
+    ].forEach((value) => {
+      this.baseOddsByKey.set(this.buildDigitKey('TRIPLE', value), tripleOdds);
+    });
+
+    for (let digit = 0; digit <= 9; digit += 1) {
+      this.baseOddsByKey.set(
+        this.buildDigitKey('SINGLE', String(digit)),
+        singleOdds,
+      );
+    }
+
+    for (let sum = 3; sum <= 27; sum += 1) {
+      const odds =
+        payouts?.sum?.[sum] ??
+        DEFAULT_SUM_PAYOUTS[sum] ??
+        0;
+      this.baseOddsByKey.set(this.buildDigitKey('SUM', String(sum)), odds);
+    }
+  }
+
+  private updateBonusOddsFromRound(round?: RoundStatePayload) {
+    this.bonusOddsByKey.clear();
+    const bonusEnabled = state.config?.bonusModeEnabled !== false;
+    if (!round || !bonusEnabled || round.status !== 'RESULT_PENDING') {
+      this.clearBonusHighlights();
+      this.syncOddsText();
+      return;
+    }
+
+    round.digitBonus?.slots?.forEach((slot) => {
+      if (
+        typeof slot.bonusRatio !== 'number' ||
+        !Number.isFinite(slot.bonusRatio)
+      ) {
+        return;
+      }
+      const key = this.buildDigitKey(slot.digitType, slot.selection ?? '');
+      this.bonusOddsByKey.set(key, slot.bonusRatio);
+    });
+    this.applyBonusHighlights();
+    this.syncOddsText();
+  }
+
+  private clearBonusHighlights() {
+    this.bonusTweens.forEach((tween) => tween.stop());
+    this.bonusTweens.clear();
+    this.bonusEmitters.forEach((emitter) => {
+      emitter.stop(true);
+      emitter.destroy();
+    });
+    this.bonusEmitters.clear();
+    this.betTargets.forEach((image) => {
+      const baseScale = image.getData('baseScale');
+      if (typeof baseScale === 'number') {
+        image.setScale(baseScale);
+      }
+      image.setAlpha(1);
+    });
+  }
+
+  private applyBonusHighlights() {
+    this.clearBonusHighlights();
+    this.ensureBonusSparkTexture();
+    this.bonusOddsByKey.forEach((_ratio, key) => {
+      const image = this.betTargets.get(key);
+      if (!image) return;
+      const baseScale = image.getData('baseScale');
+      const scale = typeof baseScale === 'number' ? baseScale : image.scaleX;
+      const tween = this.tweens.add({
+        targets: image,
+        scaleX: scale * 1.04,
+        scaleY: scale * 1.04,
+        alpha: 0.75,
+        duration: 520,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+      this.bonusTweens.set(key, tween);
+
+      const emitter = this.add.particles(0, 0, 'bonusSpark', {
+        follow: image,
+        lifespan: { min: 700, max: 1400 },
+        speed: { min: 20, max: 80 },
+        angle: { min: 0, max: 360 },
+        scale: { start: 0.9, end: 0.1 },
+        alpha: { start: 1, end: 0 },
+        tint: [0xfff1a8, 0xffd166, 0xffb703, 0xff7a18, 0xff4d4d],
+        blendMode: Phaser.BlendModes.ADD,
+        frequency: 60,
+        quantity: 2,
+        emitZone: {
+          type: 'edge',
+          source: new Phaser.Geom.Rectangle(
+            -image.displayWidth / 2,
+            -image.displayHeight / 2,
+            image.displayWidth,
+            image.displayHeight,
+          ),
+          quantity: 48,
+          yoyo: true,
+        },
+      });
+      emitter.setDepth(20);
+      this.bonusEmitters.set(key, emitter);
+    });
+  }
+
+  private ensureBonusSparkTexture() {
+    if (!this.textures.exists('bonusSpark')) {
+      const spark = this.add.graphics();
+      spark.fillStyle(0xffb703, 1);
+      spark.fillCircle(6, 6, 6);
+      spark.generateTexture('bonusSpark', 12, 12);
+      spark.destroy();
+    }
+  }
+
+  private syncOddsText() {
+    this.oddsTextByKey.forEach((text, key) => {
+      const bonusValue = this.bonusOddsByKey.get(key);
+      const baseValue = this.baseOddsByKey.get(key);
+      const value =
+        typeof bonusValue === 'number' && Number.isFinite(bonusValue)
+          ? bonusValue
+          : baseValue ?? 0;
+      text.setText(value ? formatPayoutRatio(value) : '');
+      if (bonusValue !== undefined) {
+        text.setColor('#ffd166');
+      } else {
+        text.setColor('#f8fafc');
+      }
+    });
+  }
+  private syncSelectedToken(selectedTokenValue: number) {
+    this.chipButtons.forEach(({ image, baseScale }, value) => {
+      const isSelected = value === selectedTokenValue;
+      image.setScale(isSelected ? baseScale * 1.12 : baseScale);
+      if (isSelected) {
+        image.setTint(0xffffff);
+      } else {
+        image.clearTint();
+      }
+    });
+  }
+
+  private syncTokenPlacements(
+    placements: Record<string, { value: number; count: number }>,
+  ) {
+    const activeKeys = new Set(Object.keys(placements ?? {}));
+    this.tokenSprites.forEach((sprite, key) => {
+      if (!activeKeys.has(key)) {
+        sprite.destroy();
+        this.tokenSprites.delete(key);
+      }
+    });
+
+    Object.entries(placements ?? {}).forEach(([key, placement]) => {
+      const target = this.betTargets.get(key);
+      if (!target) return;
+      const total = placement.value * placement.count;
+      let container = this.tokenSprites.get(key);
+      if (!container) {
+        const chip = this.add.image(0, 0, `chip_${placement.value}`);
+        chip.setScale(0.45);
+        const label = this.add
+          .text(0, 0, String(total), {
+            fontFamily: 'Rajdhani',
+            fontSize: '20px',
+            color: '#0b0b0b',
+            fontStyle: 'bold',
+          })
+          .setOrigin(0.5);
+        container = this.add.container(target.x, target.y, [chip, label]);
+        container.setDepth(20);
+        this.tokenSprites.set(key, container);
+      } else {
+        const chip = container.list[0] as Phaser.GameObjects.Image;
+        const label = container.list[1] as Phaser.GameObjects.Text;
+        chip.setTexture(`chip_${placement.value}`);
+        label.setText(String(total));
+      }
+    });
+  }
+
+  private syncActiveSelections(
+    selections: Array<{ digitType: DigitBetType; selection: string | null }>,
+  ) {
+    const activeKeys = new Set(
+      selections.map((selection) =>
+        this.buildDigitKey(selection.digitType, selection.selection ?? ''),
+      ),
+    );
+    this.betTargets.forEach((image, key) => {
+      if (activeKeys.has(key)) {
+        image.setTint(0x00ffb2);
+      } else {
+        image.clearTint();
+      }
+    });
+  }
+
+  private syncDigitResult(digits: string | null) {
+    if (!digits || !/^\d{3}$/.test(digits)) {
+      return;
+    }
+    if (this.roundDigitsText) {
+      this.roundDigitsText.setText(digits);
+    }
+  }
+
+  private syncBalance(balance: number) {
+    if (!this.balanceText) return;
+    this.balanceText.setText(`${balance.toFixed(2)} USDT`);
+  }
+
+  update() {
+    this.updateTimerText();
+  }
+
+  private updateTimerText() {
+    if (!this.round || !this.timerText) return;
     const now = Date.now();
     const isBetting = this.round.status === 'BETTING';
-    const targetTime = isBetting ? new Date(this.round.lockTime).getTime() : new Date(this.round.endTime).getTime();
-    const totalDuration = isBetting
-      ? Math.max(
-          new Date(this.round.lockTime).getTime() -
-            new Date(this.round.startTime).getTime(),
-          1,
-        )
-      : Math.max(
-          new Date(this.round.endTime).getTime() -
-            new Date(this.round.lockTime).getTime(),
-          1,
-        );
+    const targetTime = isBetting
+      ? new Date(this.round.lockTime).getTime()
+      : new Date(this.round.endTime).getTime();
     const remaining = Math.max(targetTime - now, 0);
-    const progress = remaining / totalDuration;
-
-    this.timerRing.clear();
-    
-    // Radius and Thickness
-    const r = this.ringRadius;
-    const t = this.ringThickness;
-
-    // Background ring
-    this.timerRing.lineStyle(t, 0x2d3436, 0.3);
-    this.timerRing.beginPath();
-    this.timerRing.arc(0, 0, r, 0, Math.PI * 2);
-    this.timerRing.strokePath();
-
-    // Progress ring
-    const color = isBetting ? 0x00b894 : 0xe17055;
-    this.timerRing.lineStyle(t, color, 1);
-    this.timerRing.beginPath();
-    // Start from top (-90 deg)
-    this.timerRing.arc(0, 0, r, Phaser.Math.DegToRad(-90), Phaser.Math.DegToRad(-90 + (360 * progress)), false);
-    this.timerRing.strokePath();
-
-    // Numeric countdown (seconds)
     const seconds = Math.ceil(remaining / 1000);
     this.timerText.setText(`${seconds}s`);
-    this.timerText.setColor(isBetting ? '#00b894' : '#e17055');
+    this.timerText.setColor(isBetting ? '#00ffb2' : '#ff8f70');
   }
-
-  private updatePendingLogic() {
-    if (this.round?.status !== 'RESULT_PENDING' || !this.playerBetSide || !this.playerBetLockedPrice || !this.lastPrice) return;
-
-    const current = this.lastPrice.price;
-    const locked = this.playerBetLockedPrice;
-    const side = this.playerBetSide;
-    
-    let isWinning = false;
-    if (side === 'UP' && current > locked) isWinning = true;
-    if (side === 'DOWN' && current < locked) isWinning = true;
-
-    const color = isWinning ? 0x00b894 : 0xd63031;
-    const label = isWinning ? 'WINNING' : 'LOSING';
-
-    this.playerBetStatusText.setText(label).setColor(isWinning ? '#00ffb2' : '#ff7675');
-    this.comparisonLine.setFillStyle(color);
-    
-    // Update Card BG
-    this.playerBetBg.clear();
-    this.playerBetBg.fillStyle(color, 0.1);
-    this.playerBetBg.fillRoundedRect(-120, -35, 240, 70, 12);
-    this.playerBetBg.lineStyle(2, color, 0.5);
-    this.playerBetBg.strokeRoundedRect(-120, -35, 240, 70, 12);
-  }
-
-  // -- Public API (Called by main.ts) --
 
   setLanguage(lang: LanguageCode) {
     this.language = lang;
     if (!this.uiReady) return;
-
-    // Static labels
-    if (this.priceLabel) this.priceLabel.setText(t(this.language, 'scene.bitcoinPrice'));
-    if (this.bettingLabel) this.bettingLabel.setText(t(this.language, 'scene.placeBets'));
-    if (this.balanceLabelText) this.balanceLabelText.setText(t(this.language, 'scene.walletBalance'));
-
-    // Round-dependent labels
+    if (this.priceLabelText) {
+      this.priceLabelText.setText(t(this.language, 'scene.bitcoinPrice'));
+    }
     if (this.round) {
-      this.roundIdText.setText(`${t(this.language, 'scene.roundPrefix')} #${this.round.id}`);
+      this.roundText?.setText(
+        `${t(this.language, 'scene.roundPrefix')} #${this.round.id}`,
+      );
       if (this.round.status === 'BETTING') {
-        this.drawStatusBadge(0x00b894, t(this.language, 'scene.betsOpen'));
+        this.statusText?.setText(t(this.language, 'scene.betsOpen'));
       } else if (this.round.status === 'RESULT_PENDING') {
-        this.drawStatusBadge(0xe17055, t(this.language, 'scene.locked'));
+        this.statusText?.setText(t(this.language, 'scene.locked'));
       }
     } else {
-      this.roundIdText.setText(`${t(this.language, 'scene.roundPrefix')} #--`);
-      this.drawStatusBadge(0x636e72, t(this.language, 'scene.connecting'));
+      this.roundText?.setText(`${t(this.language, 'scene.roundPrefix')} #--`);
+      this.statusText?.setText(t(this.language, 'scene.connecting'));
     }
   }
 
   setPrice(update: PriceUpdate) {
     const previous = this.lastPrice?.price;
     this.lastPrice = update;
-    
-    this.priceText.setText(update.price.toFixed(2));
 
-    if (previous !== undefined) {
+    this.priceText?.setText(update.price.toFixed(2));
+
+    if (previous !== undefined && this.priceArrowText) {
       const isUp = update.price >= previous;
-      const color = isUp ? '#00b894' : '#d63031';
+      const color = isUp ? '#00ffb2' : '#ff7675';
       const arrow = isUp ? '▲' : '▼';
-      const arrowY = isUp ? -10 : 10;
+      const offset = isUp ? -6 : 6;
 
-      this.priceText.setColor(color);
-      this.arrowText.setText(arrow).setColor(color).setAlpha(1);
-      
-      // Arrow Animation
-      this.tweens.killTweensOf(this.arrowText);
-      this.arrowText.y = 0;
+      this.priceText?.setColor(color);
+      this.priceArrowText.setText(arrow).setColor(color).setAlpha(1);
+
+      this.tweens.killTweensOf(this.priceArrowText);
+      this.priceArrowText.y = this.priceTextY;
       this.tweens.add({
-        targets: this.arrowText,
-        y: arrowY,
+        targets: this.priceArrowText,
+        y: this.priceTextY + offset,
         alpha: 0.5,
         duration: 400,
         yoyo: true,
-        ease: 'Sine.easeInOut'
+        ease: 'Sine.easeInOut',
       });
     }
   }
 
   setRoundState(state: RoundStatePayload) {
     this.round = state;
-    this.roundIdText.setText(`${t(this.language, 'scene.roundPrefix')} #${state.id}`);
-    
-    // Determine visuals based on phase
+    this.roundText?.setText(`${t(this.language, 'scene.roundPrefix')} #${state.id}`);
     if (state.status === 'BETTING') {
-      this.drawStatusBadge(0x00b894, t(this.language, 'scene.betsOpen'));
-      this.transitionToPhase('betting');
-
-      // Reset Player Data
-      this.playerBetSide = undefined;
-      this.playerBetLockedPrice = null;
-      this.playerBetAmount = null;
-      this.playerDigitSelections = [];
-      this.playerBetCard.setAlpha(0);
-      this.comparisonLine.setVisible(false);
-
-    } else if (state.status === 'RESULT_PENDING') {
-      this.drawStatusBadge(0xe17055, t(this.language, 'scene.locked'));
-      this.transitionToPhase('pending');
-    } else {
-       this.drawStatusBadge(0x0984e3, 'COMPLETED');
-       // No specific UI for completed, waiting for next round or results overlay
+      this.clearWinnerHighlights();
     }
-  }
+    this.updateBonusOddsFromRound(state);
 
-  private transitionToPhase(phase: 'betting' | 'pending') {
-    // Fade out current, Fade in new
-    const showBetting = phase === 'betting';
-    
-    this.tweens.add({
-      targets: this.bettingUI,
-      alpha: showBetting ? 1 : 0,
-      visible: showBetting, // visibility is toggled at start/end of tween often, but for simplicity:
-      duration: 300,
-      onStart: () => { if (showBetting) this.bettingUI.setVisible(true); },
-      onComplete: () => { if (!showBetting) this.bettingUI.setVisible(false); }
-    });
-
-    this.tweens.add({
-      targets: this.pendingUI,
-      alpha: !showBetting ? 1 : 0,
-      duration: 300,
-      onStart: () => { if (!showBetting) this.pendingUI.setVisible(true); },
-      onComplete: () => { if (showBetting) this.pendingUI.setVisible(false); }
-    });
+    if (state.status === 'BETTING') {
+      this.statusText?.setText(t(this.language, 'scene.betsOpen'));
+      this.statusText?.setColor('#00ffb2');
+    } else if (state.status === 'RESULT_PENDING') {
+      this.statusText?.setText(t(this.language, 'scene.locked'));
+      this.statusText?.setColor('#ffd166');
+    } else {
+      this.statusText?.setText(t(this.language, 'scene.roundResult'));
+      this.statusText?.setColor('#b2bec3');
+    }
   }
 
   handleRoundLock(payload: RoundLockPayload) {
     if (!this.round || this.round.id !== payload.roundId) return;
-    
     this.round = {
       ...this.round,
       status: 'RESULT_PENDING',
-      lockedPrice: payload.lockedPrice
+      lockedPrice: payload.lockedPrice,
     };
-    
     this.setRoundState(this.round);
-    this.playerBetLockedPrice = payload.lockedPrice;
-    
-    if (this.playerBetSide && this.playerBetAmount) {
-      const sideLabel =
-        this.playerBetSide === 'UP'
-          ? t(this.language, 'hilo.up')
-          : t(this.language, 'hilo.down');
-      this.playerBetDetailsText.setText(`${sideLabel} ${this.playerBetAmount.toFixed(2)} USDT`);
-      this.playerBetCard.setAlpha(1);
-      this.comparisonLine.setVisible(true);
-    }
-  }
-
-  setPlayerBet(side: BetSide, amount: number) {
-    this.playerBetSide = side;
-    this.playerBetAmount = amount;
   }
 
   clearPlayerBets() {
-    this.playerBetSide = undefined;
-    this.playerBetAmount = null;
-    this.playerBetLockedPrice = null;
-    this.playerDigitSelections = [];
-    // Ensure the pending card doesn't show anything if user clears before lock.
-    this.playerBetCard?.setAlpha(0);
-    this.comparisonLine?.setVisible(false);
+    this.tokenSprites.forEach((sprite) => sprite.destroy());
+    this.tokenSprites.clear();
+    this.betTargets.forEach((image) => image.clearTint());
   }
 
   setBalance(amount: number) {
-    if (this.balanceText) {
-      this.balanceText.setText(`${amount.toFixed(2)} USDT`);
-    }
+    this.syncBalance(amount);
   }
 
   handleRoundResult(payload: RoundResultPayload) {
     if (!this.round || this.round.id !== payload.roundId) return;
 
-    // Client does NOT decide winners. We wait for server-settled results (round:user-settlement)
-    this.playerDigitSelections = [];
-    
     this.round = {
       ...this.round,
       status: 'COMPLETED',
       finalPrice: payload.finalPrice ?? null,
-      winningSide: payload.winningSide
+      winningSide: payload.winningSide,
     };
 
-    // Show a neutral overlay; outcome/payout/winning-bets are updated from server totals afterwards.
+    if (payload.digitResult && /^\d{3}$/.test(payload.digitResult)) {
+      this.syncDigitResult(payload.digitResult);
+    }
+
+    this.updateBonusOddsFromRound(this.round);
     this.showResultOverlay('SKIPPED', payload);
+  }
+
+  private clearWinnerHighlights() {
+    this.winnerTweens.forEach((tween) => tween.stop());
+    this.winnerTweens.clear();
+    this.betTargets.forEach((image) => {
+      image.setAlpha(1);
+      image.clearTint();
+    });
   }
 
   setResultDisplayDuration(durationMs: number) {
@@ -656,7 +983,7 @@ export class HiLoScene extends Phaser.Scene {
     if (!this.resultOverlay || this.resultRoundId !== roundId || !this.resultPayoutText || !this.resultTitleText) return;
 
     const net = totalPayout - totalStake;
-    
+
     if (totalStake === 0) {
       this.resultTitleText.setText(t(this.language, 'scene.skippedRound')).setColor('#636e72');
       this.resultPayoutText.setText(t(this.language, 'scene.noBetsPlaced')).setColor('#b2bec3');
@@ -691,7 +1018,16 @@ export class HiLoScene extends Phaser.Scene {
     this.resultTitleText.setText(titleStr).setColor(color);
   }
 
-  setWinningBets(roundId: number, bets: Array<{ betType: string; side: string | null; digitType: string | null; selection: string | null; result: string }>) {
+  setWinningBets(
+    roundId: number,
+    bets: Array<{
+      betType: string;
+      side: string | null;
+      digitType: string | null;
+      selection: string | null;
+      result: string;
+    }>,
+  ) {
     if (!this.resultOverlay || this.resultRoundId !== roundId) return;
 
     const wins = bets.filter((b) => b.result === 'WIN');
@@ -719,6 +1055,13 @@ export class HiLoScene extends Phaser.Scene {
       }
     });
 
+    const winKeys = new Set(
+      wins
+        .filter((b) => b.digitType)
+        .map((b) => this.buildDigitKey(b.digitType as DigitBetType, b.selection ?? '')),
+    );
+    this.applyWinnerHighlights(winKeys);
+
     const text = labels.length ? `YOUR WINNING BETS: ${labels.join(' • ')}` : '';
 
     if (!this.resultPlayerWinsText) {
@@ -732,8 +1075,12 @@ export class HiLoScene extends Phaser.Scene {
         })
         .setOrigin(0.5)
         .setLineSpacing(6);
-      const modal = this.resultOverlay.getAt(1) as Phaser.GameObjects.Container;
-      modal.add(this.resultPlayerWinsText);
+      const modal = this.resultOverlay.getAt(0);
+      if (modal && modal instanceof Phaser.GameObjects.Container) {
+        modal.add(this.resultPlayerWinsText);
+      } else {
+        this.resultOverlay.add(this.resultPlayerWinsText);
+      }
       if (this.resultPayoutText) {
         this.resultPayoutText.setY(text ? 130 : 110);
       }
@@ -747,13 +1094,37 @@ export class HiLoScene extends Phaser.Scene {
     }
   }
 
+  private applyWinnerHighlights(winKeys: Set<string>) {
+    this.clearWinnerHighlights();
+    winKeys.forEach((key) => {
+      const image = this.betTargets.get(key);
+      if (!image) return;
+      const baseY = image.y;
+      image.setTint(0x00ffb2);
+      const tween = this.tweens.add({
+        targets: image,
+        y: baseY - 6,
+        alpha: 0.5,
+        duration: 180,
+        yoyo: true,
+        repeat: 8,
+        ease: 'Sine.easeInOut',
+        onComplete: () => {
+          image.setAlpha(1);
+          image.setTint(0x00ffb2);
+          image.y = baseY;
+        },
+      });
+      this.winnerTweens.set(key, tween);
+    });
+  }
+
   private showResultOverlay(outcome: 'WIN' | 'LOSE' | 'PUSH' | 'SKIPPED', payload: RoundResultPayload) {
     const width = this.scale.width;
     const height = this.scale.height;
 
     this.clearResultOverlay();
-    
-    // Color Determination (neutral until server-settled totals arrive)
+
     let color = 0xb2bec3;
     let titleStr = t(this.language, 'scene.roundResult');
 
@@ -765,43 +1136,35 @@ export class HiLoScene extends Phaser.Scene {
       titleStr = t(this.language, 'scene.push');
     }
 
-    // Modal Card
-    const modal = this.add.container(width/2, height/2);
-    
-    // Backdrop
-    const bg = this.add.rectangle(0, 0, width, height, 0x000000, 0.7);
-    bg.setInteractive(); 
-    
-    // Card
+    const modal = this.add.container(width / 2, height / 2 - 700);
+
     const cardBg = this.add.graphics();
     cardBg.fillStyle(0x1e272e, 1);
     cardBg.fillRoundedRect(-250, -150, 500, 300, 16);
     cardBg.lineStyle(4, color, 1);
     cardBg.strokeRoundedRect(-250, -150, 500, 300, 16);
 
-    // Title
     this.resultTitleText = this.add.text(0, -80, titleStr, {
       fontFamily: 'Rajdhani',
       fontSize: '56px',
       fontStyle: 'bold',
-      color: '#ffffff'
+      color: '#ffffff',
     }).setOrigin(0.5);
-    
+
     if (outcome === 'WIN') this.resultTitleText.setColor('#00b894');
     else this.resultTitleText.setColor('#b2bec3');
 
-    // Stats
     const final = payload.finalPrice?.toFixed(2) ?? '--';
-    
+
     const statsText = this.add.text(
       0,
       -25,
       `${t(this.language, 'scene.finalLabel')}:  ${final}`,
       {
-      fontFamily: 'Roboto Mono',
-      fontSize: '24px',
-      color: '#dfe6e9',
-      align: 'center'
+        fontFamily: 'Roboto Mono',
+        fontSize: '24px',
+        color: '#dfe6e9',
+        align: 'center',
       },
     ).setOrigin(0.5).setLineSpacing(10);
 
@@ -832,11 +1195,10 @@ export class HiLoScene extends Phaser.Scene {
 
     const payoutY = 110;
 
-    // Payout Placeholder
     this.resultPayoutText = this.add.text(0, payoutY, t(this.language, 'scene.calculating'), {
       fontFamily: 'Rajdhani',
       fontSize: '32px',
-      color: '#fdcb6e'
+      color: '#fdcb6e',
     }).setOrigin(0.5);
 
     modal.add([cardBg, this.resultTitleText, statsText]);
@@ -847,40 +1209,38 @@ export class HiLoScene extends Phaser.Scene {
       modal.add(this.resultPlayerWinsText);
     }
     modal.add(this.resultPayoutText);
-    
-    this.resultOverlay = this.add.container(0, 0, [bg, modal]);
+
+    this.resultOverlay = this.add.container(0, 0, [modal]);
     this.resultOverlay.setDepth(100);
     this.resultOverlay.setAlpha(0);
-    
+
     this.resultRoundId = payload.roundId;
 
-    // Pop in
     modal.setScale(0.8);
     this.tweens.add({
       targets: this.resultOverlay,
       alpha: 1,
-      duration: 200
+      duration: 200,
     });
     this.tweens.add({
       targets: modal,
       scale: 1,
       ease: 'Back.Out',
-      duration: 400
+      duration: 400,
     });
 
-    // Auto hide
     this.time.delayedCall(this.resultDisplayDurationMs, () => {
-       if (this.resultOverlay) {
-         this.tweens.add({
-           targets: this.resultOverlay,
-           alpha: 0,
-           duration: 300,
-           onComplete: () => {
-             this.resultOverlay?.destroy();
-             this.resultOverlay = undefined;
-           }
-         });
-       }
+      if (this.resultOverlay) {
+        this.tweens.add({
+          targets: this.resultOverlay,
+          alpha: 0,
+          duration: 300,
+          onComplete: () => {
+            this.resultOverlay?.destroy();
+            this.resultOverlay = undefined;
+          },
+        });
+      }
     });
   }
 

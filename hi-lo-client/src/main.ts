@@ -24,22 +24,24 @@ initControls({
   onClearTokens: handleClearTokens,
 });
 
+scene.setBetHandlers({
+  onSelectToken: (value) => {
+    updateState({ selectedTokenValue: value });
+  },
+  onClearTokens: () => handleClearTokens(),
+  onPlaceDigitBet: (selection) => handlePlaceDigitBet(selection),
+  onOpenSettings: () => {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('app:open-settings'));
+    }
+  },
+});
+
 void initTradingViewWidget().catch((error: unknown) =>
   console.error('TradingView widget failed to init', error),
 );
 
-const getGameSize = () => {
-  const fallback = { width: 750, height: 600 };
-  if (typeof window === 'undefined') {
-    return fallback;
-  }
-  if (window.innerWidth <= 900) {
-    const width = Math.max(320, Math.min(420, window.innerWidth));
-    const height = Math.round(width * 0.52);
-    return { width, height };
-  }
-  return fallback;
-};
+const getGameSize = () => ({ width: 1080, height: 2340 });
 
 const { width: gameWidth, height: gameHeight } = getGameSize();
 
@@ -51,6 +53,10 @@ const game = new Phaser.Game({
   scene: [scene],
   backgroundColor: '#020b16',
   banner: false,
+  input: {
+    mouse: { preventDefault: false },
+    touch: { capture: false },
+  },
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,

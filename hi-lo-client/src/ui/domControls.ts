@@ -68,6 +68,15 @@ let bettingHistoryListEl: HTMLDivElement | null = null;
 
 const tokenStackByKey = new Map<string, HTMLElement>();
 const TOKEN_VALUES = [10, 50, 100, 150, 200, 300, 500];
+const TOKEN_BAR_FLOATING_CHIPS = [
+  { value: 10, left: '21.7%', top: '58%' },
+  { value: 100, left: '30.9%', top: '58%' },
+  { value: 150, left: '40.2%', top: '58%' },
+  { value: 200, left: '49.4%', top: '58%' },
+  { value: 300, left: '58.7%', top: '58%' },
+  { value: 50, left: '67.9%', top: '58%' },
+  { value: 500, left: '77.2%', top: '58%' },
+];
 
 const WIN_CELEBRATE_FALLBACK_MS = 2600;
 let lastWinCelebrateSignature: string | null = null;
@@ -179,9 +188,9 @@ export const initControls = (handlers: ControlHandlers) => {
       </div>
     </div>
     <div class="page-wrapper" id="app-shell">
-      <div id="tradingview-chart"></div>
       <div class="layout">
         <div id="game-container">
+          <div id="tradingview-chart"></div>
           <div class="stats-dock" id="stats-dock">
             <button
               type="button"
@@ -270,6 +279,44 @@ export const initControls = (handlers: ControlHandlers) => {
             <ul id="round-history"></ul>
           </section>
         </div>
+      </div>
+      <div class="token-bar-floating" id="token-bar-floating" aria-label="Token Bar">
+        <img
+          class="token-bar-floating-bg"
+          src="/main_screen_UI/token_bar_box.png"
+          alt="Token Bar"
+        />
+        ${TOKEN_BAR_FLOATING_CHIPS.map(
+          (chip) => `
+            <button
+              type="button"
+              class="token-bar-floating-chip"
+              data-token="${chip.value}"
+              style="left: ${chip.left}; top: ${chip.top};"
+              aria-label="Token ${chip.value}"
+            >
+              <img src="/main_screen_UI/chip_${chip.value}.png" alt="" />
+            </button>
+          `,
+        ).join('')}
+        <button
+          type="button"
+          class="token-bar-floating-clear"
+          id="token-bar-clear-floating"
+          aria-label="Clean tokens"
+          title="Clean tokens"
+        >
+          <img src="/main_screen_UI/token_bar_clean.png" alt="" />
+        </button>
+        <button
+          type="button"
+          class="token-bar-floating-menu"
+          id="token-bar-menu-floating"
+          aria-label="Menu"
+          title="Menu"
+        >
+          <img src="/main_screen_UI/setting.png" alt="" />
+        </button>
       </div>
     </div>
     <div class="stats-modal-backdrop" id="stats-modal-backdrop" aria-hidden="true">
@@ -433,8 +480,12 @@ export const initControls = (handlers: ControlHandlers) => {
   upBtn = root.querySelector('button[data-side="UP"]');
   downBtn = root.querySelector('button[data-side="DOWN"]');
   tokenOptionsEl = root.querySelector('#token-options');
-  tokenBarMenuBtn = root.querySelector('#token-bar-menu');
-  tokenBarClearBtn = root.querySelector('#token-bar-clear');
+  tokenBarMenuBtn =
+    root.querySelector('#token-bar-menu-floating') ??
+    root.querySelector('#token-bar-menu');
+  tokenBarClearBtn =
+    root.querySelector('#token-bar-clear-floating') ??
+    root.querySelector('#token-bar-clear');
   statsDockEl = root.querySelector('#stats-dock');
   statsDockTabBtn = root.querySelector('#stats-dock-tab');
   statsDockPanelEl = root.querySelector('#stats-dock-panel');
@@ -493,9 +544,14 @@ export const initControls = (handlers: ControlHandlers) => {
     }
   });
 
-  tokenOptionButtons = Array.from(
-    tokenOptionsEl?.querySelectorAll<HTMLButtonElement>('.token-option') ?? [],
-  );
+  tokenOptionButtons = [
+    ...Array.from(
+      tokenOptionsEl?.querySelectorAll<HTMLButtonElement>('.token-option') ?? [],
+    ),
+    ...Array.from(
+      root.querySelectorAll<HTMLButtonElement>('.token-bar-floating-chip') ?? [],
+    ),
+  ];
   tokenOptionButtons.forEach((button) => {
     button.addEventListener('click', () => {
       const value = Number(button.dataset.token ?? 0);
@@ -815,6 +871,12 @@ export const initControls = (handlers: ControlHandlers) => {
     });
   }
 
+  if (typeof window !== 'undefined') {
+    window.addEventListener('app:open-settings', () => {
+      openModal(settingsModalBackdropEl, true, settingsModalCloseBtn);
+    });
+  }
+
   subscribe(render);
   render(state);
 };
@@ -827,6 +889,11 @@ export const setStatus = (message: string, isError = false) => {
   if (authStatusEl) {
     authStatusEl.textContent = message;
     authStatusEl.classList.toggle('error', isError);
+  }
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(
+      new CustomEvent('app:status', { detail: { message, isError } }),
+    );
   }
 };
 

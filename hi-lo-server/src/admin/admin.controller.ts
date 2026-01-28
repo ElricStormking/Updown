@@ -55,7 +55,7 @@ const resolveAdminPagePath = () => {
       return candidate;
     }
   }
-  return null;
+            return null;
 };
 
 const loadAdminPageHtml = async () => {
