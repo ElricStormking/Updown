@@ -102,6 +102,9 @@ export class HiLoScene extends Phaser.Scene {
 
   private unsubscribeState?: () => void;
   private statusListener?: (event: Event) => void;
+  private dragScrollActive = false;
+  private dragScrollY = 0;
+  private scrollBounds?: { minY: number; maxY: number };
 
   constructor() {
     super('HiLoScene');
@@ -167,6 +170,8 @@ export class HiLoScene extends Phaser.Scene {
 
   create() {
     this.createMainLayout();
+    this.updateCameraBounds();
+    this.enableVerticalScroll();
 
     this.uiReady = true;
     this.setLanguage(this.language);
@@ -214,7 +219,8 @@ export class HiLoScene extends Phaser.Scene {
       scaleY = scaleX,
     ) => this.add.image(x, y, key).setScale(scaleX, scaleY);
 
-    addImage(534, 1343, 'bg', 1.1, 1.5);
+    const bg = addImage(this.scale.width / 2, this.scale.height * 1.1, 'bg', 1.1, 1.5);
+    bg.setDepth(-100);
 
     const buttonAnyTriple = addImage(543, 868, 'button_any triple', 0.75);
     const buttonBig = addImage(950, 868, 'button_big', 0.75);
@@ -469,6 +475,7 @@ export class HiLoScene extends Phaser.Scene {
     }
 
     this.compressBodyLayout(500, 0.82);
+    this.alignLayoutToVisibleTop(8);
   }
 
   private compressBodyLayout(pivotY: number, scale: number) {
@@ -477,6 +484,160 @@ export class HiLoScene extends Phaser.Scene {
       if (typeof node.y !== 'number') return;
       if (node.y < pivotY) return;
       node.y = pivotY + (node.y - pivotY) * scale;
+    });
+  }
+
+  private alignLayoutToVisibleTop(padding = 8) {
+    const layoutItems = this.children.list.filter((item) => {
+      if (!item || typeof (item as { getBounds?: () => Phaser.Geom.Rectangle }).getBounds !== 'function') {
+        return false;
+      }
+      if (item === this.resultOverlay) return false;
+      if (
+        item instanceof Phaser.GameObjects.Image &&
+        (item.texture?.key === 'bg' || item.texture?.key === 'bg_light')
+      ) {
+        return false;
+      }
+      return true;
+    });
+
+    let minY = Number.POSITIVE_INFINITY;
+    layoutItems.forEach((item) => {
+      const bounds = (item as Phaser.GameObjects.GameObject & {
+        getBounds: () => Phaser.Geom.Rectangle;
+      }).getBounds();
+      if (!Number.isFinite(bounds.top)) return;
+      minY = Math.min(minY, bounds.top);
+    });
+
+    const headerTop = this.getHeaderTop();
+    const targetTop = Number.isFinite(headerTop) ? (headerTop as number) : minY;
+    if (!Number.isFinite(targetTop)) return;
+    const delta = targetTop - padding;
+    if (Math.abs(delta) < 0.5) return;
+
+    this.shiftLayoutY(-delta);
+    this.priceTextY -= delta;
+  }
+
+  private shiftLayoutY(delta: number) {
+    this.children.each((child) => {
+      if (child === this.resultOverlay) return;
+      const node = child as Phaser.GameObjects.GameObject & { y?: number };
+      if (typeof node.y !== 'number') return;
+      node.y += delta;
+    });
+  }
+
+  private getHeaderTop() {
+    const headerKeys = new Set([
+      'bg_line_left',
+      'bg_line_right',
+      'logo_combi3',
+      'time',
+      'box_round',
+      'box_amount',
+      '3N_box',
+    ]);
+    let top = Number.POSITIVE_INFINITY;
+    this.children.list.forEach((item) => {
+      if (!(item instanceof Phaser.GameObjects.Image)) return;
+      const key = item.texture?.key;
+      if (!key || !headerKeys.has(key) || typeof item.getBounds !== 'function') return;
+      const bounds = item.getBounds();
+      if (!Number.isFinite(bounds.top)) return;
+      top = Math.min(top, bounds.top);
+    });
+    return Number.isFinite(top) ? top : undefined;
+  }
+
+  private updateCameraBounds() {
+    const layoutItems = this.children.list.filter((item) => {
+      if (!item || typeof (item as { getBounds?: () => Phaser.Geom.Rectangle }).getBounds !== 'function') {
+        return false;
+      }
+      if (item === this.resultOverlay) return false;
+      if (
+        item instanceof Phaser.GameObjects.Image &&
+        (item.texture?.key === 'bg' || item.texture?.key === 'bg_light')
+      ) {
+        return false;
+      }
+      return true;
+    });
+
+    let minY = Number.POSITIVE_INFINITY;
+    let maxY = Number.NEGATIVE_INFINITY;
+    layoutItems.forEach((item) => {
+      const bounds = (item as Phaser.GameObjects.GameObject & {
+        getBounds: () => Phaser.Geom.Rectangle;
+      }).getBounds();
+      if (!Number.isFinite(bounds.top) || !Number.isFinite(bounds.bottom)) return;
+      minY = Math.min(minY, bounds.top);
+      maxY = Math.max(maxY, bounds.bottom);
+    });
+
+    if (!Number.isFinite(minY) || !Number.isFinite(maxY)) return;
+    const headerTop = this.getHeaderTop();
+    const topPadding = 8;
+    const topAnchor = Number.isFinite(headerTop)
+      ? Math.max(0, (headerTop as number) - topPadding)
+      : Math.max(0, minY);
+    const viewHeight = this.scale.height;
+    const bottomPadding = Math.round(viewHeight * 0.13);
+    const contentHeight = Math.max(viewHeight, maxY - topAnchor + bottomPadding);
+    this.scrollBounds = { minY: topAnchor, maxY: topAnchor + contentHeight };
+    this.cameras.main.setBounds(0, topAnchor, this.scale.width, contentHeight);
+    this.cameras.main.scrollY = topAnchor;
+  }
+
+  private enableVerticalScroll() {
+    const camera = this.cameras.main;
+    const clampScroll = (value: number) => {
+      const bounds = this.scrollBounds;
+      if (!bounds) return value;
+      const maxScroll = Math.max(bounds.minY, bounds.maxY - camera.height);
+      return Phaser.Math.Clamp(value, bounds.minY, maxScroll);
+    };
+
+    this.input.on('wheel', (
+      _pointer: Phaser.Input.Pointer,
+      _gameObjects: Phaser.GameObjects.GameObject[],
+      _dx: number,
+      dy: number,
+      _dz: number,
+      event: WheelEvent,
+    ) => {
+      // Only try preventDefault if the event is cancelable (non-passive)
+      if (event && event.cancelable && typeof event.preventDefault === 'function') {
+        event.preventDefault();
+      }
+      if (!this.scrollBounds) return;
+      camera.scrollY = clampScroll(camera.scrollY + dy);
+    });
+
+    this.input.on('pointerdown', (
+      pointer: Phaser.Input.Pointer,
+      gameObjects: Phaser.GameObjects.GameObject[],
+    ) => {
+      if (gameObjects.length) return;
+      this.dragScrollActive = true;
+      this.dragScrollY = pointer.y;
+    });
+
+    this.input.on('pointerup', () => {
+      this.dragScrollActive = false;
+    });
+
+    this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+      if (!this.dragScrollActive || !pointer.isDown) return;
+      // Don't call preventDefault on passive touch events - it causes console errors
+      // The CSS touch-action: pan-y on the canvas handles scroll behavior
+      const delta = pointer.y - this.dragScrollY;
+      if (Math.abs(delta) < 2) return;
+      camera.scrollY = clampScroll(camera.scrollY - delta);
+      this.dragScrollY = pointer.y;
     });
   }
 
@@ -1136,7 +1297,7 @@ export class HiLoScene extends Phaser.Scene {
       titleStr = t(this.language, 'scene.push');
     }
 
-    const modal = this.add.container(width / 2, height / 2 - 700);
+    const modal = this.add.container(width / 2, height / 2 - 520);
 
     const cardBg = this.add.graphics();
     cardBg.fillStyle(0x1e272e, 1);

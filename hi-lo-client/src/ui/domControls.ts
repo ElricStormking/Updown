@@ -791,8 +791,6 @@ export const initControls = (handlers: ControlHandlers) => {
     const gameContainer = root.querySelector<HTMLDivElement>('#game-container');
     const layout = root.querySelector<HTMLDivElement>('.layout');
     const controlPanel = root.querySelector<HTMLDivElement>('.control-panel');
-    const betControls = root.querySelector<HTMLDivElement>('.bet-controls');
-    const betHint = root.querySelector<HTMLDivElement>('.bet-hint');
     if (!gameContainer || !layout || !controlPanel) {
       return;
     }
@@ -800,22 +798,10 @@ export const initControls = (handlers: ControlHandlers) => {
     const isMobile = typeof window !== 'undefined' && window.innerWidth <= 720;
 
     if (isMobile) {
-      // Move the Phaser canvas above the bet hint in the stacked mobile layout.
-      const isAlreadyInPlace =
-        !!betControls &&
-        !!betHint &&
-        gameContainer.parentElement === betControls &&
-        betHint.parentElement === betControls &&
-        betHint.previousElementSibling === gameContainer;
-
-      if (!isAlreadyInPlace) {
-        if (betHint && betControls) {
-          betHint.insertAdjacentElement('beforebegin', gameContainer);
-        } else if (betControls) {
-          betControls.appendChild(gameContainer);
-        } else {
-          layout.insertBefore(gameContainer, controlPanel);
-        }
+      // On mobile, keep the game container inside .layout (don't move it into the
+      // hidden .control-panel). The CSS handles fullscreen display.
+      if (gameContainer.parentElement !== layout) {
+        layout.insertBefore(gameContainer, controlPanel);
         window.dispatchEvent(new Event('app:layout:shown'));
       }
       return;

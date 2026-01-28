@@ -41,7 +41,7 @@ void initTradingViewWidget().catch((error: unknown) =>
   console.error('TradingView widget failed to init', error),
 );
 
-const getGameSize = () => ({ width: 1080, height: 2340 });
+const getGameSize = () => ({ width: 1080, height: 1920 });
 
 const { width: gameWidth, height: gameHeight } = getGameSize();
 
@@ -59,7 +59,7 @@ const game = new Phaser.Game({
   },
   scale: {
     mode: Phaser.Scale.FIT,
-    autoCenter: Phaser.Scale.CENTER_BOTH,
+    autoCenter: Phaser.Scale.CENTER_HORIZONTALLY,
   },
 });
 
