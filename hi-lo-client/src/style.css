@@ -1644,11 +1644,12 @@ li {
   }
 
   #game-container {
-    width: 100vw;
-    height: calc(100vw * 16 / 9);
+    --game-width: min(100vw, calc(100vh * 9 / 16));
+    width: var(--game-width);
+    height: calc(var(--game-width) * 16 / 9);
     max-width: 100vw;
     max-height: 100vh;
-    margin: auto 0;
+    margin: 0;
     border-radius: 0;
     background: #050505;
     overflow: hidden;
@@ -1668,9 +1669,15 @@ li {
   }
 
   .stats-dock {
+    position: absolute;
     top: 158px;
     left: 8px;
     gap: 0.4rem;
+  }
+
+  .token-bar-floating {
+    width: min(540px, 92%);
+    bottom: -12px;
   }
 
   .stats-dock-tab {

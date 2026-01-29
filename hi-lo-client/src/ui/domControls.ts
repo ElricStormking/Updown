@@ -791,6 +791,8 @@ export const initControls = (handlers: ControlHandlers) => {
     const gameContainer = root.querySelector<HTMLDivElement>('#game-container');
     const layout = root.querySelector<HTMLDivElement>('.layout');
     const controlPanel = root.querySelector<HTMLDivElement>('.control-panel');
+    const tokenBarFloating = root.querySelector<HTMLDivElement>('#token-bar-floating');
+    const appShell = appShellEl ?? root.querySelector<HTMLDivElement>('#app-shell');
     if (!gameContainer || !layout || !controlPanel) {
       return;
     }
@@ -804,12 +806,20 @@ export const initControls = (handlers: ControlHandlers) => {
         layout.insertBefore(gameContainer, controlPanel);
         window.dispatchEvent(new Event('app:layout:shown'));
       }
+      if (tokenBarFloating && tokenBarFloating.parentElement !== gameContainer) {
+        gameContainer.appendChild(tokenBarFloating);
+        window.dispatchEvent(new Event('app:layout:shown'));
+      }
       return;
     }
 
     // Desktop/tablet: restore original layout (game left, panel right).
     if (gameContainer.parentElement !== layout) {
       layout.insertBefore(gameContainer, controlPanel);
+      window.dispatchEvent(new Event('app:layout:shown'));
+    }
+    if (tokenBarFloating && appShell && tokenBarFloating.parentElement !== appShell) {
+      appShell.appendChild(tokenBarFloating);
       window.dispatchEvent(new Event('app:layout:shown'));
     }
   };
