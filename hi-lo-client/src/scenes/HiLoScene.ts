@@ -78,6 +78,7 @@ export class HiLoScene extends Phaser.Scene {
   private oddsRightText?: Phaser.GameObjects.Text;
   private lastResultDigits: Phaser.GameObjects.Image[] = [];
   private roundDigitsText?: Phaser.GameObjects.Text;
+  private bgm?: Phaser.Sound.BaseSound;
 
   private chipButtons = new Map<number, { image: Phaser.GameObjects.Image; baseScale: number }>();
   private betTargets = new Map<string, Phaser.GameObjects.Image>();
@@ -102,9 +103,11 @@ export class HiLoScene extends Phaser.Scene {
 
   private unsubscribeState?: () => void;
   private statusListener?: (event: Event) => void;
+  private audioSettingsListener?: (event: Event) => void;
   private dragScrollActive = false;
   private dragScrollY = 0;
   private scrollBounds?: { minY: number; maxY: number };
+  private desiredMusicEnabled = true;
 
   constructor() {
     super('HiLoScene');
@@ -116,6 +119,7 @@ export class HiLoScene extends Phaser.Scene {
 
   preload() {
     this.cameras.main.setBackgroundColor('#050505');
+    this.load.audio('bgm', 'audio/BGM_Hi_Lo.mp3');
     this.load.setPath('main_screen_UI');
     const loadImage = (key: string, file = `${key}.png`) => {
       this.load.image(key, encodeURI(file));
@@ -172,6 +176,7 @@ export class HiLoScene extends Phaser.Scene {
     this.createMainLayout();
     this.updateCameraBounds();
     this.enableVerticalScroll();
+    this.startBackgroundMusic();
 
     this.uiReady = true;
     this.setLanguage(this.language);
@@ -200,6 +205,13 @@ export class HiLoScene extends Phaser.Scene {
         this.statusText?.setColor(detail.isError ? '#ff7675' : '#00ffb2');
       };
       window.addEventListener('app:status', this.statusListener);
+
+      this.audioSettingsListener = (event) => {
+        const detail = (event as CustomEvent<{ musicEnabled?: boolean }>).detail;
+        if (!detail || typeof detail.musicEnabled !== 'boolean') return;
+        this.setMusicEnabled(detail.musicEnabled);
+      };
+      window.addEventListener('app:audio-settings', this.audioSettingsListener);
     }
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -207,7 +219,64 @@ export class HiLoScene extends Phaser.Scene {
       if (this.statusListener && typeof window !== 'undefined') {
         window.removeEventListener('app:status', this.statusListener);
       }
+      if (this.audioSettingsListener && typeof window !== 'undefined') {
+        window.removeEventListener('app:audio-settings', this.audioSettingsListener);
+      }
     });
+  }
+
+  private startBackgroundMusic() {
+    if (this.bgm) return;
+    this.bgm = this.sound.add('bgm', { loop: true, volume: 0.35 });
+
+    const tryPlay = () => {
+      if (!this.bgm || this.bgm.isPlaying) return;
+      if (!this.desiredMusicEnabled) return;
+      this.bgm.play();
+    };
+
+    this.desiredMusicEnabled = this.readMusicEnabledFromStorage();
+
+    if (this.sound.locked) {
+      this.sound.once(Phaser.Sound.Events.UNLOCKED, tryPlay);
+      this.input.once('pointerdown', tryPlay);
+    } else {
+      tryPlay();
+    }
+
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.bgm?.stop();
+      this.bgm?.destroy();
+      this.bgm = undefined;
+    });
+  }
+
+  private readMusicEnabledFromStorage() {
+    if (typeof window === 'undefined') return true;
+    try {
+      const raw = window.localStorage.getItem('audioSettings');
+      if (!raw) return true;
+      const parsed = JSON.parse(raw) as { musicEnabled?: boolean } | null;
+      return parsed?.musicEnabled !== false;
+    } catch {
+      return true;
+    }
+  }
+
+  private setMusicEnabled(enabled: boolean) {
+    this.desiredMusicEnabled = enabled;
+    if (!this.bgm) return;
+    if (enabled) {
+      if (this.sound.locked) return;
+      if (this.bgm.isPaused) {
+        this.bgm.resume();
+      } else if (!this.bgm.isPlaying) {
+        this.bgm.play();
+      }
+      this.bgm.setVolume(0.35);
+    } else if (this.bgm.isPlaying) {
+      this.bgm.pause();
+    }
   }
 
   private createMainLayout() {

@@ -96,10 +96,62 @@ async function seedAdminUser() {
   return user;
 }
 
+async function seedTestPlayerTopUp() {
+  const account = process.env.SEED_TESTPLAYER_ACCOUNT ?? 'testplayer';
+  const password = process.env.SEED_TESTPLAYER_PASSWORD ?? 'changeme';
+  const saltRounds = Number(process.env.PASSWORD_SALT_ROUNDS ?? 12);
+  const topUpAmount = new Prisma.Decimal(process.env.SEED_TESTPLAYER_TOPUP ?? '1000000');
+
+  const existing = await prisma.user.findUnique({
+    where: { email: account },
+    include: { wallet: true },
+  });
+
+  if (existing) {
+    if (existing.wallet) {
+      const updatedWallet = await prisma.wallet.update({
+        where: { userId: existing.id },
+        data: { balance: { increment: topUpAmount } },
+      });
+      console.log(
+        `✅ Topped up ${existing.email} by ${topUpAmount} (new balance ${updatedWallet.balance})`,
+      );
+      return existing;
+    }
+
+    await prisma.wallet.create({
+      data: {
+        userId: existing.id,
+        balance: topUpAmount,
+        currency: 'USDT',
+      },
+    });
+    console.log(`✅ Created wallet for ${existing.email} with ${topUpAmount}`);
+    return existing;
+  }
+
+  const passwordHash = await bcrypt.hash(password, saltRounds);
+  const user = await prisma.user.create({
+    data: {
+      email: account,
+      password: passwordHash,
+      wallet: {
+        create: {
+          balance: topUpAmount,
+          currency: 'USDT',
+        },
+      },
+    },
+  });
+  console.log(`✅ Created ${user.email} with wallet balance ${topUpAmount}`);
+  return user;
+}
+
 async function main() {
   await seedTestMerchant();
   await seedDemoUser();
   await seedAdminUser();
+  await seedTestPlayerTopUp();
 }
 
 main()
