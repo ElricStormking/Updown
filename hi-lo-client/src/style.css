@@ -1589,7 +1589,8 @@ li {
   }
 }
 
-@media (max-width: 720px) {
+/* Mobile layout: width <= 1024px OR touch device with coarse pointer */
+@media (max-width: 1024px), (pointer: coarse) and (hover: none) {
   .page-wrapper {
     min-height: 100vh;
     height: 100dvh;

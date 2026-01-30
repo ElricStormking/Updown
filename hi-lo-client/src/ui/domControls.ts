@@ -571,7 +571,31 @@ export const initControls = (handlers: ControlHandlers) => {
     });
   });
 
-  const isMobileViewport = () => typeof window !== 'undefined' && window.innerWidth <= 720;
+  const isMobileViewport = () => {
+    if (typeof window === 'undefined') return false;
+    
+    // Method 1: User Agent detection
+    const ua = navigator.userAgent || '';
+    const mobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|mobile|CriOS/i.test(ua);
+    
+    // Method 2: Touch capability
+    const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    
+    // Method 3: CSS media query for coarse pointer (touch screens)
+    const hasCoarsePointer = window.matchMedia?.('(pointer: coarse)')?.matches ?? false;
+    
+    // Method 4: CSS media query for no hover (mobile devices)
+    const hasNoHover = window.matchMedia?.('(hover: none)')?.matches ?? false;
+    
+    // Method 5: Viewport width check
+    const narrowViewport = window.innerWidth <= 1024;
+    
+    // Consider mobile if:
+    // - User agent says mobile, OR
+    // - Has coarse pointer (touch) AND no hover, OR
+    // - Has touch AND narrow viewport
+    return mobileUA || (hasCoarsePointer && hasNoHover) || (hasTouch && narrowViewport);
+  };
   const isFullscreenActive = () => {
     if (typeof document === 'undefined') return false;
     return Boolean(
@@ -849,7 +873,7 @@ export const initControls = (handlers: ControlHandlers) => {
       return;
     }
 
-    const isMobile = typeof window !== 'undefined' && window.innerWidth <= 720;
+    const isMobile = isMobileViewport();
 
     if (isMobile) {
       // On mobile, keep the game container inside .layout (don't move it into the
@@ -881,6 +905,10 @@ export const initControls = (handlers: ControlHandlers) => {
   repositionGameContainer();
   if (typeof window !== 'undefined') {
     window.addEventListener('resize', repositionGameContainer);
+    window.addEventListener('orientationchange', repositionGameContainer);
+    // Also reposition after a short delay to handle late DOM updates
+    setTimeout(repositionGameContainer, 100);
+    setTimeout(repositionGameContainer, 500);
   }
   if (typeof document !== 'undefined') {
     document.addEventListener('fullscreenchange', repositionGameContainer);
