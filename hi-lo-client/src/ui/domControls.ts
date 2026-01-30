@@ -187,6 +187,26 @@ export const initControls = (handlers: ControlHandlers) => {
         <div class="status auth-status" id="auth-status">
           Enter demo credentials to start.
         </div>
+        <div class="fullscreen-overlay" id="fullscreen-overlay">
+          <div class="fullscreen-overlay-content">
+            <div class="rotate-phone-hint">
+              <svg class="rotate-phone-icon" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="18" y="4" width="28" height="56" rx="4" stroke="currentColor" stroke-width="2.5"/>
+                <circle cx="32" cy="52" r="2.5" fill="currentColor"/>
+                <path d="M8 32 L8 22 L16 27 Z" fill="currentColor" class="rotate-arrow"/>
+                <path d="M56 32 L56 42 L48 37 Z" fill="currentColor" class="rotate-arrow"/>
+                <path d="M8 27 Q8 12, 24 12" stroke="currentColor" stroke-width="2" fill="none" class="rotate-curve"/>
+                <path d="M56 37 Q56 52, 40 52" stroke="currentColor" stroke-width="2" fill="none" class="rotate-curve"/>
+              </svg>
+              <p class="rotate-phone-text">Please hold your phone <strong>vertically</strong></p>
+            </div>
+            <div class="fullscreen-divider"></div>
+            <p>For the best experience, enter fullscreen mode</p>
+            <button type="button" class="fullscreen-btn fullscreen-overlay-btn" id="auth-fullscreen-btn">
+              Tap to Enter Fullscreen
+            </button>
+          </div>
+        </div>
       </div>
     </div>
     <div class="page-wrapper" id="app-shell">
@@ -495,6 +515,8 @@ export const initControls = (handlers: ControlHandlers) => {
     root.querySelector('#token-bar-clear');
   fullscreenPromptEl = root.querySelector('#fullscreen-prompt');
   fullscreenBtnEl = root.querySelector('#fullscreen-btn');
+  const fullscreenOverlayEl = root.querySelector<HTMLElement>('#fullscreen-overlay');
+  const authFullscreenBtnEl = root.querySelector<HTMLButtonElement>('#auth-fullscreen-btn');
   statsDockEl = root.querySelector('#stats-dock');
   statsDockTabBtn = root.querySelector('#stats-dock-tab');
   statsDockPanelEl = root.querySelector('#stats-dock-panel');
@@ -613,32 +635,72 @@ export const initControls = (handlers: ControlHandlers) => {
           (target as HTMLElement & { webkitRequestFullscreen?: () => Promise<void> })
             .webkitRequestFullscreen),
     );
+  // Track if user has dismissed the fullscreen overlay (for fallback when fullscreen doesn't work)
+  let fullscreenOverlayDismissed = false;
+
   const updateFullscreenPrompt = () => {
-    if (!fullscreenPromptEl) return;
     const target = appShellEl ?? root.querySelector<HTMLElement>('#app-shell');
-    const shouldShow = isMobileViewport() && !isFullscreenActive() && canFullscreen(target);
-    fullscreenPromptEl.classList.toggle('is-hidden', !shouldShow);
+    const isMobile = isMobileViewport();
+    const isFullscreen = isFullscreenActive();
+    const shouldShowPrompt = isMobile && !isFullscreen && canFullscreen(target) && !fullscreenOverlayDismissed;
+    // Update game fullscreen prompt
+    if (fullscreenPromptEl) {
+      fullscreenPromptEl.classList.toggle('is-hidden', !shouldShowPrompt);
+    }
+    // Update auth screen fullscreen overlay (blocks form until fullscreen on mobile)
+    if (fullscreenOverlayEl) {
+      // Show overlay on mobile when not in fullscreen (unless dismissed)
+      fullscreenOverlayEl.classList.toggle('is-hidden', !shouldShowPrompt);
+    }
   };
 
-  fullscreenBtnEl?.addEventListener('click', async () => {
+  const requestFullscreen = async () => {
     const target = appShellEl ?? root.querySelector<HTMLElement>('#app-shell');
-    if (!target) return;
+    if (!target) {
+      fullscreenOverlayDismissed = true;
+      updateFullscreenPrompt();
+      return;
+    }
     const request =
       target.requestFullscreen ||
       (target as HTMLElement & { webkitRequestFullscreen?: () => Promise<void> })
         .webkitRequestFullscreen;
-    if (!request) return;
+    
+    // If fullscreen not supported, just dismiss the overlay
+    if (!request) {
+      fullscreenOverlayDismissed = true;
+      updateFullscreenPrompt();
+      return;
+    }
+    
     try {
       await request.call(target);
     } catch {
-      // Ignore fullscreen errors.
+      // Ignore errors
     }
-  });
+    
+    // Check if fullscreen was actually entered after a short delay
+    // If not (e.g., DevTools simulation), dismiss the overlay anyway
+    setTimeout(() => {
+      if (!isFullscreenActive()) {
+        fullscreenOverlayDismissed = true;
+        updateFullscreenPrompt();
+      }
+    }, 300);
+  };
+
+  // Fullscreen button in game area
+  fullscreenBtnEl?.addEventListener('click', requestFullscreen);
+  // Fullscreen button in auth/login screen
+  authFullscreenBtnEl?.addEventListener('click', requestFullscreen);
 
   if (typeof document !== 'undefined') {
     document.addEventListener('fullscreenchange', updateFullscreenPrompt);
     document.addEventListener('webkitfullscreenchange', updateFullscreenPrompt);
   }
+
+  // Initialize fullscreen prompt visibility
+  updateFullscreenPrompt();
 
   const setStatsModalOpen = (open: boolean) => {
     openModal(statsModalBackdropEl, open, statsModalCloseBtn);

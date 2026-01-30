@@ -126,6 +126,11 @@ html {
   text-align: center;
 }
 
+/* Fullscreen overlay - hidden by default on desktop */
+.fullscreen-overlay {
+  display: none;
+}
+
 .page-wrapper {
   display: flex;
   flex-direction: column;
@@ -1615,6 +1620,80 @@ li {
   .auth-screen {
     padding: 1rem;
     overflow-y: auto;
+    position: relative;
+  }
+
+  /* Fullscreen overlay that blocks login form on mobile */
+  .fullscreen-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(5, 8, 12, 0.95);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 16px;
+    z-index: 100;
+  }
+
+  .fullscreen-overlay.is-hidden {
+    display: none;
+  }
+
+  .fullscreen-overlay-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.5rem;
+    text-align: center;
+  }
+
+  .fullscreen-overlay-content p {
+    margin: 0;
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 0.95rem;
+    line-height: 1.5;
+  }
+
+  .rotate-phone-hint {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .rotate-phone-icon {
+    width: 56px;
+    height: 56px;
+    color: var(--accent);
+    animation: gentle-pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes gentle-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.7; transform: scale(1.05); }
+  }
+
+  .rotate-phone-text {
+    font-size: 1rem;
+    color: rgba(255, 255, 255, 0.9);
+  }
+
+  .rotate-phone-text strong {
+    color: var(--accent);
+  }
+
+  .fullscreen-divider {
+    width: 60%;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.15);
+    margin: 0.5rem 0;
+  }
+
+  .fullscreen-overlay-btn {
+    font-size: 1rem;
+    padding: 0.75rem 1.5rem;
   }
 
   .auth-card {
