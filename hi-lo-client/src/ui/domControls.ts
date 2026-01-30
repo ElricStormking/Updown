@@ -32,6 +32,8 @@ let tokenOptionsEl: HTMLDivElement | null = null;
 let tokenOptionButtons: HTMLButtonElement[] = [];
 let tokenBarMenuBtn: HTMLButtonElement | null = null;
 let tokenBarClearBtn: HTMLButtonElement | null = null;
+let fullscreenPromptEl: HTMLDivElement | null = null;
+let fullscreenBtnEl: HTMLButtonElement | null = null;
 let statsDockEl: HTMLDivElement | null = null;
 let statsDockTabBtn: HTMLButtonElement | null = null;
 let statsDockPanelEl: HTMLDivElement | null = null;
@@ -203,6 +205,11 @@ export const initControls = (handlers: ControlHandlers) => {
             <div class="stats-dock-panel" id="stats-dock-panel" aria-hidden="true">
               <div class="stats-last9 stats-dock-last9" id="stats-dock-last9"></div>
             </div>
+          </div>
+          <div class="fullscreen-prompt is-hidden" id="fullscreen-prompt">
+            <button type="button" class="fullscreen-btn" id="fullscreen-btn">
+              Tap to Enter Fullscreen
+            </button>
           </div>
         </div>
         <div class="control-panel">
@@ -486,6 +493,8 @@ export const initControls = (handlers: ControlHandlers) => {
   tokenBarClearBtn =
     root.querySelector('#token-bar-clear-floating') ??
     root.querySelector('#token-bar-clear');
+  fullscreenPromptEl = root.querySelector('#fullscreen-prompt');
+  fullscreenBtnEl = root.querySelector('#fullscreen-btn');
   statsDockEl = root.querySelector('#stats-dock');
   statsDockTabBtn = root.querySelector('#stats-dock-tab');
   statsDockPanelEl = root.querySelector('#stats-dock-panel');
@@ -561,6 +570,49 @@ export const initControls = (handlers: ControlHandlers) => {
       updateState({ selectedTokenValue: value });
     });
   });
+
+  const isMobileViewport = () => typeof window !== 'undefined' && window.innerWidth <= 720;
+  const isFullscreenActive = () => {
+    if (typeof document === 'undefined') return false;
+    return Boolean(
+      document.fullscreenElement ||
+        (document as Document & { webkitFullscreenElement?: Element })
+          .webkitFullscreenElement,
+    );
+  };
+  const canFullscreen = (target: HTMLElement | null) =>
+    Boolean(
+      target &&
+        (target.requestFullscreen ||
+          (target as HTMLElement & { webkitRequestFullscreen?: () => Promise<void> })
+            .webkitRequestFullscreen),
+    );
+  const updateFullscreenPrompt = () => {
+    if (!fullscreenPromptEl) return;
+    const target = appShellEl ?? root.querySelector<HTMLElement>('#app-shell');
+    const shouldShow = isMobileViewport() && !isFullscreenActive() && canFullscreen(target);
+    fullscreenPromptEl.classList.toggle('is-hidden', !shouldShow);
+  };
+
+  fullscreenBtnEl?.addEventListener('click', async () => {
+    const target = appShellEl ?? root.querySelector<HTMLElement>('#app-shell');
+    if (!target) return;
+    const request =
+      target.requestFullscreen ||
+      (target as HTMLElement & { webkitRequestFullscreen?: () => Promise<void> })
+        .webkitRequestFullscreen;
+    if (!request) return;
+    try {
+      await request.call(target);
+    } catch {
+      // Ignore fullscreen errors.
+    }
+  });
+
+  if (typeof document !== 'undefined') {
+    document.addEventListener('fullscreenchange', updateFullscreenPrompt);
+    document.addEventListener('webkitfullscreenchange', updateFullscreenPrompt);
+  }
 
   const setStatsModalOpen = (open: boolean) => {
     openModal(statsModalBackdropEl, open, statsModalCloseBtn);
@@ -810,6 +862,7 @@ export const initControls = (handlers: ControlHandlers) => {
         gameContainer.appendChild(tokenBarFloating);
         window.dispatchEvent(new Event('app:layout:shown'));
       }
+      updateFullscreenPrompt();
       return;
     }
 
@@ -822,11 +875,16 @@ export const initControls = (handlers: ControlHandlers) => {
       appShell.appendChild(tokenBarFloating);
       window.dispatchEvent(new Event('app:layout:shown'));
     }
+    updateFullscreenPrompt();
   };
 
   repositionGameContainer();
   if (typeof window !== 'undefined') {
     window.addEventListener('resize', repositionGameContainer);
+  }
+  if (typeof document !== 'undefined') {
+    document.addEventListener('fullscreenchange', repositionGameContainer);
+    document.addEventListener('webkitfullscreenchange', repositionGameContainer);
   }
 
   [upBtn, downBtn].forEach((button) => {

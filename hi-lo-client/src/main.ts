@@ -115,6 +115,8 @@ if (typeof window !== 'undefined') {
     refreshGameScale();
     setTimeout(refreshGameScale, 50);
   });
+  document.addEventListener('fullscreenchange', refreshGameScale);
+  document.addEventListener('webkitfullscreenchange', refreshGameScale);
   if ('ResizeObserver' in window) {
     const container = document.getElementById('game-container');
     if (container) {
