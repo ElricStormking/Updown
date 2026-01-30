@@ -70,6 +70,7 @@ html {
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
+  position: relative; /* For overlay positioning */
 }
 
 .auth-brand {
@@ -108,6 +109,17 @@ html {
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
+  position: relative;
+  z-index: 200; /* Above overlay z-index of 100 */
+  pointer-events: auto;
+}
+
+.auth-form input,
+.auth-form button {
+  pointer-events: auto;
+  touch-action: auto;
+  -webkit-user-select: auto;
+  user-select: auto;
 }
 
 .auth-form label {
@@ -129,6 +141,79 @@ html {
 /* Fullscreen overlay - hidden by default on desktop */
 .fullscreen-overlay {
   display: none;
+}
+
+/* Fullscreen gate - shown between login and game on mobile */
+.fullscreen-gate {
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(circle at top, #0b1b2a 0%, #040608 80%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.fullscreen-gate.is-hidden {
+  display: none;
+}
+
+.fullscreen-gate-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+  padding: 2rem;
+  text-align: center;
+  max-width: 400px;
+}
+
+.fullscreen-gate-content p {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+.fullscreen-gate-btn {
+  font-size: 1.1rem;
+  padding: 0.9rem 2rem;
+}
+
+/* Rotate phone hint - used in fullscreen gate */
+.rotate-phone-hint {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.rotate-phone-icon {
+  width: 64px;
+  height: 64px;
+  color: var(--accent);
+  animation: gentle-pulse 2s ease-in-out infinite;
+}
+
+@keyframes gentle-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(1.05); }
+}
+
+.rotate-phone-text {
+  font-size: 1.1rem;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.rotate-phone-text strong {
+  color: var(--accent);
+}
+
+.fullscreen-divider {
+  width: 60%;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.15);
+  margin: 0.5rem 0;
 }
 
 .page-wrapper {
@@ -1637,7 +1722,8 @@ li {
   }
 
   .fullscreen-overlay.is-hidden {
-    display: none;
+    display: none !important;
+    pointer-events: none !important;
   }
 
   .fullscreen-overlay-content {

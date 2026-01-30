@@ -68,6 +68,27 @@ let bettingHistoryNextBtn: HTMLButtonElement | null = null;
 let bettingHistoryPageLabelEl: HTMLSpanElement | null = null;
 let bettingHistoryListEl: HTMLDivElement | null = null;
 
+// Track if user has passed through the fullscreen gate (mobile only)
+let fullscreenGatePassed = false;
+
+// Mobile viewport detection (used globally)
+const isMobileViewport = () => {
+  if (typeof window === 'undefined') return false;
+  // Method 1: User Agent detection
+  const ua = navigator.userAgent || '';
+  const mobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|mobile|CriOS/i.test(ua);
+  // Method 2: Touch capability
+  const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+  // Method 3: CSS media query for coarse pointer (touch screens)
+  const hasCoarsePointer = window.matchMedia?.('(pointer: coarse)')?.matches ?? false;
+  // Method 4: CSS media query for no hover (mobile devices)
+  const hasNoHover = window.matchMedia?.('(hover: none)')?.matches ?? false;
+  // Method 5: Viewport width check
+  const narrowViewport = window.innerWidth <= 1024;
+  // Consider mobile if: User agent says mobile, OR has coarse pointer AND no hover, OR has touch AND narrow viewport
+  return mobileUA || (hasCoarsePointer && hasNoHover) || (hasTouch && narrowViewport);
+};
+
 const tokenStackByKey = new Map<string, HTMLElement>();
 const TOKEN_VALUES = [10, 50, 100, 150, 200, 300, 500];
 const TOKEN_BAR_FLOATING_CHIPS = [
@@ -187,26 +208,26 @@ export const initControls = (handlers: ControlHandlers) => {
         <div class="status auth-status" id="auth-status">
           Enter demo credentials to start.
         </div>
-        <div class="fullscreen-overlay" id="fullscreen-overlay">
-          <div class="fullscreen-overlay-content">
-            <div class="rotate-phone-hint">
-              <svg class="rotate-phone-icon" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <rect x="18" y="4" width="28" height="56" rx="4" stroke="currentColor" stroke-width="2.5"/>
-                <circle cx="32" cy="52" r="2.5" fill="currentColor"/>
-                <path d="M8 32 L8 22 L16 27 Z" fill="currentColor" class="rotate-arrow"/>
-                <path d="M56 32 L56 42 L48 37 Z" fill="currentColor" class="rotate-arrow"/>
-                <path d="M8 27 Q8 12, 24 12" stroke="currentColor" stroke-width="2" fill="none" class="rotate-curve"/>
-                <path d="M56 37 Q56 52, 40 52" stroke="currentColor" stroke-width="2" fill="none" class="rotate-curve"/>
-              </svg>
-              <p class="rotate-phone-text">Please hold your phone <strong>vertically</strong></p>
-            </div>
-            <div class="fullscreen-divider"></div>
-            <p>For the best experience, enter fullscreen mode</p>
-            <button type="button" class="fullscreen-btn fullscreen-overlay-btn" id="auth-fullscreen-btn">
-              Tap to Enter Fullscreen
-            </button>
-          </div>
+      </div>
+    </div>
+    <div class="fullscreen-gate is-hidden" id="fullscreen-gate">
+      <div class="fullscreen-gate-content">
+        <div class="rotate-phone-hint">
+          <svg class="rotate-phone-icon" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="18" y="4" width="28" height="56" rx="4" stroke="currentColor" stroke-width="2.5"/>
+            <circle cx="32" cy="52" r="2.5" fill="currentColor"/>
+            <path d="M8 32 L8 22 L16 27 Z" fill="currentColor" class="rotate-arrow"/>
+            <path d="M56 32 L56 42 L48 37 Z" fill="currentColor" class="rotate-arrow"/>
+            <path d="M8 27 Q8 12, 24 12" stroke="currentColor" stroke-width="2" fill="none" class="rotate-curve"/>
+            <path d="M56 37 Q56 52, 40 52" stroke="currentColor" stroke-width="2" fill="none" class="rotate-curve"/>
+          </svg>
+          <p class="rotate-phone-text">Please hold your phone <strong>vertically</strong></p>
         </div>
+        <div class="fullscreen-divider"></div>
+        <p>For the best experience, enter fullscreen mode</p>
+        <button type="button" class="fullscreen-btn fullscreen-gate-btn" id="fullscreen-gate-btn">
+          Tap to Enter Fullscreen
+        </button>
       </div>
     </div>
     <div class="page-wrapper" id="app-shell">
@@ -515,8 +536,8 @@ export const initControls = (handlers: ControlHandlers) => {
     root.querySelector('#token-bar-clear');
   fullscreenPromptEl = root.querySelector('#fullscreen-prompt');
   fullscreenBtnEl = root.querySelector('#fullscreen-btn');
-  const fullscreenOverlayEl = root.querySelector<HTMLElement>('#fullscreen-overlay');
-  const authFullscreenBtnEl = root.querySelector<HTMLButtonElement>('#auth-fullscreen-btn');
+  const fullscreenGateEl = root.querySelector<HTMLElement>('#fullscreen-gate');
+  const fullscreenGateBtnEl = root.querySelector<HTMLButtonElement>('#fullscreen-gate-btn');
   statsDockEl = root.querySelector('#stats-dock');
   statsDockTabBtn = root.querySelector('#stats-dock-tab');
   statsDockPanelEl = root.querySelector('#stats-dock-panel');
@@ -595,31 +616,6 @@ export const initControls = (handlers: ControlHandlers) => {
     });
   });
 
-  const isMobileViewport = () => {
-    if (typeof window === 'undefined') return false;
-    
-    // Method 1: User Agent detection
-    const ua = navigator.userAgent || '';
-    const mobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|mobile|CriOS/i.test(ua);
-    
-    // Method 2: Touch capability
-    const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-    
-    // Method 3: CSS media query for coarse pointer (touch screens)
-    const hasCoarsePointer = window.matchMedia?.('(pointer: coarse)')?.matches ?? false;
-    
-    // Method 4: CSS media query for no hover (mobile devices)
-    const hasNoHover = window.matchMedia?.('(hover: none)')?.matches ?? false;
-    
-    // Method 5: Viewport width check
-    const narrowViewport = window.innerWidth <= 1024;
-    
-    // Consider mobile if:
-    // - User agent says mobile, OR
-    // - Has coarse pointer (touch) AND no hover, OR
-    // - Has touch AND narrow viewport
-    return mobileUA || (hasCoarsePointer && hasNoHover) || (hasTouch && narrowViewport);
-  };
   const isFullscreenActive = () => {
     if (typeof document === 'undefined') return false;
     return Boolean(
@@ -635,64 +631,63 @@ export const initControls = (handlers: ControlHandlers) => {
           (target as HTMLElement & { webkitRequestFullscreen?: () => Promise<void> })
             .webkitRequestFullscreen),
     );
-  // Track if user has dismissed the fullscreen overlay (for fallback when fullscreen doesn't work)
-  let fullscreenOverlayDismissed = false;
 
   const updateFullscreenPrompt = () => {
     const target = appShellEl ?? root.querySelector<HTMLElement>('#app-shell');
     const isMobile = isMobileViewport();
     const isFullscreen = isFullscreenActive();
-    const shouldShowPrompt = isMobile && !isFullscreen && canFullscreen(target) && !fullscreenOverlayDismissed;
-    // Update game fullscreen prompt
+    const canEnterFullscreen = canFullscreen(target);
+    const shouldShowGamePrompt = isMobile && !isFullscreen && canEnterFullscreen;
+    // Update game fullscreen prompt (shown inside game area)
     if (fullscreenPromptEl) {
-      fullscreenPromptEl.classList.toggle('is-hidden', !shouldShowPrompt);
+      fullscreenPromptEl.classList.toggle('is-hidden', !shouldShowGamePrompt);
     }
-    // Update auth screen fullscreen overlay (blocks form until fullscreen on mobile)
-    if (fullscreenOverlayEl) {
-      // Show overlay on mobile when not in fullscreen (unless dismissed)
-      fullscreenOverlayEl.classList.toggle('is-hidden', !shouldShowPrompt);
-    }
+  };
+
+  // Show/hide the fullscreen gate (between login and game)
+  const updateFullscreenGate = (isAuthed: boolean) => {
+    if (!fullscreenGateEl) return;
+    const isMobile = isMobileViewport();
+    // Show gate if: user is authenticated, on mobile, and hasn't passed the gate yet
+    const shouldShowGate = isAuthed && isMobile && !fullscreenGatePassed;
+    fullscreenGateEl.classList.toggle('is-hidden', !shouldShowGate);
   };
 
   const requestFullscreen = async () => {
     const target = appShellEl ?? root.querySelector<HTMLElement>('#app-shell');
-    if (!target) {
-      fullscreenOverlayDismissed = true;
-      updateFullscreenPrompt();
-      return;
-    }
+    if (!target) return;
     const request =
       target.requestFullscreen ||
       (target as HTMLElement & { webkitRequestFullscreen?: () => Promise<void> })
         .webkitRequestFullscreen;
-    
-    // If fullscreen not supported, just dismiss the overlay
-    if (!request) {
-      fullscreenOverlayDismissed = true;
-      updateFullscreenPrompt();
-      return;
-    }
-    
+    if (!request) return;
     try {
       await request.call(target);
     } catch {
       // Ignore errors
     }
-    
-    // Check if fullscreen was actually entered after a short delay
-    // If not (e.g., DevTools simulation), dismiss the overlay anyway
-    setTimeout(() => {
-      if (!isFullscreenActive()) {
-        fullscreenOverlayDismissed = true;
-        updateFullscreenPrompt();
-      }
-    }, 300);
+  };
+
+  // Dismiss the fullscreen gate and show the game
+  const dismissFullscreenGate = () => {
+    fullscreenGatePassed = true;
+    if (fullscreenGateEl) {
+      fullscreenGateEl.classList.add('is-hidden');
+    }
+    if (appShellEl) {
+      appShellEl.classList.remove('is-hidden');
+    }
+    window.dispatchEvent(new Event('app:layout:shown'));
   };
 
   // Fullscreen button in game area
   fullscreenBtnEl?.addEventListener('click', requestFullscreen);
-  // Fullscreen button in auth/login screen
-  authFullscreenBtnEl?.addEventListener('click', requestFullscreen);
+  
+  // Fullscreen gate button (shown after login, before game)
+  fullscreenGateBtnEl?.addEventListener('click', () => {
+    dismissFullscreenGate();
+    void requestFullscreen();
+  });
 
   if (typeof document !== 'undefined') {
     document.addEventListener('fullscreenchange', updateFullscreenPrompt);
@@ -1665,12 +1660,31 @@ const refreshAuthScreen = (nextState: typeof state) => {
   if (!authScreenEl || !appShellEl) return;
   const isAuthed = Boolean(nextState.token);
   const wasHidden = authScreenEl.classList.contains('is-hidden');
+  const isMobile = isMobileViewport();
+  const fullscreenGate = document.querySelector<HTMLElement>('#fullscreen-gate');
+  
+  // Hide auth screen when authenticated
   authScreenEl.classList.toggle('is-hidden', isAuthed);
-  appShellEl.classList.toggle('is-hidden', !isAuthed);
+  
   if (isAuthed && !wasHidden) {
     // Reset viewport zoom after login (fixes iOS/Android zoom issue from input focus)
     resetMobileViewportZoom();
-    window.dispatchEvent(new Event('app:layout:shown'));
+    
+    if (isMobile && fullscreenGate && !fullscreenGatePassed) {
+      // On mobile: show fullscreen gate, keep game hidden
+      fullscreenGate.classList.remove('is-hidden');
+      appShellEl.classList.add('is-hidden');
+    } else {
+      // On desktop or if gate already passed: show game directly
+      appShellEl.classList.remove('is-hidden');
+      window.dispatchEvent(new Event('app:layout:shown'));
+    }
+  } else if (!isAuthed) {
+    // Not authenticated: hide both gate and game
+    appShellEl.classList.add('is-hidden');
+    if (fullscreenGate) {
+      fullscreenGate.classList.add('is-hidden');
+    }
   }
 };
 
