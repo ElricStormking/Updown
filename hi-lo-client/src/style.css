@@ -304,9 +304,10 @@ html {
 }
 
 .token-bar-floating-bg {
-  width: 100%;
+  width: 115%; /* Widen by 45% */
   height: auto;
   display: block;
+  margin-left: -12.5%; /* Center the widened image */
 }
 
 .token-bar-floating button {
@@ -1928,8 +1929,10 @@ li {
   }
 
   .token-bar-floating {
-    width: min(540px, 92%);
-    bottom: 8px; /* Position at bottom of game container */
+    width: min(460px, 78%);
+    bottom: 4px; /* Position at bottom of game container */
+    transform: translateX(-50%) scale(0.85); /* Shrink by 15% */
+    transform-origin: center bottom;
   }
 
   .fullscreen-prompt {
