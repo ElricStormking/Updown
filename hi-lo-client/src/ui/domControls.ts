@@ -538,6 +538,8 @@ export const initControls = (handlers: ControlHandlers) => {
   const authForm = root.querySelector<HTMLFormElement>('#auth-form');
   authForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
+    // Blur inputs immediately to prevent mobile zoom from persisting
+    authForm.querySelectorAll('input').forEach((input) => input.blur());
     const formData = new FormData(authForm);
     const account = formData.get('account')?.toString() ?? '';
     const password = formData.get('password')?.toString() ?? '';
@@ -1581,6 +1583,22 @@ const renderDigitResult = (nextState: typeof state) => {
   digitResultSumEl.textContent = `Sum ${sum}`;
 };
 
+const resetMobileViewportZoom = () => {
+  // Reset any zoom that occurred during input focus on mobile
+  if (typeof document === 'undefined') return;
+  const viewport = document.querySelector('meta[name="viewport"]');
+  if (viewport) {
+    // Force viewport reset by toggling the content
+    const original = viewport.getAttribute('content') || '';
+    viewport.setAttribute('content', 'width=device-width, initial-scale=1.0');
+    setTimeout(() => {
+      viewport.setAttribute('content', original);
+    }, 50);
+  }
+  // Also try scrolling to top-left to reset any offset
+  window.scrollTo(0, 0);
+};
+
 const refreshAuthScreen = (nextState: typeof state) => {
   if (!authScreenEl || !appShellEl) return;
   const isAuthed = Boolean(nextState.token);
@@ -1588,6 +1606,8 @@ const refreshAuthScreen = (nextState: typeof state) => {
   authScreenEl.classList.toggle('is-hidden', isAuthed);
   appShellEl.classList.toggle('is-hidden', !isAuthed);
   if (isAuthed && !wasHidden) {
+    // Reset viewport zoom after login (fixes iOS/Android zoom issue from input focus)
+    resetMobileViewportZoom();
     window.dispatchEvent(new Event('app:layout:shown'));
   }
 };
