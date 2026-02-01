@@ -254,17 +254,17 @@ html {
 
 #tradingview-chart {
   position: absolute;
-  top: var(--hud-chart-top, clamp(84px, 12%, 170px));
+  top: calc(var(--hud-chart-top, clamp(84px, 12%, 170px)) + 60px);
   left: 50%;
   transform: translateX(-50%);
   width: var(--hud-chart-width, min(74%, 640px));
   height: var(--hud-chart-height, clamp(56px, 10%, 130px));
   border-radius: 14px;
   overflow: hidden;
-  background: rgba(4, 8, 12, 0.55);
+  background: transparent;
   border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(6px);
+  backdrop-filter: none;
   z-index: 6;
   pointer-events: none;
 }

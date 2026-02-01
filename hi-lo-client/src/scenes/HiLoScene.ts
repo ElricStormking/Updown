@@ -89,7 +89,9 @@ export class HiLoScene extends Phaser.Scene {
   private singleDoubleMultiplierText?: Phaser.GameObjects.Text;
   private singleTripleMultiplierText?: Phaser.GameObjects.Text;
   private lastResultDigits: Phaser.GameObjects.Image[] = [];
-  private roundDigitsText?: Phaser.GameObjects.Text;
+  private roundDigitsLeftText?: Phaser.GameObjects.Text;
+  private roundDigitsCenterText?: Phaser.GameObjects.Text;
+  private roundDigitsRightText?: Phaser.GameObjects.Text;
   private bgm?: Phaser.Sound.BaseSound;
 
   private chipButtons = new Map<number, { image: Phaser.GameObjects.Image; baseScale: number }>();
@@ -366,7 +368,7 @@ export class HiLoScene extends Phaser.Scene {
     const singleMultiplierOffset = singleTitleSectionWidth + singleTitleInset;
     this.singleDoubleMultiplierText = this.add
       .text(
-        singleTitleLeft + singleMultiplierOffset,
+        singleTitleLeft + singleMultiplierOffset - 115,
         titleOnSingle.y,
         '',
         {
@@ -380,7 +382,7 @@ export class HiLoScene extends Phaser.Scene {
       .setDepth(6);
     this.singleTripleMultiplierText = this.add
       .text(
-        singleTitleLeft + singleTitleSectionWidth * 2 + singleTitleInset,
+        singleTitleLeft + singleTitleSectionWidth * 2 + singleTitleInset - 225,
         titleOnSingle.y,
         '',
         {
@@ -545,7 +547,7 @@ export class HiLoScene extends Phaser.Scene {
       .setOrigin(0.5, 0.5);
 
     this.roundText = this.add
-      .text(130, 199, `${t(this.language, 'scene.roundPrefix')} #--`, {
+      .text(180, 199, `--`, {
         fontFamily: 'Rajdhani',
         fontSize: '20px',
         color: '#f8fafc',
@@ -563,7 +565,7 @@ export class HiLoScene extends Phaser.Scene {
       .setOrigin(0, 0.5);
 
     this.balanceText = this.add
-      .text(894, 200, '0.00 USDT', {
+      .text(974, 200, '0.00 USDT', {
         fontFamily: 'Roboto Mono',
         fontSize: '20px',
         color: '#00ffb2',
@@ -576,15 +578,6 @@ export class HiLoScene extends Phaser.Scene {
         fontFamily: 'Rajdhani',
         fontSize: '18px',
         color: '#b2bec3',
-        fontStyle: 'bold',
-      })
-      .setOrigin(0.5);
-
-    this.priceLabelText = this.add
-      .text(540, 900, t(this.language, 'scene.bitcoinPrice'), {
-        fontFamily: 'Rajdhani',
-        fontSize: '18px',
-        color: '#cbd5f5',
         fontStyle: 'bold',
       })
       .setOrigin(0.5);
@@ -608,10 +601,31 @@ export class HiLoScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setAlpha(0);
 
-    this.roundDigitsText = this.add
-      .text(538, 181, '0   0   0', {
+    // Create three separate digit text objects for each frame
+    this.roundDigitsLeftText = this.add
+      .text(420, 181, '0', {
         fontFamily: 'Roboto Mono',
-        fontSize: '28px',
+        fontSize: '40px',
+        color: '#f8fafc',
+        fontStyle: 'bold',
+        align: 'center',
+      })
+      .setOrigin(0.5, 0.5);
+
+    this.roundDigitsCenterText = this.add
+      .text(538, 181, '0', {
+        fontFamily: 'Roboto Mono',
+        fontSize: '40px',
+        color: '#f8fafc',
+        fontStyle: 'bold',
+        align: 'center',
+      })
+      .setOrigin(0.5, 0.5);
+
+    this.roundDigitsRightText = this.add
+      .text(655, 181, '0', {
+        fontFamily: 'Roboto Mono',
+        fontSize: '40px',
         color: '#f8fafc',
         fontStyle: 'bold',
         align: 'center',
@@ -815,7 +829,7 @@ export class HiLoScene extends Phaser.Scene {
     this.betTargets.set(key, image);
     image.setData('baseScale', image.scaleX);
     this.makeInteractive(image, () => this.handlePlaceDigitBet(digitType));
-    this.registerOddsText(key, image.x, image.y + 26, 17);
+    this.registerOddsText(key, image.x, image.y + 64, 17);
   }
 
   private registerDigitCell(
@@ -1136,7 +1150,7 @@ export class HiLoScene extends Phaser.Scene {
             fontStyle: 'bold',
           })
           .setOrigin(0.5);
-        container = this.add.container(target.x, target.y, [chip, label]);
+        container = this.add.container(target.x + 58, target.y, [chip, label]);
         container.setDepth(20);
         this.tokenSprites.set(key, container);
       } else {
@@ -1169,8 +1183,10 @@ export class HiLoScene extends Phaser.Scene {
     if (!digits || !/^\d{3}$/.test(digits)) {
       return;
     }
-    if (this.roundDigitsText) {
-      this.roundDigitsText.setText(digits);
+    if (this.roundDigitsLeftText && this.roundDigitsCenterText && this.roundDigitsRightText) {
+      this.roundDigitsLeftText.setText(digits[0]);
+      this.roundDigitsCenterText.setText(digits[1]);
+      this.roundDigitsRightText.setText(digits[2]);
     }
   }
 
@@ -1199,20 +1215,15 @@ export class HiLoScene extends Phaser.Scene {
   setLanguage(lang: LanguageCode) {
     this.language = lang;
     if (!this.uiReady) return;
-    if (this.priceLabelText) {
-      this.priceLabelText.setText(t(this.language, 'scene.bitcoinPrice'));
-    }
     if (this.round) {
-      this.roundText?.setText(
-        `${t(this.language, 'scene.roundPrefix')} #${this.round.id}`,
-      );
+      this.roundText?.setText(`${this.round.id}`);
       if (this.round.status === 'BETTING') {
         this.statusText?.setText(t(this.language, 'scene.betsOpen'));
       } else if (this.round.status === 'RESULT_PENDING') {
         this.statusText?.setText(t(this.language, 'scene.locked'));
       }
     } else {
-      this.roundText?.setText(`${t(this.language, 'scene.roundPrefix')} #--`);
+      this.roundText?.setText(`--`);
       this.statusText?.setText(t(this.language, 'scene.connecting'));
     }
   }
@@ -1247,7 +1258,7 @@ export class HiLoScene extends Phaser.Scene {
 
   setRoundState(state: RoundStatePayload) {
     this.round = state;
-    this.roundText?.setText(`${t(this.language, 'scene.roundPrefix')} #${state.id}`);
+    this.roundText?.setText(`${state.id}`);
     if (state.status === 'BETTING') {
       this.clearWinnerHighlights();
     }
