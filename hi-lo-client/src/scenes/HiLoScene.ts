@@ -311,14 +311,15 @@ export class HiLoScene extends Phaser.Scene {
 
     addImage(529, 1155, 'title_bigbox_yellow', 0.75);
     const titleOnDouble = addImage(535, 1014, 'title_on_double', 0.75);
+    const titleDoubleInset = titleOnDouble.displayWidth * 0.37;
     this.doublePayoutText = this.add
       .text(
-        titleOnDouble.x - titleOnDouble.displayWidth / 2 - 12,
+        titleOnDouble.x - titleOnDouble.displayWidth / 2 + titleDoubleInset,
         titleOnDouble.y,
         '',
         {
           fontFamily: 'Rajdhani',
-          fontSize: '18px',
+          fontSize: '22px',
           color: '#f8fafc',
           fontStyle: 'bold',
         },
@@ -327,14 +328,15 @@ export class HiLoScene extends Phaser.Scene {
       .setDepth(6);
     addImage(530, 1372, 'title_bigbox_yellow', 0.75);
     const titleOnTriple = addImage(532, 1231, 'title_on_triple', 0.75);
+    const titleTripleInset = titleOnTriple.displayWidth * 0.39;
     this.triplePayoutText = this.add
       .text(
-        titleOnTriple.x - titleOnTriple.displayWidth / 2 - 12,
+        titleOnTriple.x - titleOnTriple.displayWidth / 2 + titleTripleInset,
         titleOnTriple.y,
         '',
         {
           fontFamily: 'Rajdhani',
-          fontSize: '18px',
+          fontSize: '22px',
           color: '#f8fafc',
           fontStyle: 'bold',
         },
@@ -344,49 +346,51 @@ export class HiLoScene extends Phaser.Scene {
     addImage(531, 1600, 'title_bigbox_purple', 0.75);
     addImage(536, 1459, 'title_sum', 0.75);
     const titleOnSingle = addImage(535, 1909, 'title_on_single', 0.75);
+    const singleTitleSectionWidth = titleOnSingle.displayWidth / 3;
+    const singleTitleLeft = titleOnSingle.x - titleOnSingle.displayWidth / 2;
+    const singleTitleInset = singleTitleSectionWidth * 0.69;
     this.singlePayoutText = this.add
       .text(
-        titleOnSingle.x - titleOnSingle.displayWidth / 2 - 12,
+        singleTitleLeft + singleTitleInset,
         titleOnSingle.y,
         '',
         {
           fontFamily: 'Rajdhani',
-          fontSize: '18px',
+          fontSize: '22px',
           color: '#f8fafc',
           fontStyle: 'bold',
         },
       )
       .setOrigin(1, 0.5)
       .setDepth(6);
-    const singleTitleSectionWidth = titleOnSingle.displayWidth / 3;
-    const singleMultiplierOffset = singleTitleSectionWidth * 0.18;
+    const singleMultiplierOffset = singleTitleSectionWidth + singleTitleInset;
     this.singleDoubleMultiplierText = this.add
       .text(
-        titleOnSingle.x + singleMultiplierOffset,
+        singleTitleLeft + singleMultiplierOffset,
         titleOnSingle.y,
         '',
         {
           fontFamily: 'Rajdhani',
-          fontSize: '18px',
+          fontSize: '22px',
           color: '#ffd166',
           fontStyle: 'bold',
         },
       )
-      .setOrigin(0, 0.5)
+      .setOrigin(1, 0.5)
       .setDepth(6);
     this.singleTripleMultiplierText = this.add
       .text(
-        titleOnSingle.x + singleTitleSectionWidth + singleMultiplierOffset,
+        singleTitleLeft + singleTitleSectionWidth * 2 + singleTitleInset,
         titleOnSingle.y,
         '',
         {
           fontFamily: 'Rajdhani',
-          fontSize: '18px',
+          fontSize: '22px',
           color: '#ffd166',
           fontStyle: 'bold',
         },
       )
-      .setOrigin(0, 0.5)
+      .setOrigin(1, 0.5)
       .setDepth(6);
 
     const doubleDigits: Array<[string, number, number]> = [
@@ -515,7 +519,7 @@ export class HiLoScene extends Phaser.Scene {
     this.oddsLeftText = this.add
       .text(144, 733, '', {
         fontFamily: 'Rajdhani',
-        fontSize: '18px',
+        fontSize: '22px',
         color: '#f8fafc',
         fontStyle: 'bold',
       })
@@ -524,7 +528,7 @@ export class HiLoScene extends Phaser.Scene {
     this.oddsRightText = this.add
       .text(664, 733, '', {
         fontFamily: 'Rajdhani',
-        fontSize: '18px',
+        fontSize: '22px',
         color: '#f8fafc',
         fontStyle: 'bold',
       })
@@ -533,7 +537,7 @@ export class HiLoScene extends Phaser.Scene {
     this.oddsCenterText = this.add
       .text(520, 733, '', {
         fontFamily: 'Rajdhani',
-        fontSize: '20px',
+        fontSize: '24px',
         color: '#ffd166',
         fontStyle: 'bold',
       })
@@ -811,7 +815,7 @@ export class HiLoScene extends Phaser.Scene {
     this.betTargets.set(key, image);
     image.setData('baseScale', image.scaleX);
     this.makeInteractive(image, () => this.handlePlaceDigitBet(digitType));
-    this.registerOddsText(key, image.x, image.y + 26, 14);
+    this.registerOddsText(key, image.x, image.y + 26, 17);
   }
 
   private registerDigitCell(
@@ -826,7 +830,7 @@ export class HiLoScene extends Phaser.Scene {
     this.makeInteractive(image, () =>
       this.handlePlaceDigitBet(digitType, selection),
     );
-    this.registerOddsText(key, image.x, image.y + oddsOffsetY, 12);
+    this.registerOddsText(key, image.x, image.y + oddsOffsetY, 15);
   }
 
   private registerChipButton(value: number, image: Phaser.GameObjects.Image) {
