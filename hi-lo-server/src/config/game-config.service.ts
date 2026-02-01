@@ -332,7 +332,16 @@ export class GameConfigService {
       sum[Number(key)] = requireNumber(sumRaw[key], `digitPayouts.sum.${key}`);
     }
 
+    const doubleBase = requireNumber(raw.double, 'digitPayouts.double');
+    const tripleBase = requireNumber(raw.triple, 'digitPayouts.triple');
+    const singleBase = requireNumber(singleRaw.single, 'digitPayouts.single.single');
+    const singleDouble = requireNumber(singleRaw.double, 'digitPayouts.single.double');
+    const singleTriple = requireNumber(singleRaw.triple, 'digitPayouts.single.triple');
+
     const bySlot = this.parseSlotPayouts(raw.bySlot, defaults.bySlot, raw);
+    this.normalizeSingleSlotPayouts(bySlot, singleBase);
+    this.normalizeDoubleSlotPayouts(bySlot, doubleBase);
+    this.normalizeTripleSlotPayouts(bySlot, tripleBase);
     const bySlotMeta = this.parseSlotPayoutMeta(
       raw.bySlotMeta,
       defaults.bySlotMeta,
@@ -344,12 +353,12 @@ export class GameConfigService {
         'digitPayouts.smallBigOddEven',
       ),
       anyTriple: requireNumber(raw.anyTriple, 'digitPayouts.anyTriple'),
-      double: requireNumber(raw.double, 'digitPayouts.double'),
-      triple: requireNumber(raw.triple, 'digitPayouts.triple'),
+      double: doubleBase,
+      triple: tripleBase,
       single: {
-        single: requireNumber(singleRaw.single, 'digitPayouts.single.single'),
-        double: requireNumber(singleRaw.double, 'digitPayouts.single.double'),
-        triple: requireNumber(singleRaw.triple, 'digitPayouts.single.triple'),
+        single: singleBase,
+        double: singleDouble,
+        triple: singleTriple,
       },
       sum,
       bySlot,
@@ -373,7 +382,16 @@ export class GameConfigService {
       sum[Number(key)] = toNumber(sumRaw[key], fallback.sum[Number(key)]);
     }
 
+    const doubleBase = toNumber(raw.double, fallback.double);
+    const tripleBase = toNumber(raw.triple, fallback.triple);
+    const singleBase = toNumber(singleRaw.single, fallback.single.single);
+    const singleDouble = toNumber(singleRaw.double, fallback.single.double);
+    const singleTriple = toNumber(singleRaw.triple, fallback.single.triple);
+
     const bySlot = this.mergeSlotPayouts(raw.bySlot, fallback.bySlot, raw);
+    this.normalizeSingleSlotPayouts(bySlot, singleBase);
+    this.normalizeDoubleSlotPayouts(bySlot, doubleBase);
+    this.normalizeTripleSlotPayouts(bySlot, tripleBase);
     const bySlotMeta = this.mergeSlotPayoutMeta(
       raw.bySlotMeta,
       fallback.bySlotMeta,
@@ -382,17 +400,50 @@ export class GameConfigService {
     return {
       smallBigOddEven: toNumber(raw.smallBigOddEven, fallback.smallBigOddEven),
       anyTriple: toNumber(raw.anyTriple, fallback.anyTriple),
-      double: toNumber(raw.double, fallback.double),
-      triple: toNumber(raw.triple, fallback.triple),
+      double: doubleBase,
+      triple: tripleBase,
       single: {
-        single: toNumber(singleRaw.single, fallback.single.single),
-        double: toNumber(singleRaw.double, fallback.single.double),
-        triple: toNumber(singleRaw.triple, fallback.single.triple),
+        single: singleBase,
+        double: singleDouble,
+        triple: singleTriple,
       },
       sum,
       bySlot,
       bySlotMeta,
     };
+  }
+
+  private normalizeSingleSlotPayouts(
+    bySlot: Record<string, number>,
+    singleBase: number,
+  ) {
+    for (const key of Object.keys(bySlot)) {
+      if (key.startsWith('SINGLE|')) {
+        bySlot[key] = singleBase;
+      }
+    }
+  }
+
+  private normalizeDoubleSlotPayouts(
+    bySlot: Record<string, number>,
+    doubleBase: number,
+  ) {
+    for (const key of Object.keys(bySlot)) {
+      if (key.startsWith('DOUBLE|')) {
+        bySlot[key] = doubleBase;
+      }
+    }
+  }
+
+  private normalizeTripleSlotPayouts(
+    bySlot: Record<string, number>,
+    tripleBase: number,
+  ) {
+    for (const key of Object.keys(bySlot)) {
+      if (key.startsWith('TRIPLE|')) {
+        bySlot[key] = tripleBase;
+      }
+    }
   }
 
   private parseSlotPayouts(

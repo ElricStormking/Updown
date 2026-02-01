@@ -901,6 +901,9 @@
       const bonusRatioInputs = new Map();
       const slotPayoutInputs = new Map();
       const slotMetaInputs = new Map();
+      const singleSlotKeys = [];
+      const doubleSlotKeys = [];
+      const tripleSlotKeys = [];
 
       const buildBonusSlotDefs = () => {
         const defs = [];
@@ -1294,6 +1297,39 @@
         slotMetaInputs.forEach((_, key) => updateSlotMetrics(key));
       };
 
+      const syncSingleSlotPayoutInputs = (value, sourceKey) => {
+        singleSlotKeys.forEach((key) => {
+          const input = slotPayoutInputs.get(key);
+          if (!input) return;
+          if (!sourceKey || key !== sourceKey) {
+            input.value = value;
+          }
+        });
+        singleSlotKeys.forEach((key) => updateSlotMetrics(key));
+      };
+
+      const syncDoubleSlotPayoutInputs = (value, sourceKey) => {
+        doubleSlotKeys.forEach((key) => {
+          const input = slotPayoutInputs.get(key);
+          if (!input) return;
+          if (!sourceKey || key !== sourceKey) {
+            input.value = value;
+          }
+        });
+        doubleSlotKeys.forEach((key) => updateSlotMetrics(key));
+      };
+
+      const syncTripleSlotPayoutInputs = (value, sourceKey) => {
+        tripleSlotKeys.forEach((key) => {
+          const input = slotPayoutInputs.get(key);
+          if (!input) return;
+          if (!sourceKey || key !== sourceKey) {
+            input.value = value;
+          }
+        });
+        tripleSlotKeys.forEach((key) => updateSlotMetrics(key));
+      };
+
       let syncingBonusScroll = false;
       const syncBonusRatioScroll = (source, target) => {
         if (!source || !target) return;
@@ -1334,11 +1370,20 @@
 
       const resolveSlotPayoutValue = (digitPayouts, slotKey) => {
         if (!digitPayouts) return null;
+        const digitType = slotKey.split('|')[0];
+        if (digitType === 'SINGLE') {
+          return digitPayouts.single?.single;
+        }
+        if (digitType === 'DOUBLE') {
+          return digitPayouts.double;
+        }
+        if (digitType === 'TRIPLE') {
+          return digitPayouts.triple;
+        }
         const bySlotValue = digitPayouts.bySlot && digitPayouts.bySlot[slotKey];
         if (typeof bySlotValue === 'number' && Number.isFinite(bySlotValue)) {
           return bySlotValue;
         }
-        const digitType = slotKey.split('|')[0];
         switch (digitType) {
           case 'SMALL':
           case 'ODD':
@@ -1351,8 +1396,6 @@
             return digitPayouts.double;
           case 'TRIPLE':
             return digitPayouts.triple;
-          case 'SINGLE':
-            return digitPayouts.single?.single;
           default:
             return null;
         }
@@ -1428,6 +1471,9 @@
         sumInputs.clear();
         slotPayoutInputs.clear();
         slotMetaInputs.clear();
+        singleSlotKeys.length = 0;
+        doubleSlotKeys.length = 0;
+        tripleSlotKeys.length = 0;
 
         bonusSlotDefs.forEach((slot) => {
           const key = slot.digitType + '|' + (slot.selection ?? '');
@@ -1558,7 +1604,24 @@
             payoutCell.appendChild(payoutInput);
             row.appendChild(payoutCell);
             slotPayoutInputs.set(key, payoutInput);
-            payoutInput.addEventListener('input', () => updateSlotMetrics(key));
+            if (slot.digitType === 'SINGLE') {
+              singleSlotKeys.push(key);
+              payoutInput.addEventListener('input', () => {
+                syncSingleSlotPayoutInputs(payoutInput.value, key);
+              });
+            } else if (slot.digitType === 'DOUBLE') {
+              doubleSlotKeys.push(key);
+              payoutInput.addEventListener('input', () => {
+                syncDoubleSlotPayoutInputs(payoutInput.value, key);
+              });
+            } else if (slot.digitType === 'TRIPLE') {
+              tripleSlotKeys.push(key);
+              payoutInput.addEventListener('input', () => {
+                syncTripleSlotPayoutInputs(payoutInput.value, key);
+              });
+            } else {
+              payoutInput.addEventListener('input', () => updateSlotMetrics(key));
+            }
 
             slotMetaInputs.set(key, {
               bonusEl: bonusValue,

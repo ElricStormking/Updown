@@ -28,6 +28,13 @@ const formatPayoutRatio = (value: number) => {
   return `${asStr}:1`;
 };
 
+const formatMultiplierRatio = (value: number) => {
+  if (!Number.isFinite(value)) return '--';
+  const rounded = Math.round(value * 100) / 100;
+  const asStr = rounded.toFixed(2).replace(/\.?0+$/, '');
+  return `1:${asStr}`;
+};
+
 const DEFAULT_SUM_PAYOUTS: Record<number, number> = {
   1: 130,
   2: 70,
@@ -76,6 +83,11 @@ export class HiLoScene extends Phaser.Scene {
   private oddsLeftText?: Phaser.GameObjects.Text;
   private oddsCenterText?: Phaser.GameObjects.Text;
   private oddsRightText?: Phaser.GameObjects.Text;
+  private doublePayoutText?: Phaser.GameObjects.Text;
+  private triplePayoutText?: Phaser.GameObjects.Text;
+  private singlePayoutText?: Phaser.GameObjects.Text;
+  private singleDoubleMultiplierText?: Phaser.GameObjects.Text;
+  private singleTripleMultiplierText?: Phaser.GameObjects.Text;
   private lastResultDigits: Phaser.GameObjects.Image[] = [];
   private roundDigitsText?: Phaser.GameObjects.Text;
   private bgm?: Phaser.Sound.BaseSound;
@@ -298,12 +310,84 @@ export class HiLoScene extends Phaser.Scene {
     const buttonSmall = addImage(135, 868, 'button_small', 0.75);
 
     addImage(529, 1155, 'title_bigbox_yellow', 0.75);
-    addImage(535, 1014, 'title_on_double', 0.75);
+    const titleOnDouble = addImage(535, 1014, 'title_on_double', 0.75);
+    this.doublePayoutText = this.add
+      .text(
+        titleOnDouble.x - titleOnDouble.displayWidth / 2 - 12,
+        titleOnDouble.y,
+        '',
+        {
+          fontFamily: 'Rajdhani',
+          fontSize: '18px',
+          color: '#f8fafc',
+          fontStyle: 'bold',
+        },
+      )
+      .setOrigin(1, 0.5)
+      .setDepth(6);
     addImage(530, 1372, 'title_bigbox_yellow', 0.75);
-    addImage(532, 1231, 'title_on_triple', 0.75);
+    const titleOnTriple = addImage(532, 1231, 'title_on_triple', 0.75);
+    this.triplePayoutText = this.add
+      .text(
+        titleOnTriple.x - titleOnTriple.displayWidth / 2 - 12,
+        titleOnTriple.y,
+        '',
+        {
+          fontFamily: 'Rajdhani',
+          fontSize: '18px',
+          color: '#f8fafc',
+          fontStyle: 'bold',
+        },
+      )
+      .setOrigin(1, 0.5)
+      .setDepth(6);
     addImage(531, 1600, 'title_bigbox_purple', 0.75);
     addImage(536, 1459, 'title_sum', 0.75);
-    addImage(535, 1909, 'title_on_single', 0.75);
+    const titleOnSingle = addImage(535, 1909, 'title_on_single', 0.75);
+    this.singlePayoutText = this.add
+      .text(
+        titleOnSingle.x - titleOnSingle.displayWidth / 2 - 12,
+        titleOnSingle.y,
+        '',
+        {
+          fontFamily: 'Rajdhani',
+          fontSize: '18px',
+          color: '#f8fafc',
+          fontStyle: 'bold',
+        },
+      )
+      .setOrigin(1, 0.5)
+      .setDepth(6);
+    const singleTitleSectionWidth = titleOnSingle.displayWidth / 3;
+    const singleMultiplierOffset = singleTitleSectionWidth * 0.18;
+    this.singleDoubleMultiplierText = this.add
+      .text(
+        titleOnSingle.x + singleMultiplierOffset,
+        titleOnSingle.y,
+        '',
+        {
+          fontFamily: 'Rajdhani',
+          fontSize: '18px',
+          color: '#ffd166',
+          fontStyle: 'bold',
+        },
+      )
+      .setOrigin(0, 0.5)
+      .setDepth(6);
+    this.singleTripleMultiplierText = this.add
+      .text(
+        titleOnSingle.x + singleTitleSectionWidth + singleMultiplierOffset,
+        titleOnSingle.y,
+        '',
+        {
+          fontFamily: 'Rajdhani',
+          fontSize: '18px',
+          color: '#ffd166',
+          fontStyle: 'bold',
+        },
+      )
+      .setOrigin(0, 0.5)
+      .setDepth(6);
 
     const doubleDigits: Array<[string, number, number]> = [
       ['00', 141, 1084],
@@ -831,6 +915,18 @@ export class HiLoScene extends Phaser.Scene {
     const doubleOdds = payouts?.double ?? 1;
     const tripleOdds = payouts?.triple ?? 1;
     const singleOdds = payouts?.single?.single ?? 1;
+    const singleDouble = payouts?.single?.double ?? 0;
+    const singleTriple = payouts?.single?.triple ?? 0;
+
+    this.doublePayoutText?.setText(formatPayoutRatio(doubleOdds));
+    this.triplePayoutText?.setText(formatPayoutRatio(tripleOdds));
+    this.singlePayoutText?.setText(formatPayoutRatio(singleOdds));
+    this.singleDoubleMultiplierText?.setText(
+      singleDouble > 0 ? formatMultiplierRatio(singleDouble) : '',
+    );
+    this.singleTripleMultiplierText?.setText(
+      singleTriple > 0 ? formatMultiplierRatio(singleTriple) : '',
+    );
 
     this.baseOddsByKey.set(this.buildDigitKey('SMALL'), smallBig);
     this.baseOddsByKey.set(this.buildDigitKey('BIG'), smallBig);
@@ -975,6 +1071,16 @@ export class HiLoScene extends Phaser.Scene {
     this.oddsTextByKey.forEach((text, key) => {
       const bonusValue = this.bonusOddsByKey.get(key);
       const baseValue = this.baseOddsByKey.get(key);
+      if (
+        (key.startsWith('DIGIT|TRIPLE|') ||
+          key.startsWith('DIGIT|DOUBLE|') ||
+          key.startsWith('DIGIT|SINGLE|')) &&
+        bonusValue === undefined
+      ) {
+        text.setText('');
+        text.setColor('#f8fafc');
+        return;
+      }
       const value =
         typeof bonusValue === 'number' && Number.isFinite(bonusValue)
           ? bonusValue
