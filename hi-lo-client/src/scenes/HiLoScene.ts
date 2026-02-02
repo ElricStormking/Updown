@@ -79,6 +79,8 @@ export class HiLoScene extends Phaser.Scene {
   private priceLabelText?: Phaser.GameObjects.Text;
   private priceTextY = 465;
   private timerText?: Phaser.GameObjects.Text;
+  private timerUrgencyTween?: Phaser.Tweens.Tween;
+  private lastTimerSeconds = -1;
   private roundText?: Phaser.GameObjects.Text;
   private statusText?: Phaser.GameObjects.Text;
   private balanceText?: Phaser.GameObjects.Text;
@@ -565,9 +567,9 @@ export class HiLoScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.timerText = this.add
-      .text(320, 209, '--s', {
+      .text(298, 209, '--s', {
         fontFamily: 'Roboto Mono',
-        fontSize: '20px',
+        fontSize: '37px',
         color: '#00ffb2',
         fontStyle: 'bold',
       })
@@ -1536,7 +1538,46 @@ export class HiLoScene extends Phaser.Scene {
     const remaining = Math.max(targetTime - now, 0);
     const seconds = Math.ceil(remaining / 1000);
     this.timerText.setText(`${seconds}s`);
-    this.timerText.setColor(isBetting ? '#00ffb2' : '#ff8f70');
+
+    // Urgency effect when 5 seconds or less
+    const isUrgent = seconds <= 5 && seconds > 0;
+    
+    if (isUrgent) {
+      // Set urgent color (red/orange)
+      this.timerText.setColor('#ff4757');
+      
+      // Start blinking tween if not already running or if seconds changed
+      if (!this.timerUrgencyTween || !this.timerUrgencyTween.isPlaying() || this.lastTimerSeconds !== seconds) {
+        // Kill existing tween
+        if (this.timerUrgencyTween) {
+          this.timerUrgencyTween.stop();
+        }
+        
+        // Create pulsing/blinking effect
+        this.timerText.setScale(1);
+        this.timerUrgencyTween = this.tweens.add({
+          targets: this.timerText,
+          scaleX: 1.15,
+          scaleY: 1.15,
+          alpha: 0.6,
+          duration: 200,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut',
+        });
+      }
+    } else {
+      // Normal state - stop urgency effects
+      if (this.timerUrgencyTween) {
+        this.timerUrgencyTween.stop();
+        this.timerUrgencyTween = undefined;
+      }
+      this.timerText.setScale(1);
+      this.timerText.setAlpha(1);
+      this.timerText.setColor(isBetting ? '#00ffb2' : '#ff8f70');
+    }
+    
+    this.lastTimerSeconds = seconds;
   }
 
   setLanguage(lang: LanguageCode) {
