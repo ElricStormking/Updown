@@ -459,7 +459,7 @@ export class HiLoScene extends Phaser.Scene {
     sumDigits.forEach(([value, x, y]) => {
       const selection = String(Number(value));
       const image = addImage(Number(x), Number(y), `number_sum_${value}`, 0.75);
-      this.registerDigitCell(image, 'SUM', selection);
+      this.registerDigitCell(image, 'SUM', selection, 17, 16.5);
     });
 
     const singleDigits: Array<[string, number, number]> = [
@@ -519,7 +519,7 @@ export class HiLoScene extends Phaser.Scene {
     addImage(808, 742, 'odd_box_right', 0.7);
 
     this.oddsLeftText = this.add
-      .text(144, 733, '', {
+      .text(134, 740, '', {
         fontFamily: 'Rajdhani',
         fontSize: '22px',
         color: '#f8fafc',
@@ -528,7 +528,7 @@ export class HiLoScene extends Phaser.Scene {
       .setScale(1.3)
       .setOrigin(0, 0.5);
     this.oddsRightText = this.add
-      .text(664, 733, '', {
+      .text(659, 740, '', {
         fontFamily: 'Rajdhani',
         fontSize: '22px',
         color: '#f8fafc',
@@ -537,7 +537,7 @@ export class HiLoScene extends Phaser.Scene {
       .setScale(1.3)
       .setOrigin(0, 0.5);
     this.oddsCenterText = this.add
-      .text(520, 733, '', {
+      .text(540, 740, '', {
         fontFamily: 'Rajdhani',
         fontSize: '24px',
         color: '#ffd166',
@@ -829,7 +829,7 @@ export class HiLoScene extends Phaser.Scene {
     this.betTargets.set(key, image);
     image.setData('baseScale', image.scaleX);
     this.makeInteractive(image, () => this.handlePlaceDigitBet(digitType));
-    this.registerOddsText(key, image.x, image.y + 64, 17);
+    // Payout ratios for SMALL, ODD, ANY_TRIPLE, EVEN, BIG are shown in title area
   }
 
   private registerDigitCell(
@@ -837,6 +837,7 @@ export class HiLoScene extends Phaser.Scene {
     digitType: DigitBetType,
     selection: string,
     oddsOffsetY = 22,
+    fontSize = 15,
   ) {
     const key = this.buildDigitKey(digitType, selection);
     this.betTargets.set(key, image);
@@ -844,7 +845,7 @@ export class HiLoScene extends Phaser.Scene {
     this.makeInteractive(image, () =>
       this.handlePlaceDigitBet(digitType, selection),
     );
-    this.registerOddsText(key, image.x, image.y + oddsOffsetY, 15);
+    this.registerOddsText(key, image.x, image.y + oddsOffsetY, fontSize);
   }
 
   private registerChipButton(value: number, image: Phaser.GameObjects.Image) {
