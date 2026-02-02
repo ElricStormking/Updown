@@ -273,7 +273,7 @@ html {
 /* Locked layout mode: expand chart when round is locked */
 #game-container.locked-layout #tradingview-chart {
   height: clamp(280px, 50%, 480px);
-  top: calc(var(--hud-chart-top, clamp(84px, 12%, 170px)) - 60px);
+  top: calc(var(--hud-chart-top, clamp(84px, 12%, 170px)) + 40px);
 }
 
 .layout {
