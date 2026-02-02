@@ -73,6 +73,8 @@ export class HiLoScene extends Phaser.Scene {
   private lastPrice?: PriceUpdate;
 
   private priceText?: Phaser.GameObjects.Text;
+  private priceTextHighlight?: Phaser.GameObjects.Text; // Last 3 digits highlighted
+  private priceTextDecimal?: Phaser.GameObjects.Text; // Decimal part
   private priceArrowText?: Phaser.GameObjects.Text;
   private priceLabelText?: Phaser.GameObjects.Text;
   private priceTextY = 465;
@@ -122,6 +124,13 @@ export class HiLoScene extends Phaser.Scene {
   private dragScrollY = 0;
   private scrollBounds?: { minY: number; maxY: number };
   private desiredMusicEnabled = true;
+
+  // Locked layout mode state
+  private isLockedLayoutMode = false;
+  private lockedLayoutTween?: Phaser.Tweens.Tween;
+  private betSlotsContainer?: Phaser.GameObjects.Container;
+  private betSlotsOriginalY = 0;
+  private readonly BET_SLOTS_PIVOT_Y = 550; // Includes odds boxes (Y~699 after compression)
 
   constructor() {
     super('HiLoScene');
@@ -582,14 +591,34 @@ export class HiLoScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
+    // Price display split into 3 parts: prefix, last 3 digits (highlighted), decimal
+    // Example: "75" + "830" + ".16" for price 75830.16
     this.priceText = this.add
-      .text(540, this.priceTextY, '00000.00', {
+      .text(540, this.priceTextY, '00', {
         fontFamily: 'Roboto Mono',
         fontSize: '54px',
         color: '#ffffff',
         fontStyle: 'bold',
       })
-      .setOrigin(0.5);
+      .setOrigin(1, 0.5); // Right-aligned to connect with highlight
+
+    this.priceTextHighlight = this.add
+      .text(540, this.priceTextY, '000', {
+        fontFamily: 'Roboto Mono',
+        fontSize: '54px',
+        color: '#ffffff', // Will change to highlight color during locked phase
+        fontStyle: 'bold',
+      })
+      .setOrigin(0, 0.5); // Left-aligned to connect with prefix
+
+    this.priceTextDecimal = this.add
+      .text(540, this.priceTextY, '.00', {
+        fontFamily: 'Roboto Mono',
+        fontSize: '54px',
+        color: '#ffffff',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0, 0.5); // Left-aligned after highlight
 
     this.priceArrowText = this.add
       .text(720, this.priceTextY, '▲', {
@@ -812,6 +841,269 @@ export class HiLoScene extends Phaser.Scene {
     });
   }
 
+  private enterLockedLayout() {
+    if (this.isLockedLayoutMode) return;
+    this.isLockedLayoutMode = true;
+
+    // Toggle CSS class on game container for chart expansion
+    const container = document.getElementById('game-container');
+    container?.classList.add('locked-layout');
+
+    // Disable scrolling during locked phase
+    this.dragScrollActive = false;
+
+    // Reset camera to top
+    const camera = this.cameras.main;
+    if (this.scrollBounds) {
+      this.tweens.add({
+        targets: camera,
+        scrollY: this.scrollBounds.minY,
+        duration: 400,
+        ease: 'Sine.easeInOut',
+      });
+    }
+
+    // Animate all bet slot elements (elements below pivot Y)
+    const pivotY = this.BET_SLOTS_PIVOT_Y;
+    const targetScale = 0.5;
+    const viewHeight = this.scale.height;
+    const viewWidth = this.scale.width;
+    const centerX = viewWidth / 2;
+    const targetY = viewHeight * 0.65; // Move to bottom 40%
+
+    this.children.each((child) => {
+      if (child === this.resultOverlay) return;
+      const node = child as Phaser.GameObjects.GameObject & {
+        x?: number;
+        y?: number;
+        scaleX?: number;
+        scaleY?: number;
+        setScale?: (x: number, y?: number) => void;
+        getData?: (key: string) => unknown;
+        setData?: (key: string, value: unknown) => void;
+      };
+      if (typeof node.y !== 'number' || node.y < pivotY) return;
+
+      // Skip background elements
+      if (
+        child instanceof Phaser.GameObjects.Image &&
+        (child.texture?.key === 'bg' || child.texture?.key === 'bg_light')
+      ) {
+        return;
+      }
+
+      // Store original position and scale
+      if (node.setData && node.getData) {
+        if (node.getData('originalY') === undefined) {
+          node.setData('originalX', node.x ?? centerX);
+          node.setData('originalY', node.y);
+          node.setData('originalScaleX', node.scaleX ?? 1);
+          node.setData('originalScaleY', node.scaleY ?? 1);
+        }
+      }
+
+      const originalX = (node.getData?.('originalX') as number) ?? node.x ?? centerX;
+      const originalY = (node.getData?.('originalY') as number) ?? node.y;
+      const relativeX = originalX - centerX;
+      const relativeY = originalY - pivotY;
+      const newX = centerX + relativeX * targetScale;
+      const newY = targetY + relativeY * targetScale;
+
+      this.tweens.add({
+        targets: node,
+        x: newX,
+        y: newY,
+        scaleX: (node.getData?.('originalScaleX') as number ?? 1) * targetScale,
+        scaleY: (node.getData?.('originalScaleY') as number ?? 1) * targetScale,
+        duration: 400,
+        ease: 'Sine.easeOut',
+      });
+    });
+
+    // Also transform token placements
+    this.tokenSprites.forEach((sprite) => {
+      if (sprite.y < pivotY) return;
+      if (!sprite.getData('originalY')) {
+        sprite.setData('originalX', sprite.x);
+        sprite.setData('originalY', sprite.y);
+        sprite.setData('originalScaleX', sprite.scaleX);
+        sprite.setData('originalScaleY', sprite.scaleY);
+      }
+      const originalX = sprite.getData('originalX') as number;
+      const originalY = sprite.getData('originalY') as number;
+      const relativeX = originalX - centerX;
+      const relativeY = originalY - pivotY;
+      const newX = centerX + relativeX * targetScale;
+      const newY = targetY + relativeY * targetScale;
+
+      this.tweens.add({
+        targets: sprite,
+        x: newX,
+        y: newY,
+        scaleX: (sprite.getData('originalScaleX') as number) * targetScale,
+        scaleY: (sprite.getData('originalScaleY') as number) * targetScale,
+        duration: 400,
+        ease: 'Sine.easeOut',
+      });
+    });
+
+    // Pause bonus tweens and explicitly scale bonus slot images
+    this.bonusTweens.forEach((tween, key) => {
+      tween.pause();
+      const image = this.betTargets.get(key);
+      if (!image) return;
+      
+      // Get the base scale (before bonus pulse animation)
+      const baseScale = image.getData('baseScale') as number | undefined;
+      const origScale = baseScale ?? 0.75;
+      
+      // Store original values if not already stored
+      if (image.getData('originalY') === undefined) {
+        image.setData('originalX', image.x);
+        image.setData('originalY', image.y);
+        image.setData('originalScaleX', origScale);
+        image.setData('originalScaleY', origScale);
+      }
+      
+      const originalX = image.getData('originalX') as number;
+      const originalY = image.getData('originalY') as number;
+      const relativeX = originalX - centerX;
+      const relativeY = originalY - pivotY;
+      const newX = centerX + relativeX * targetScale;
+      const newY = targetY + relativeY * targetScale;
+      
+      // Kill any existing tweens on this image and apply new transform
+      this.tweens.killTweensOf(image);
+      this.tweens.add({
+        targets: image,
+        x: newX,
+        y: newY,
+        scaleX: origScale * targetScale,
+        scaleY: origScale * targetScale,
+        duration: 400,
+        ease: 'Sine.easeOut',
+      });
+    });
+
+    // Scale bonus emitters
+    this.bonusEmitters.forEach((emitter) => {
+      if (!emitter.getData('originalScaleX')) {
+        emitter.setData('originalScaleX', emitter.scaleX);
+        emitter.setData('originalScaleY', emitter.scaleY);
+      }
+      this.tweens.add({
+        targets: emitter,
+        scaleX: (emitter.getData('originalScaleX') as number) * targetScale,
+        scaleY: (emitter.getData('originalScaleY') as number) * targetScale,
+        duration: 400,
+        ease: 'Sine.easeOut',
+      });
+    });
+  }
+
+  private exitLockedLayout() {
+    if (!this.isLockedLayoutMode) return;
+    this.isLockedLayoutMode = false;
+
+    // Remove CSS class from game container
+    const container = document.getElementById('game-container');
+    container?.classList.remove('locked-layout');
+
+    // Restore all bet slot elements to original positions
+    this.children.each((child) => {
+      if (child === this.resultOverlay) return;
+      const node = child as Phaser.GameObjects.GameObject & {
+        y?: number;
+        getData?: (key: string) => unknown;
+      };
+      if (typeof node.y !== 'number') return;
+
+      const originalX = node.getData?.('originalX') as number | undefined;
+      const originalY = node.getData?.('originalY') as number | undefined;
+      const originalScaleX = node.getData?.('originalScaleX') as number | undefined;
+      const originalScaleY = node.getData?.('originalScaleY') as number | undefined;
+
+      if (originalY === undefined) return;
+
+      this.tweens.add({
+        targets: node,
+        x: originalX,
+        y: originalY,
+        scaleX: originalScaleX ?? 1,
+        scaleY: originalScaleY ?? 1,
+        duration: 400,
+        ease: 'Sine.easeOut',
+      });
+    });
+
+    // Restore token placements
+    this.tokenSprites.forEach((sprite) => {
+      const originalX = sprite.getData('originalX') as number | undefined;
+      const originalY = sprite.getData('originalY') as number | undefined;
+      const originalScaleX = sprite.getData('originalScaleX') as number | undefined;
+      const originalScaleY = sprite.getData('originalScaleY') as number | undefined;
+
+      if (originalY === undefined) return;
+
+      this.tweens.add({
+        targets: sprite,
+        x: originalX,
+        y: originalY,
+        scaleX: originalScaleX ?? 1,
+        scaleY: originalScaleY ?? 1,
+        duration: 400,
+        ease: 'Sine.easeOut',
+      });
+    });
+
+    // Restore bonus emitters
+    this.bonusEmitters.forEach((emitter) => {
+      const originalScaleX = emitter.getData('originalScaleX') as number | undefined;
+      const originalScaleY = emitter.getData('originalScaleY') as number | undefined;
+
+      this.tweens.add({
+        targets: emitter,
+        scaleX: originalScaleX ?? 1,
+        scaleY: originalScaleY ?? 1,
+        duration: 400,
+        ease: 'Sine.easeOut',
+      });
+    });
+
+    // Restore bonus slot images and resume their pulse animation
+    this.bonusTweens.forEach((tween, key) => {
+      const image = this.betTargets.get(key);
+      if (!image) {
+        tween.resume();
+        return;
+      }
+      
+      const originalX = image.getData('originalX') as number | undefined;
+      const originalY = image.getData('originalY') as number | undefined;
+      const baseScale = image.getData('baseScale') as number | undefined;
+      const origScale = baseScale ?? 0.75;
+      
+      if (originalX === undefined || originalY === undefined) {
+        tween.resume();
+        return;
+      }
+      
+      // Restore position and scale, then resume pulse animation
+      this.tweens.add({
+        targets: image,
+        x: originalX,
+        y: originalY,
+        scaleX: origScale,
+        scaleY: origScale,
+        duration: 400,
+        ease: 'Sine.easeOut',
+        onComplete: () => {
+          tween.resume();
+        },
+      });
+    });
+  }
+
   private buildDigitKey(digitType: DigitBetType, selection?: string) {
     return `DIGIT|${digitType}|${selection ?? ''}`;
   }
@@ -821,7 +1113,14 @@ export class HiLoScene extends Phaser.Scene {
     handler: () => void,
   ) {
     image.setInteractive({ useHandCursor: true });
-    image.on('pointerdown', handler);
+    let lastTapTime = 0;
+    const debounceMs = 300; // Prevent double-tap on mobile
+    image.on('pointerdown', () => {
+      const now = Date.now();
+      if (now - lastTapTime < debounceMs) return;
+      lastTapTime = now;
+      handler();
+    });
   }
 
   private registerBetButton(image: Phaser.GameObjects.Image, digitType: DigitBetType) {
@@ -1019,10 +1318,14 @@ export class HiLoScene extends Phaser.Scene {
       emitter.destroy();
     });
     this.bonusEmitters.clear();
+    
+    // When clearing highlights, respect locked layout mode
+    const lockedScale = this.isLockedLayoutMode ? 0.5 : 1;
+    
     this.betTargets.forEach((image) => {
       const baseScale = image.getData('baseScale');
       if (typeof baseScale === 'number') {
-        image.setScale(baseScale);
+        image.setScale(baseScale * lockedScale);
       }
       image.setAlpha(1);
     });
@@ -1031,29 +1334,50 @@ export class HiLoScene extends Phaser.Scene {
   private applyBonusHighlights() {
     this.clearBonusHighlights();
     this.ensureBonusSparkTexture();
+    
+    // If in locked layout mode, use scaled values
+    const lockedScale = this.isLockedLayoutMode ? 0.5 : 1;
+    
     this.bonusOddsByKey.forEach((_ratio, key) => {
       const image = this.betTargets.get(key);
       if (!image) return;
-      const baseScale = image.getData('baseScale');
-      const scale = typeof baseScale === 'number' ? baseScale : image.scaleX;
+      const baseScale = image.getData('baseScale') as number | undefined;
+      const scale = typeof baseScale === 'number' ? baseScale : 0.75;
+      
+      // Apply locked scale to the pulse animation
+      const effectiveScale = scale * lockedScale;
+      
       const tween = this.tweens.add({
         targets: image,
-        scaleX: scale * 1.04,
-        scaleY: scale * 1.04,
+        scaleX: effectiveScale * 1.04,
+        scaleY: effectiveScale * 1.04,
         alpha: 0.75,
         duration: 520,
         yoyo: true,
         repeat: -1,
         ease: 'Sine.easeInOut',
       });
+      
+      // If in locked mode, pause the tween immediately
+      if (this.isLockedLayoutMode) {
+        tween.pause();
+      }
+      
       this.bonusTweens.set(key, tween);
 
+      // Calculate emit zone based on base image size multiplied by effective scale
+      // Use texture dimensions multiplied by scale to get correct size
+      const baseWidth = image.width * scale;
+      const baseHeight = image.height * scale;
+      const emitWidth = baseWidth * lockedScale;
+      const emitHeight = baseHeight * lockedScale;
+      
       const emitter = this.add.particles(0, 0, 'bonusSpark', {
         follow: image,
         lifespan: { min: 700, max: 1400 },
-        speed: { min: 20, max: 80 },
+        speed: { min: 20 * lockedScale, max: 80 * lockedScale },
         angle: { min: 0, max: 360 },
-        scale: { start: 0.9, end: 0.1 },
+        scale: { start: 0.9 * lockedScale, end: 0.1 * lockedScale },
         alpha: { start: 1, end: 0 },
         tint: [0xfff1a8, 0xffd166, 0xffb703, 0xff7a18, 0xff4d4d],
         blendMode: Phaser.BlendModes.ADD,
@@ -1062,10 +1386,10 @@ export class HiLoScene extends Phaser.Scene {
         emitZone: {
           type: 'edge',
           source: new Phaser.Geom.Rectangle(
-            -image.displayWidth / 2,
-            -image.displayHeight / 2,
-            image.displayWidth,
-            image.displayHeight,
+            -emitWidth / 2,
+            -emitHeight / 2,
+            emitWidth,
+            emitHeight,
           ),
           quantity: 48,
           yoyo: true,
@@ -1142,13 +1466,15 @@ export class HiLoScene extends Phaser.Scene {
       let container = this.tokenSprites.get(key);
       if (!container) {
         const chip = this.add.image(0, 0, `chip_${placement.value}`);
-        chip.setScale(0.45);
+        chip.setScale(0.52); // 15% larger than 0.45
         const label = this.add
           .text(0, 0, String(total), {
             fontFamily: 'Rajdhani',
-            fontSize: '20px',
-            color: '#0b0b0b',
+            fontSize: '23px', // 15% larger than 20px
+            color: '#00ff88', // bright green
             fontStyle: 'bold',
+            stroke: '#003311',
+            strokeThickness: 2,
           })
           .setOrigin(0.5);
         container = this.add.container(target.x + 58, target.y, [chip, label]);
@@ -1233,16 +1559,46 @@ export class HiLoScene extends Phaser.Scene {
     const previous = this.lastPrice?.price;
     this.lastPrice = update;
 
-    this.priceText?.setText(update.price.toFixed(2));
+    // Split price into parts: prefix, last 3 digits (1 before decimal + 2 after decimal)
+    // Example: "75649.99" -> "7564" + "9.99"
+    const priceStr = update.price.toFixed(2);
+    const [intPart, decPart] = priceStr.split('.');
+    const lastDigit = intPart.slice(-1); // Last digit before decimal
+    const prefix = intPart.slice(0, -1); // All digits except last one
+    const highlight = `${lastDigit}.${decPart}`; // e.g., "9.99"
+    
+    // Update text content
+    this.priceText?.setText(prefix);
+    this.priceTextHighlight?.setText(highlight);
+    this.priceTextDecimal?.setText(''); // Not used anymore
+    
+    // Position the text elements to form continuous price display
+    const centerX = 540;
+    const prefixWidth = this.priceText?.width ?? 0;
+    const highlightWidth = this.priceTextHighlight?.width ?? 0;
+    const totalWidth = prefixWidth + highlightWidth;
+    
+    const startX = centerX - totalWidth / 2;
+    this.priceText?.setX(startX + prefixWidth);
+    this.priceTextHighlight?.setX(startX + prefixWidth);
 
     if (previous !== undefined && this.priceArrowText) {
       const isUp = update.price >= previous;
-      const color = isUp ? '#00ffb2' : '#ff7675';
+      const baseColor = isUp ? '#00ffb2' : '#ff7675';
       const arrow = isUp ? '▲' : '▼';
       const offset = isUp ? -6 : 6;
 
-      this.priceText?.setColor(color);
-      this.priceArrowText.setText(arrow).setColor(color).setAlpha(1);
+      // Set colors - highlight last 3 digits during locked/result phase
+      this.priceText?.setColor(baseColor);
+      
+      // Highlight color for last 3 digits (1 digit + decimal + 2 digits) during locked phase
+      if (this.isLockedLayoutMode) {
+        this.priceTextHighlight?.setColor('#ffff00'); // Bright yellow highlight
+      } else {
+        this.priceTextHighlight?.setColor(baseColor);
+      }
+      
+      this.priceArrowText.setText(arrow).setColor(baseColor).setAlpha(1);
 
       this.tweens.killTweensOf(this.priceArrowText);
       this.priceArrowText.y = this.priceTextY;
@@ -1260,21 +1616,30 @@ export class HiLoScene extends Phaser.Scene {
   setRoundState(state: RoundStatePayload) {
     this.round = state;
     this.roundText?.setText(`${state.id}`);
+    
+    // Handle layout transitions BEFORE updating bonus odds
+    // so that applyBonusHighlights knows the correct layout mode
     if (state.status === 'BETTING') {
       this.clearWinnerHighlights();
-    }
-    this.updateBonusOddsFromRound(state);
-
-    if (state.status === 'BETTING') {
+      this.exitLockedLayout();
       this.statusText?.setText(t(this.language, 'scene.betsOpen'));
       this.statusText?.setColor('#00ffb2');
     } else if (state.status === 'RESULT_PENDING') {
+      this.enterLockedLayout();
       this.statusText?.setText(t(this.language, 'scene.locked'));
       this.statusText?.setColor('#ffd166');
+    } else if (state.status === 'COMPLETED') {
+      // Keep locked layout during result display phase
+      this.enterLockedLayout();
+      this.statusText?.setText(t(this.language, 'scene.roundResult'));
+      this.statusText?.setColor('#b2bec3');
     } else {
       this.statusText?.setText(t(this.language, 'scene.roundResult'));
       this.statusText?.setColor('#b2bec3');
     }
+    
+    // Update bonus odds after layout mode is set
+    this.updateBonusOddsFromRound(state);
   }
 
   handleRoundLock(payload: RoundLockPayload) {
@@ -1488,7 +1853,7 @@ export class HiLoScene extends Phaser.Scene {
       titleStr = t(this.language, 'scene.push');
     }
 
-    const modal = this.add.container(width / 2, height / 2 - 520);
+    const modal = this.add.container(width / 2, height / 2 - 320); // Moved down 150px to center in enlarged chart area
 
     const cardBg = this.add.graphics();
     cardBg.fillStyle(0x1e272e, 1);

@@ -254,11 +254,11 @@ html {
 
 #tradingview-chart {
   position: absolute;
-  top: calc(var(--hud-chart-top, clamp(84px, 12%, 170px)) + 60px);
+  top: calc(var(--hud-chart-top, clamp(84px, 12%, 170px)) + 10px);
   left: 50%;
   transform: translateX(-50%);
   width: var(--hud-chart-width, min(74%, 640px));
-  height: var(--hud-chart-height, clamp(56px, 10%, 130px));
+  height: var(--hud-chart-height, clamp(170px, 30%, 340px));
   border-radius: 14px;
   overflow: hidden;
   background: transparent;
@@ -267,6 +267,13 @@ html {
   backdrop-filter: none;
   z-index: 6;
   pointer-events: none;
+  transition: height 0.4s ease-out, top 0.4s ease-out;
+}
+
+/* Locked layout mode: expand chart when round is locked */
+#game-container.locked-layout #tradingview-chart {
+  height: clamp(280px, 50%, 480px);
+  top: calc(var(--hud-chart-top, clamp(84px, 12%, 170px)) - 60px);
 }
 
 .layout {
@@ -278,7 +285,7 @@ html {
 
 #game-container {
   --hud-chart-width: min(74%, 640px);
-  --hud-chart-height: clamp(56px, 10%, 130px);
+  --hud-chart-height: clamp(170px, 30%, 340px);
   --hud-chart-top: clamp(84px, 12%, 170px);
   --hud-dock-top: clamp(170px, 24%, 320px);
   --hud-dock-left: clamp(8px, 1.8vw, 16px);
@@ -1699,7 +1706,7 @@ li {
     min-height: 0;
     aspect-ratio: 9 / 16;
     --hud-chart-width: min(78%, 520px);
-    --hud-chart-height: clamp(52px, 9.5%, 120px);
+    --hud-chart-height: clamp(153px, 27%, 306px);
     --hud-chart-top: clamp(80px, 12%, 150px);
     --hud-dock-top: clamp(160px, 24%, 300px);
     --hud-dock-left: clamp(8px, 2vw, 14px);
@@ -1894,7 +1901,7 @@ li {
     flex-shrink: 0;
     position: relative;
     --hud-chart-width: min(82%, 380px);
-    --hud-chart-height: clamp(48px, 7.5%, 96px);
+    --hud-chart-height: clamp(136px, 24%, 272px);
     --hud-chart-top: clamp(78px, 12%, 140px);
     --hud-dock-top: clamp(150px, 22%, 230px);
     --hud-dock-left: clamp(6px, 2vw, 12px);

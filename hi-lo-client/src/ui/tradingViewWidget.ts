@@ -14,7 +14,7 @@ import type { PriceUpdate } from '../types';
 const CONTAINER_ID = 'tradingview-chart';
 const WINDOW_SECONDS = 1 * 20; // 10 minutes
 const PRICE_LABEL_INTERVAL = 1; // dollars
-const MIN_PRICE_RANGE = PRICE_LABEL_INTERVAL * 10; // dollars
+const MIN_PRICE_RANGE = PRICE_LABEL_INTERVAL * 5; // 5 dollars - smaller range makes price changes more visible
 
 let chart: IChartApi | null = null;
 let series: ISeriesApi<'Line'> | null = null;
@@ -25,6 +25,7 @@ let lockedPrice: number | null = null;
 let roundLockSec: number | null = null;
 let roundEndSec: number | null = null;
 let lockedBadgeEl: HTMLDivElement | null = null;
+let sonarDotEl: HTMLDivElement | null = null;
 
 function getContainer() {
   const el = document.getElementById(CONTAINER_ID);
@@ -61,6 +62,73 @@ function ensureChart() {
   lockedBadgeEl.style.boxShadow = '0 8px 18px rgba(0,0,0,0.35)';
   lockedBadgeEl.style.display = 'none';
   container.appendChild(lockedBadgeEl);
+
+  // Create sonar/pulse dot for the line end point
+  sonarDotEl = document.createElement('div');
+  sonarDotEl.style.position = 'absolute';
+  sonarDotEl.style.width = '12px';
+  sonarDotEl.style.height = '12px';
+  sonarDotEl.style.borderRadius = '50%';
+  sonarDotEl.style.background = '#00d2ff';
+  sonarDotEl.style.boxShadow = '0 0 8px 2px #00d2ff, 0 0 16px 4px rgba(0,210,255,0.5)';
+  sonarDotEl.style.zIndex = '15';
+  sonarDotEl.style.pointerEvents = 'none';
+  sonarDotEl.style.transform = 'translate(-50%, -50%)';
+  sonarDotEl.style.animation = 'sonarPulse 1.5s ease-out infinite';
+  container.appendChild(sonarDotEl);
+
+  // Add CSS animation for the sonar pulse effect
+  if (!document.getElementById('sonar-pulse-style')) {
+    const style = document.createElement('style');
+    style.id = 'sonar-pulse-style';
+    style.textContent = `
+      @keyframes sonarPulse {
+        0% {
+          transform: translate(-50%, -50%) scale(1);
+          opacity: 1;
+          box-shadow: 0 0 8px 2px #00d2ff, 0 0 16px 4px rgba(0,210,255,0.5);
+        }
+        50% {
+          transform: translate(-50%, -50%) scale(1.8);
+          opacity: 0.7;
+          box-shadow: 0 0 20px 8px #00d2ff, 0 0 40px 16px rgba(0,210,255,0.3);
+        }
+        100% {
+          transform: translate(-50%, -50%) scale(1);
+          opacity: 1;
+          box-shadow: 0 0 8px 2px #00d2ff, 0 0 16px 4px rgba(0,210,255,0.5);
+        }
+      }
+      @keyframes sonarRing {
+        0% {
+          transform: translate(-50%, -50%) scale(1);
+          opacity: 0.8;
+          border-width: 2px;
+        }
+        100% {
+          transform: translate(-50%, -50%) scale(3);
+          opacity: 0;
+          border-width: 1px;
+        }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  // Create outer sonar ring
+  const sonarRingEl = document.createElement('div');
+  sonarRingEl.style.position = 'absolute';
+  sonarRingEl.style.width = '12px';
+  sonarRingEl.style.height = '12px';
+  sonarRingEl.style.borderRadius = '50%';
+  sonarRingEl.style.border = '2px solid #00d2ff';
+  sonarRingEl.style.background = 'transparent';
+  sonarRingEl.style.zIndex = '14';
+  sonarRingEl.style.pointerEvents = 'none';
+  sonarRingEl.style.transform = 'translate(-50%, -50%)';
+  sonarRingEl.style.animation = 'sonarRing 1.5s ease-out infinite';
+  sonarRingEl.id = 'sonar-ring';
+  container.appendChild(sonarRingEl);
 
   chart = createChart(container, {
     autoSize: true,
@@ -218,6 +286,40 @@ export function setLockedPrice(nextLockedPrice: number | null) {
   }
 }
 
+// Update the sonar dot position to match the last point on the chart
+function updateSonarPosition(time: number, price: number) {
+  if (!chart || !series || !sonarDotEl) return;
+  
+  const sonarRingEl = document.getElementById('sonar-ring');
+  
+  try {
+    // Get the pixel coordinates from the chart
+    const timeCoord = chart.timeScale().timeToCoordinate(time as UTCTimestamp);
+    const priceCoord = series.priceToCoordinate(price);
+    
+    if (timeCoord === null || priceCoord === null) {
+      sonarDotEl.style.display = 'none';
+      if (sonarRingEl) sonarRingEl.style.display = 'none';
+      return;
+    }
+    
+    // Position the sonar elements
+    sonarDotEl.style.display = 'block';
+    sonarDotEl.style.left = `${timeCoord}px`;
+    sonarDotEl.style.top = `${priceCoord}px`;
+    
+    if (sonarRingEl) {
+      sonarRingEl.style.display = 'block';
+      sonarRingEl.style.left = `${timeCoord}px`;
+      sonarRingEl.style.top = `${priceCoord}px`;
+    }
+  } catch {
+    // Hide if coordinates can't be calculated
+    sonarDotEl.style.display = 'none';
+    if (sonarRingEl) sonarRingEl.style.display = 'none';
+  }
+}
+
 // Feed this from the server price stream. We sample at 2Hz (every 0.5s).
 export function pushPriceUpdate(update: PriceUpdate) {
   if (typeof window === 'undefined') return;
@@ -237,6 +339,7 @@ export function pushPriceUpdate(update: PriceUpdate) {
     series.setData(points);
     renderRange(t);
     updatePriceScaleRange(price);
+    updateSonarPosition(t, price);
     return;
   }
 
@@ -260,4 +363,5 @@ export function pushPriceUpdate(update: PriceUpdate) {
   series.setData(points);
   renderRange(t);
   updatePriceScaleRange(price);
+  updateSonarPosition(t, price);
 }
