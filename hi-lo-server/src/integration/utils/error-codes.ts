@@ -11,6 +11,8 @@ export const IntegrationErrorCodes = {
   INVALID_TRANSFER_TYPE: 3003,
   INVALID_PAGE_SIZE: 4001,
   INVALID_PAGE_NUMBER: 4002,
+  INVALID_BET_AMOUNT_LIMIT: 5001,
+  INVALID_TOKEN_VALUES: 5002,
   INTERNAL_ERROR: 9999,
 } as const;
 
@@ -28,5 +30,9 @@ export const IntegrationErrorMessages: Record<number, string> = {
   [IntegrationErrorCodes.INVALID_PAGE_SIZE]:
     'Page size must be between 1 and 100',
   [IntegrationErrorCodes.INVALID_PAGE_NUMBER]: 'Invalid page number',
+  [IntegrationErrorCodes.INVALID_BET_AMOUNT_LIMIT]:
+    'Invalid bet amount limit',
+  [IntegrationErrorCodes.INVALID_TOKEN_VALUES]:
+    'Invalid token values',
   [IntegrationErrorCodes.INTERNAL_ERROR]: 'Internal server error',
 };

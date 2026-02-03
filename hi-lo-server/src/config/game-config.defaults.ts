@@ -39,6 +39,7 @@ export interface GameConfigSnapshot {
   resultDisplayDurationMs: number;
   minBetAmount: number;
   maxBetAmount: number;
+  tokenValues: number[];
   payoutMultiplierUp: number;
   payoutMultiplierDown: number;
   priceSnapshotInterval: number;
@@ -293,6 +294,10 @@ export const buildDefaultDigitBonusRatios = (): DigitBonusRatios => {
       ratios: [300, 500, 777, 888, 1000],
       weights: [4000, 4000, 3667, 3667, 3667],
     },
+    27: {
+      ratios: [300, 500, 777, 888, 1000],
+      weights: [4000, 4000, 3667, 3667, 3667],
+    },
   };
 
   slots
@@ -318,6 +323,9 @@ export const buildDefaultGameConfig = (): GameConfigSnapshot => ({
   resultDisplayDurationMs: Number(gameConfig.resultDisplayDurationMs),
   minBetAmount: Number(gameConfig.minBetAmount),
   maxBetAmount: Number(gameConfig.maxBetAmount),
+  tokenValues: Array.isArray(gameConfig.tokenValues)
+    ? gameConfig.tokenValues.slice()
+    : [10, 50, 100, 150, 200, 300, 500],
   payoutMultiplierUp: Number(gameConfig.payoutMultiplierUp),
   payoutMultiplierDown: Number(gameConfig.payoutMultiplierDown),
   priceSnapshotInterval: Number(gameConfig.priceSnapshotInterval),

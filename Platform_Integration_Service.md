@@ -17,7 +17,6 @@ The following tables need to add a merchantId field:
 
 User
 Bet
-
 Integration APIs
 Authentication Mechanism
 
@@ -136,4 +135,45 @@ data: When success=true, returns game-side balance, otherwise null
 
 json{
     "url": "https://www.ehooray.com?accessToken={jwtToken}"
+}
+
+UpdateBetLimit: Configure Max Bet Amount per Round
+Request:
+
+Merchant ID: merchantId
+Max Bet Amount: maxBetAmount
+Timestamp: timestamp (seconds; 10 digits)
+Signature: hash = SHA256_HASH(merchantId&maxBetAmount&timestamp&hashKey)
+Default maxBetAmount is 5000 unless overridden.
+
+Response:
+
+success: true or false
+errorCode (int): Error code - 0 when success=true, other codes when success=false
+errorMessage (string): Error description when failed
+data: When success=true, returns updated bet limits, otherwise null
+
+json{
+    "minBetAmount": 1,
+    "maxBetAmount": 500
+}
+
+UpdateTokenValues: Configure 7 Token Values
+Request:
+
+Merchant ID: merchantId
+Token Values: tokenValues (array of 7 numbers, order is left-to-right slots)
+Timestamp: timestamp (seconds; 10 digits)
+Signature: hash = SHA256_HASH(merchantId&tokenValuesCSV&timestamp&hashKey)
+tokenValuesCSV: comma-joined string of the 7 values in the request order
+
+Response:
+
+success: true or false
+errorCode (int): Error code - 0 when success=true, other codes when success=false
+errorMessage (string): Error description when failed
+data: When success=true, returns updated token values, otherwise null
+
+json{
+    "tokenValues": [5, 10, 20, 50, 100, 200, 500]
 }

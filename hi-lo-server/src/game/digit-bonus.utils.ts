@@ -151,7 +151,7 @@ export const getAllDigitBetSlots = (): DigitBonusSlot[] => {
     slots.push({ digitType: DigitBetType.TRIPLE, selection: d });
   }
 
-  for (let sum = 1; sum <= 26; sum += 1) {
+  for (let sum = 1; sum <= 27; sum += 1) {
     slots.push({ digitType: DigitBetType.SUM, selection: String(sum) });
   }
 

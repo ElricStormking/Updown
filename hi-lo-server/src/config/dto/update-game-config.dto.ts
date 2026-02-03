@@ -1,4 +1,4 @@
-import { IsBoolean, IsInt, IsNumber, IsObject, IsOptional, Min } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsInt, IsNumber, IsObject, IsOptional, Min } from 'class-validator';
 
 export class UpdateGameConfigDto {
   @IsInt()
@@ -20,6 +20,13 @@ export class UpdateGameConfigDto {
   @IsNumber()
   @Min(0)
   maxBetAmount: number;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMinSize(7)
+  @ArrayMaxSize(7)
+  @IsNumber({}, { each: true })
+  tokenValues?: number[];
 
   @IsNumber()
   @Min(0)

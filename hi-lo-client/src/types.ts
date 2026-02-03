@@ -79,6 +79,7 @@ export interface GameConfig {
   resultDisplayDurationMs: number;
   minBetAmount: number;
   maxBetAmount: number;
+  tokenValues?: number[];
   payoutMultiplierUp: number;
   payoutMultiplierDown: number;
   priceSnapshotInterval: number;

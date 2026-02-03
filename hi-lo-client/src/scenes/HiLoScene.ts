@@ -62,6 +62,7 @@ const DEFAULT_SUM_PAYOUTS: Record<number, number> = {
   24: 40,
   25: 70,
   26: 130,
+  27: 130,
 };
 
 export class HiLoScene extends Phaser.Scene {
@@ -79,6 +80,7 @@ export class HiLoScene extends Phaser.Scene {
   private priceLabelText?: Phaser.GameObjects.Text;
   private priceTextY = 465;
   private timerText?: Phaser.GameObjects.Text;
+  private roundSumText?: Phaser.GameObjects.Text;
   private timerUrgencyTween?: Phaser.Tweens.Tween;
   private lastTimerSeconds = -1;
   private roundText?: Phaser.GameObjects.Text;
@@ -99,6 +101,8 @@ export class HiLoScene extends Phaser.Scene {
   private bgm?: Phaser.Sound.BaseSound;
 
   private chipButtons = new Map<number, { image: Phaser.GameObjects.Image; baseScale: number }>();
+  private tokenStyleValues = [10, 50, 100, 150, 200, 300, 500];
+  private tokenStyleByValue = new Map<number, number>();
   private betTargets = new Map<string, Phaser.GameObjects.Image>();
   private tokenSprites = new Map<string, Phaser.GameObjects.Container>();
   private oddsTextByKey = new Map<string, Phaser.GameObjects.Text>();
@@ -206,18 +210,22 @@ export class HiLoScene extends Phaser.Scene {
     this.uiReady = true;
     this.setLanguage(this.language);
     this.applyConfigOdds(state.config);
+    this.updateTokenStyleMap(state.config);
     this.syncSelectedToken(state.selectedTokenValue);
     this.syncTokenPlacements(state.tokenPlacements);
     this.syncActiveSelections(state.digitSelections);
     this.syncDigitResult(state.lastDigitResult);
+    this.syncDigitSum(state.lastDigitSum, state.lastDigitResult);
     this.syncBalance(state.walletBalance);
 
     this.unsubscribeState = subscribe((nextState) => {
       this.applyConfigOdds(nextState.config);
+      this.updateTokenStyleMap(nextState.config);
       this.syncSelectedToken(nextState.selectedTokenValue);
       this.syncTokenPlacements(nextState.tokenPlacements);
       this.syncActiveSelections(nextState.digitSelections);
       this.syncDigitResult(nextState.lastDigitResult);
+      this.syncDigitSum(nextState.lastDigitSum, nextState.lastDigitResult);
       this.syncBalance(nextState.walletBalance);
     });
 
@@ -561,6 +569,15 @@ export class HiLoScene extends Phaser.Scene {
       .text(180, 199, `--`, {
         fontFamily: 'Rajdhani',
         fontSize: '20px',
+        color: '#f8fafc',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5);
+
+    this.roundSumText = this.add
+      .text(180, 252, '3-digit SUM: --', {
+        fontFamily: 'Rajdhani',
+        fontSize: '40px',
         color: '#f8fafc',
         fontStyle: 'bold',
       })
@@ -1228,6 +1245,28 @@ export class HiLoScene extends Phaser.Scene {
     this.updateBonusOddsFromRound(this.round);
   }
 
+  private updateTokenStyleMap(config?: GameConfig) {
+    const tokenValues = Array.isArray(config?.tokenValues)
+      ? config?.tokenValues
+      : null;
+    const normalized =
+      tokenValues &&
+      tokenValues.length === this.tokenStyleValues.length &&
+      tokenValues.every((value) => Number.isFinite(value) && value > 0)
+        ? tokenValues
+        : this.tokenStyleValues;
+    this.tokenStyleByValue.clear();
+    normalized.forEach((value, index) => {
+      const styleValue =
+        this.tokenStyleValues[index] ?? this.tokenStyleValues[0];
+      this.tokenStyleByValue.set(value, styleValue);
+    });
+  }
+
+  private getTokenStyleValue(value: number) {
+    return this.tokenStyleByValue.get(value) ?? value;
+  }
+
   private updateBaseOdds(config?: GameConfig) {
     const payouts = config?.digitPayouts;
     const smallBig = payouts?.smallBigOddEven ?? 1;
@@ -1466,8 +1505,9 @@ export class HiLoScene extends Phaser.Scene {
       if (!target) return;
       const total = placement.value * placement.count;
       let container = this.tokenSprites.get(key);
+      const styleValue = this.getTokenStyleValue(placement.value);
       if (!container) {
-        const chip = this.add.image(0, 0, `chip_${placement.value}`);
+        const chip = this.add.image(0, 0, `chip_${styleValue}`);
         chip.setScale(0.52); // 15% larger than 0.45
         const label = this.add
           .text(0, 0, String(total), {
@@ -1485,7 +1525,7 @@ export class HiLoScene extends Phaser.Scene {
       } else {
         const chip = container.list[0] as Phaser.GameObjects.Image;
         const label = container.list[1] as Phaser.GameObjects.Text;
-        chip.setTexture(`chip_${placement.value}`);
+        chip.setTexture(`chip_${styleValue}`);
         label.setText(String(total));
       }
     });
@@ -1517,6 +1557,17 @@ export class HiLoScene extends Phaser.Scene {
       this.roundDigitsCenterText.setText(digits[1]);
       this.roundDigitsRightText.setText(digits[2]);
     }
+  }
+
+  private syncDigitSum(sum: number | null, digits?: string | null) {
+    if (!this.roundSumText) return;
+    let resolved: number | null =
+      typeof sum === 'number' && Number.isFinite(sum) ? sum : null;
+    if (resolved === null && digits && /^\d{3}$/.test(digits)) {
+      resolved = digits.split('').reduce((acc, digit) => acc + Number(digit), 0);
+    }
+    const display = resolved === null ? '--' : String(resolved);
+    this.roundSumText.setText(`3-digit SUM: ${display}`);
   }
 
   private syncBalance(balance: number) {
@@ -1716,6 +1767,7 @@ export class HiLoScene extends Phaser.Scene {
     if (payload.digitResult && /^\d{3}$/.test(payload.digitResult)) {
       this.syncDigitResult(payload.digitResult);
     }
+    this.syncDigitSum(payload.digitSum, payload.digitResult);
 
     this.updateBonusOddsFromRound(this.round);
     this.showResultOverlay('SKIPPED', payload);

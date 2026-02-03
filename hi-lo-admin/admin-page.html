@@ -896,7 +896,7 @@
         '#bonus-ratio-scrollbar-top .bonus-ratio-scrollbar-inner',
       );
 
-      const sumKeys = Array.from({ length: 26 }, (_, idx) => idx + 1);
+      const sumKeys = Array.from({ length: 27 }, (_, idx) => idx + 1);
       const sumInputs = new Map();
       const bonusRatioInputs = new Map();
       const slotPayoutInputs = new Map();
@@ -938,7 +938,7 @@
           });
         }
 
-        for (let sum = 1; sum <= 26; sum += 1) {
+        for (let sum = 1; sum <= 27; sum += 1) {
           pushDef({
             digitType: 'SUM',
             selection: String(sum),

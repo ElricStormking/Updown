@@ -16,6 +16,7 @@ export interface GameConfigInput {
   resultDisplayDurationMs: number;
   minBetAmount: number;
   maxBetAmount: number;
+  tokenValues?: unknown;
   payoutMultiplierUp: number;
   payoutMultiplierDown: number;
   priceSnapshotInterval: number;
@@ -134,6 +135,10 @@ export class GameConfigService {
       this.extractBonusSlotChanceTotalSource(raw),
       defaults.bonusSlotChanceTotal,
     );
+    const tokenValues = this.normalizeTokenValues(
+      this.extractTokenValuesSource(raw),
+      defaults.tokenValues,
+    );
     const configVersion =
       typeof raw.configVersion === 'string'
         ? raw.configVersion
@@ -155,6 +160,7 @@ export class GameConfigService {
       ),
       minBetAmount: toNumber(raw.minBetAmount, defaults.minBetAmount),
       maxBetAmount: toNumber(raw.maxBetAmount, defaults.maxBetAmount),
+      tokenValues,
       payoutMultiplierUp: toNumber(
         raw.payoutMultiplierUp,
         defaults.payoutMultiplierUp,
@@ -175,11 +181,16 @@ export class GameConfigService {
   }
 
   async updateFromInput(input: GameConfigInput, merchantId?: string | null): Promise<GameConfigSnapshot> {
+    const defaults = this.getDefaultConfig();
     const digitPayouts = this.parseDigitPayouts(input.digitPayouts);
     const digitBonusRatios = this.parseDigitBonusRatios(input.digitBonusRatios);
     const bonusModeEnabled = this.parseBonusModeEnabled(
       input.bonusModeEnabled,
       true,
+    );
+    const tokenValues = this.parseTokenValues(
+      input.tokenValues,
+      defaults.tokenValues,
     );
     const config: GameConfigSnapshot = {
       bettingDurationMs: requireNumber(
@@ -196,6 +207,7 @@ export class GameConfigService {
       ),
       minBetAmount: requireNumber(input.minBetAmount, 'minBetAmount'),
       maxBetAmount: requireNumber(input.maxBetAmount, 'maxBetAmount'),
+      tokenValues,
       payoutMultiplierUp: requireNumber(
         input.payoutMultiplierUp,
         'payoutMultiplierUp',
@@ -290,6 +302,16 @@ export class GameConfigService {
     }
     if (config.maxBetAmount < config.minBetAmount) {
       throw new BadRequestException('maxBetAmount must be >= minBetAmount');
+    }
+    if (!Array.isArray(config.tokenValues) || config.tokenValues.length !== 7) {
+      throw new BadRequestException('tokenValues must contain 7 entries');
+    }
+    if (
+      config.tokenValues.some(
+        (value) => !Number.isFinite(value) || value <= 0,
+      )
+    ) {
+      throw new BadRequestException('tokenValues must be > 0');
     }
     if (config.payoutMultiplierUp < 0 || config.payoutMultiplierDown < 0) {
       throw new BadRequestException('Payout multipliers must be >= 0');
@@ -657,9 +679,47 @@ export class GameConfigService {
     return this.getDefaultConfig().bonusModeEnabled;
   }
 
+  private extractTokenValuesSource(raw: unknown): unknown {
+    if (!isRecord(raw)) {
+      return undefined;
+    }
+    if (raw.tokenValues !== undefined) {
+      return raw.tokenValues;
+    }
+    if (isRecord(raw.digitPayouts) && raw.digitPayouts.tokenValues !== undefined) {
+      return raw.digitPayouts.tokenValues;
+    }
+    return undefined;
+  }
+
   private parseDigitBonusRatios(raw: unknown): DigitBonusRatios {
     const defaults = buildDefaultDigitBonusRatios();
     return this.mergeDigitBonusRatios(raw, defaults);
+  }
+
+  private parseTokenValues(raw: unknown, fallback: number[]): number[] {
+    if (raw === undefined) {
+      return fallback.slice();
+    }
+    if (!Array.isArray(raw) || raw.length !== fallback.length) {
+      throw new BadRequestException('tokenValues must be an array of 7 numbers');
+    }
+    const values = raw.map((entry) => requireNumber(entry, 'tokenValues'));
+    if (values.some((value) => value <= 0)) {
+      throw new BadRequestException('tokenValues must be > 0');
+    }
+    return values;
+  }
+
+  private normalizeTokenValues(raw: unknown, fallback: number[]): number[] {
+    if (!Array.isArray(raw) || raw.length !== fallback.length) {
+      return fallback.slice();
+    }
+    const values = raw.map((entry) => Number(entry));
+    if (values.some((value) => !Number.isFinite(value) || value <= 0)) {
+      return fallback.slice();
+    }
+    return values;
   }
 
   private mergeDigitBonusRatios(
@@ -745,6 +805,10 @@ export class GameConfigService {
       this.extractBonusSlotChanceTotalSource(record.digitPayouts),
       defaults.bonusSlotChanceTotal,
     );
+    const tokenValues = this.normalizeTokenValues(
+      this.extractTokenValuesSource(record.digitPayouts),
+      defaults.tokenValues,
+    );
     return {
       configVersion: record.updatedAt.toISOString(),
       bettingDurationMs: record.bettingDurationMs,
@@ -752,6 +816,7 @@ export class GameConfigService {
       resultDisplayDurationMs: record.resultDisplayDurationMs,
       minBetAmount: Number(record.minBetAmount),
       maxBetAmount: Number(record.maxBetAmount),
+      tokenValues,
       payoutMultiplierUp: Number(record.payoutMultiplierUp),
       payoutMultiplierDown: Number(record.payoutMultiplierDown),
       priceSnapshotInterval: record.priceSnapshotInterval,
@@ -767,6 +832,7 @@ export class GameConfigService {
     digitBonusRatios: DigitBonusRatios,
     bonusModeEnabled: boolean,
     bonusSlotChanceTotal?: number,
+    tokenValues?: number[],
   ): Prisma.InputJsonValue {
     const sum: Record<string, number> = {};
     for (const [key, value] of Object.entries(payouts.sum)) {
@@ -805,6 +871,7 @@ export class GameConfigService {
       triple: payouts.triple,
       bonusModeEnabled,
       bonusSlotChanceTotal,
+      tokenValues,
       single: {
         single: payouts.single.single,
         double: payouts.single.double,
@@ -832,6 +899,7 @@ export class GameConfigService {
         config.digitBonusRatios,
         config.bonusModeEnabled,
         config.bonusSlotChanceTotal,
+        config.tokenValues,
       ),
     };
   }

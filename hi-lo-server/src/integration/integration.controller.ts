@@ -8,6 +8,8 @@ import {
   GetBetHistoryDto,
   GetTransferHistoryDto,
   LaunchGameDto,
+  UpdateBetLimitDto,
+  UpdateTokenValuesDto,
 } from './dto';
 
 @Controller('integration')
@@ -75,6 +77,28 @@ export class IntegrationController {
     return this.integrationService.launchGame(
       merchant,
       dto.account,
+      dto.timestamp,
+      dto.hash,
+    );
+  }
+
+  @Post('config/bet-limit')
+  async updateBetLimit(@Body() dto: UpdateBetLimitDto, @Req() req: any) {
+    const merchant: Merchant = req[MERCHANT_KEY];
+    return this.integrationService.updateBetLimit(
+      merchant,
+      dto.maxBetAmount,
+      dto.timestamp,
+      dto.hash,
+    );
+  }
+
+  @Post('config/token-values')
+  async updateTokenValues(@Body() dto: UpdateTokenValuesDto, @Req() req: any) {
+    const merchant: Merchant = req[MERCHANT_KEY];
+    return this.integrationService.updateTokenValues(
+      merchant,
+      dto.tokenValues,
       dto.timestamp,
       dto.hash,
     );

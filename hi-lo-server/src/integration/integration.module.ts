@@ -6,11 +6,13 @@ import { IntegrationService } from './integration.service';
 import { MerchantAuthGuard } from './guards/merchant-auth.guard';
 import { PrismaModule } from '../prisma/prisma.module';
 import { WalletModule } from '../wallet/wallet.module';
+import { GameConfigModule } from '../config/game-config.module';
 
 @Module({
   imports: [
     PrismaModule,
     WalletModule,
+    GameConfigModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

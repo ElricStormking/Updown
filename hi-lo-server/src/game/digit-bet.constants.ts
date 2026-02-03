@@ -35,6 +35,7 @@ export const DIGIT_PAYOUTS = {
     24: 40,
     25: 70,
     26: 130,
+    27: 130,
   },
 } as const;
 
@@ -42,5 +43,5 @@ export const DIGIT_SUM_RANGES = {
   small: { min: 0, max: 13 },
   big: { min: 14, max: 27 },
   sumMin: 1,
-  sumMax: 26,
+  sumMax: 27,
 } as const;

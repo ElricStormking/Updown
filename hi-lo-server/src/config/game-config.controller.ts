@@ -50,6 +50,7 @@ export class GameConfigController {
     resultDisplayDurationMs: number;
     minBetAmount: number;
     maxBetAmount: number;
+    tokenValues: number[];
     payoutMultiplierUp: number;
     payoutMultiplierDown: number;
     priceSnapshotInterval: number;
@@ -82,6 +83,7 @@ export class GameConfigController {
       resultDisplayDurationMs: config.resultDisplayDurationMs,
       minBetAmount: config.minBetAmount,
       maxBetAmount: config.maxBetAmount,
+      tokenValues: config.tokenValues,
       payoutMultiplierUp: config.payoutMultiplierUp,
       payoutMultiplierDown: config.payoutMultiplierDown,
       priceSnapshotInterval: config.priceSnapshotInterval,

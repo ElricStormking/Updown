@@ -44,7 +44,6 @@ const ADMIN_PAGE_CANDIDATES = [
   path.resolve(__dirname, '..', '..', '..', ...ADMIN_PAGE_RELATIVE_PATH),
 ];
 
-let adminPageHtmlCache: string | null = null;
 let adminPagePathCache: string | null = null;
 
 const resolveAdminPagePath = () => {
@@ -59,13 +58,11 @@ const resolveAdminPagePath = () => {
 };
 
 const loadAdminPageHtml = async () => {
-  if (adminPageHtmlCache) return adminPageHtmlCache;
   const filePath = resolveAdminPagePath();
   if (!filePath) {
     throw new NotFoundException('Admin page not found');
   }
-  adminPageHtmlCache = await readFile(filePath, 'utf8');
-  return adminPageHtmlCache;
+  return readFile(filePath, 'utf8');
 };
 
 @Controller('admin')

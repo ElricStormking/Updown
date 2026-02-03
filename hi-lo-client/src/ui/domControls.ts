@@ -29,7 +29,9 @@ let authScreenEl: HTMLDivElement | null = null;
 let appShellEl: HTMLDivElement | null = null;
 let authStatusEl: HTMLElement | null = null;
 let tokenOptionsEl: HTMLDivElement | null = null;
+let tokenBarFloatingChipsEl: HTMLDivElement | null = null;
 let tokenOptionButtons: HTMLButtonElement[] = [];
+let renderTokenBars: ((values: number[]) => void) | null = null;
 let tokenBarMenuBtn: HTMLButtonElement | null = null;
 let tokenBarClearBtn: HTMLButtonElement | null = null;
 let fullscreenPromptEl: HTMLDivElement | null = null;
@@ -90,18 +92,70 @@ const isMobileViewport = () => {
 };
 
 const tokenStackByKey = new Map<string, HTMLElement>();
-const TOKEN_VALUES = [10, 50, 100, 150, 200, 300, 500];
-const TOKEN_BAR_FLOATING_CHIPS = [
-  { value: 10, left: '21.7%', top: '58%' },
-  { value: 100, left: '30.9%', top: '58%' },
-  { value: 150, left: '40.2%', top: '58%' },
-  { value: 200, left: '49.4%', top: '58%' },
-  { value: 300, left: '58.7%', top: '58%' },
-  { value: 50, left: '67.9%', top: '58%' },
-  { value: 500, left: '77.2%', top: '58%' },
+const DEFAULT_TOKEN_VALUES = [10, 50, 100, 150, 200, 300, 500];
+const TOKEN_SLOT_POSITIONS = [
+  { left: '21.7%', top: '58%' },
+  { left: '30.9%', top: '58%' },
+  { left: '40.2%', top: '58%' },
+  { left: '49.4%', top: '58%' },
+  { left: '58.7%', top: '58%' },
+  { left: '67.9%', top: '58%' },
+  { left: '77.2%', top: '58%' },
 ];
 
+const normalizeTokenValues = (values?: number[]) => {
+  if (!Array.isArray(values) || values.length !== DEFAULT_TOKEN_VALUES.length) {
+    return DEFAULT_TOKEN_VALUES.slice();
+  }
+  const normalized = values.map((value) => Number(value));
+  if (normalized.some((value) => !Number.isFinite(value) || value <= 0)) {
+    return DEFAULT_TOKEN_VALUES.slice();
+  }
+  return normalized;
+};
+
+let activeTokenValues = DEFAULT_TOKEN_VALUES.slice();
+const getTokenStyleValue = (value: number) => {
+  const index = activeTokenValues.indexOf(value);
+  return DEFAULT_TOKEN_VALUES[index] ?? value;
+};
+
+const buildTokenOptionsMarkup = (values: number[]) =>
+  values
+    .map((value, index) => {
+      const styleValue =
+        DEFAULT_TOKEN_VALUES[index] ?? DEFAULT_TOKEN_VALUES[0];
+      return `
+        <button type="button" class="token-option" data-token="${value}">
+          <span class="token-chip token-chip--${styleValue}">${value}</span>
+        </button>
+      `;
+    })
+    .join('');
+
+const buildTokenFloatingMarkup = (values: number[]) =>
+  values
+    .map((value, index) => {
+      const position = TOKEN_SLOT_POSITIONS[index];
+      if (!position) return '';
+      const styleValue =
+        DEFAULT_TOKEN_VALUES[index] ?? DEFAULT_TOKEN_VALUES[0];
+      return `
+        <button
+          type="button"
+          class="token-bar-floating-chip"
+          data-token="${value}"
+          style="left: ${position.left}; top: ${position.top};"
+          aria-label="Token ${value}"
+        >
+          <span class="token-chip token-chip--${styleValue}">${value}</span>
+        </button>
+      `;
+    })
+    .join('');
+
 const WIN_CELEBRATE_FALLBACK_MS = 2600;
+let lastTokenValuesSignature: string | null = null;
 let lastWinCelebrateSignature: string | null = null;
 
 const sumPayouts: Record<number, number> = {
@@ -131,6 +185,7 @@ const sumPayouts: Record<number, number> = {
   24: 40,
   25: 70,
   26: 130,
+  27: 130,
 };
 
 const formatPayoutRatio = (value: number) => {
@@ -276,13 +331,7 @@ export const initControls = (handlers: ControlHandlers) => {
                 </button>
               </div>
               <div class="token-options" id="token-options">
-                ${TOKEN_VALUES.map(
-                  (value) => `
-                    <button type="button" class="token-option" data-token="${value}">
-                      <span class="token-chip token-chip--${value}">${value}</span>
-                    </button>
-                  `,
-                ).join('')}
+                ${buildTokenOptionsMarkup(DEFAULT_TOKEN_VALUES)}
               </div>
               <div class="token-bar-actions">
                 <button
@@ -334,19 +383,9 @@ export const initControls = (handlers: ControlHandlers) => {
           src="/main_screen_UI/token_bar_box.png"
           alt="Token Bar"
         />
-        ${TOKEN_BAR_FLOATING_CHIPS.map(
-          (chip) => `
-            <button
-              type="button"
-              class="token-bar-floating-chip"
-              data-token="${chip.value}"
-              style="left: ${chip.left}; top: ${chip.top};"
-              aria-label="Token ${chip.value}"
-            >
-              <img src="/main_screen_UI/chip_${chip.value}.png" alt="" />
-            </button>
-          `,
-        ).join('')}
+        <div id="token-bar-floating-chips">
+          ${buildTokenFloatingMarkup(DEFAULT_TOKEN_VALUES)}
+        </div>
         <button
           type="button"
           class="token-bar-floating-clear"
@@ -528,6 +567,7 @@ export const initControls = (handlers: ControlHandlers) => {
   upBtn = root.querySelector('button[data-side="UP"]');
   downBtn = root.querySelector('button[data-side="DOWN"]');
   tokenOptionsEl = root.querySelector('#token-options');
+  tokenBarFloatingChipsEl = root.querySelector('#token-bar-floating-chips');
   tokenBarMenuBtn =
     root.querySelector('#token-bar-menu-floating') ??
     root.querySelector('#token-bar-menu');
@@ -598,23 +638,40 @@ export const initControls = (handlers: ControlHandlers) => {
     }
   });
 
-  tokenOptionButtons = [
-    ...Array.from(
-      tokenOptionsEl?.querySelectorAll<HTMLButtonElement>('.token-option') ?? [],
-    ),
-    ...Array.from(
-      root.querySelectorAll<HTMLButtonElement>('.token-bar-floating-chip') ?? [],
-    ),
-  ];
-  tokenOptionButtons.forEach((button) => {
-    button.addEventListener('click', () => {
-      const value = Number(button.dataset.token ?? 0);
-      if (!Number.isFinite(value) || value <= 0) {
-        return;
-      }
-      updateState({ selectedTokenValue: value });
+  const bindTokenOptionButtons = () => {
+    tokenOptionButtons = [
+      ...Array.from(
+        tokenOptionsEl?.querySelectorAll<HTMLButtonElement>('.token-option') ?? [],
+      ),
+      ...Array.from(
+        tokenBarFloatingChipsEl?.querySelectorAll<HTMLButtonElement>(
+          '.token-bar-floating-chip',
+        ) ?? [],
+      ),
+    ];
+    tokenOptionButtons.forEach((button) => {
+      button.onclick = () => {
+        const value = Number(button.dataset.token ?? 0);
+        if (!Number.isFinite(value) || value <= 0) {
+          return;
+        }
+        updateState({ selectedTokenValue: value });
+      };
     });
-  });
+  };
+
+  renderTokenBars = (values: number[]) => {
+    activeTokenValues = values.slice();
+    if (tokenOptionsEl) {
+      tokenOptionsEl.innerHTML = buildTokenOptionsMarkup(values);
+    }
+    if (tokenBarFloatingChipsEl) {
+      tokenBarFloatingChipsEl.innerHTML = buildTokenFloatingMarkup(values);
+    }
+    bindTokenOptionButtons();
+  };
+
+  renderTokenBars(DEFAULT_TOKEN_VALUES);
 
   const isFullscreenActive = () => {
     if (typeof document === 'undefined') return false;
@@ -1081,6 +1138,13 @@ const render = (nextState: typeof state) => {
     walletEl.textContent = nextState.walletBalance.toFixed(2);
   }
 
+  const tokenValues = normalizeTokenValues(nextState.config?.tokenValues);
+  const tokenSignature = tokenValues.join(',');
+  if (tokenSignature !== lastTokenValuesSignature) {
+    renderTokenBars?.(tokenValues);
+    lastTokenValuesSignature = tokenSignature;
+  }
+
   if (tokenBarClearBtn) {
     const round = nextState.currentRound;
     const hasPlacements = Object.keys(nextState.tokenPlacements ?? {}).length > 0;
@@ -1487,7 +1551,7 @@ const refreshDigitHighlights = (nextState: typeof state) => {
     }
 
     // SUM always highlights if within table range.
-    if (Number.isFinite(sum) && sum >= 1 && sum <= 26) {
+    if (Number.isFinite(sum) && sum >= 1 && sum <= 27) {
       keys.add(`SUM|${sum}`);
     }
 
@@ -1593,9 +1657,10 @@ const renderTokenStack = (
   }
   const totalAmount = placement.value * placement.count;
   const amountLabel = String(totalAmount);
+  const styleValue = getTokenStyleValue(placement.value);
   const compactClass = amountLabel.length >= 4 ? ' token-chip--compact' : '';
   stackEl.innerHTML = `
-    <span class="token-chip token-chip--${placement.value}${compactClass}">
+    <span class="token-chip token-chip--${styleValue}${compactClass}">
       ${amountLabel}
     </span>
   `;
@@ -1740,7 +1805,7 @@ const buildDigitBetTable = () => {
     selection: value,
   })));
 
-  const sumValues = Array.from({ length: 26 }, (_, index) => index + 1);
+  const sumValues = Array.from({ length: 27 }, (_, index) => index + 1);
   const sumRows = Math.ceil(sumValues.length / 5);
   for (let row = 0; row < sumRows; row += 1) {
     const rowValues = sumValues.slice(row * 5, row * 5 + 5);

@@ -4,6 +4,7 @@ import { JwtService } from '@nestjs/jwt';
 import { Merchant, Prisma, WalletTxType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { WalletService } from '../wallet/wallet.service';
+import { GameConfigService } from '../config/game-config.service';
 import {
   validateSignature,
   formatDateForSignature,
@@ -20,6 +21,8 @@ import {
   GetTransferHistoryResponseData,
   TransferHistoryItem,
   LaunchGameResponseData,
+  UpdateBetLimitResponseData,
+  UpdateTokenValuesResponseData,
 } from './dto';
 
 @Injectable()
@@ -31,6 +34,7 @@ export class IntegrationService {
     private readonly walletService: WalletService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly gameConfigService: GameConfigService,
   ) {}
 
   async createAccount(
@@ -452,6 +456,113 @@ export class IntegrationService {
       });
     } catch (error) {
       this.logger.error('Failed to launch game', error);
+      return IntegrationResponseDto.error(
+        IntegrationErrorCodes.INTERNAL_ERROR,
+        IntegrationErrorMessages[IntegrationErrorCodes.INTERNAL_ERROR],
+      );
+    }
+  }
+
+  async updateBetLimit(
+    merchant: Merchant,
+    maxBetAmount: number,
+    timestamp: number,
+    hash: string,
+  ): Promise<IntegrationResponseDto<UpdateBetLimitResponseData>> {
+    const maxBetAmountText = String(maxBetAmount ?? '');
+    const params = [
+      merchant.merchantId,
+      maxBetAmountText,
+      timestamp.toString(),
+    ];
+    if (!validateSignature(params, merchant.hashKey, hash)) {
+      return IntegrationResponseDto.error(
+        IntegrationErrorCodes.INVALID_SIGNATURE,
+        IntegrationErrorMessages[IntegrationErrorCodes.INVALID_SIGNATURE],
+      );
+    }
+
+    if (!Number.isFinite(maxBetAmount) || maxBetAmount < 0) {
+      return IntegrationResponseDto.error(
+        IntegrationErrorCodes.INVALID_BET_AMOUNT_LIMIT,
+        IntegrationErrorMessages[IntegrationErrorCodes.INVALID_BET_AMOUNT_LIMIT],
+      );
+    }
+
+    try {
+      const current = await this.gameConfigService.getActiveConfig(
+        merchant.merchantId,
+      );
+      const updated = await this.gameConfigService.updateConfig(
+        { ...current, maxBetAmount },
+        merchant.merchantId,
+      );
+      return IntegrationResponseDto.success({
+        minBetAmount: updated.minBetAmount,
+        maxBetAmount: updated.maxBetAmount,
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('maxBetAmount')) {
+        return IntegrationResponseDto.error(
+          IntegrationErrorCodes.INVALID_BET_AMOUNT_LIMIT,
+          IntegrationErrorMessages[
+            IntegrationErrorCodes.INVALID_BET_AMOUNT_LIMIT
+          ],
+        );
+      }
+      this.logger.error('Failed to update bet limit', error);
+      return IntegrationResponseDto.error(
+        IntegrationErrorCodes.INTERNAL_ERROR,
+        IntegrationErrorMessages[IntegrationErrorCodes.INTERNAL_ERROR],
+      );
+    }
+  }
+
+  async updateTokenValues(
+    merchant: Merchant,
+    tokenValues: number[],
+    timestamp: number,
+    hash: string,
+  ): Promise<IntegrationResponseDto<UpdateTokenValuesResponseData>> {
+    const tokenValuesSignature = Array.isArray(tokenValues)
+      ? tokenValues.join(',')
+      : '';
+    const params = [
+      merchant.merchantId,
+      tokenValuesSignature,
+      timestamp.toString(),
+    ];
+    if (!validateSignature(params, merchant.hashKey, hash)) {
+      return IntegrationResponseDto.error(
+        IntegrationErrorCodes.INVALID_SIGNATURE,
+        IntegrationErrorMessages[IntegrationErrorCodes.INVALID_SIGNATURE],
+      );
+    }
+
+    if (
+      !Array.isArray(tokenValues) ||
+      tokenValues.length !== 7 ||
+      tokenValues.some((value) => !Number.isFinite(value) || value <= 0)
+    ) {
+      return IntegrationResponseDto.error(
+        IntegrationErrorCodes.INVALID_TOKEN_VALUES,
+        IntegrationErrorMessages[IntegrationErrorCodes.INVALID_TOKEN_VALUES],
+      );
+    }
+
+    try {
+      const current = await this.gameConfigService.getActiveConfig(
+        merchant.merchantId,
+      );
+      const updated = await this.gameConfigService.updateConfig(
+        { ...current, tokenValues },
+        merchant.merchantId,
+      );
+      return IntegrationResponseDto.success({
+        tokenValues: updated.tokenValues,
+      });
+    } catch (error) {
+      this.logger.error('Failed to update token values', error);
       return IntegrationResponseDto.error(
         IntegrationErrorCodes.INTERNAL_ERROR,
         IntegrationErrorMessages[IntegrationErrorCodes.INTERNAL_ERROR],

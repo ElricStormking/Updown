@@ -339,9 +339,19 @@ html {
 
 .token-bar-floating-chip {
   width: 7.5%;
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
 }
 
-.token-bar-floating-chip img,
+.token-bar-floating-chip .token-chip {
+  width: 100%;
+  height: 100%;
+  font-size: clamp(0.5rem, 1.2vw, 0.7rem);
+  border-width: 2px;
+  box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.2), 0 6px 10px rgba(0, 0, 0, 0.35);
+}
+
 .token-bar-floating-clear img,
 .token-bar-floating-menu img {
   width: 100%;

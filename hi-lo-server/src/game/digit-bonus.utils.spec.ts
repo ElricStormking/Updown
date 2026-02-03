@@ -8,9 +8,9 @@ import {
 } from './digit-bonus.utils';
 
 describe('digit-bonus.utils', () => {
-  it('getAllDigitBetSlots matches the client digit table layout (61 slots) and is unique', () => {
+  it('getAllDigitBetSlots matches the client digit table layout (62 slots) and is unique', () => {
     const slots = getAllDigitBetSlots();
-    expect(slots).toHaveLength(61);
+    expect(slots).toHaveLength(62);
 
     const keys = slots.map(buildDigitBonusKey);
     const unique = new Set(keys);
@@ -21,7 +21,7 @@ describe('digit-bonus.utils', () => {
     expect(keys).toContain(`${DigitBetType.DOUBLE}|11`);
     expect(keys).toContain(`${DigitBetType.TRIPLE}|777`);
     expect(keys).toContain(`${DigitBetType.SUM}|1`);
-    expect(keys).toContain(`${DigitBetType.SUM}|26`);
+    expect(keys).toContain(`${DigitBetType.SUM}|27`);
   });
 
   it('pickRandomDigitBonusSlots returns N unique slots', () => {

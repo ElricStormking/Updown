@@ -63,6 +63,20 @@ const game = new Phaser.Game({
   },
 });
 
+const DEFAULT_TOKEN_VALUES = [10, 50, 100, 150, 200, 300, 500];
+const normalizeTokenValues = (values?: number[]) => {
+  if (!Array.isArray(values) || values.length !== DEFAULT_TOKEN_VALUES.length) {
+    return DEFAULT_TOKEN_VALUES.slice();
+  }
+  const normalized = values.map((value) => Number(value));
+  if (normalized.some((value) => !Number.isFinite(value) || value <= 0)) {
+    return DEFAULT_TOKEN_VALUES.slice();
+  }
+  return normalized;
+};
+const resolveSelectedTokenValue = (current: number, values: number[]) =>
+  values.includes(current) ? current : values[0];
+
 type AudioSettings = { musicEnabled: boolean; sfxEnabled: boolean };
 const AUDIO_SETTINGS_KEY = 'audioSettings';
 
@@ -271,10 +285,17 @@ async function handleLogin(credentials: { account: string; password: string }) {
     api.fetchGameConfig(),
   ]);
 
+  const tokenValues = normalizeTokenValues(config?.tokenValues);
+  const selectedTokenValue = resolveSelectedTokenValue(
+    state.selectedTokenValue,
+    tokenValues,
+  );
+
   updateState({
     token: auth.accessToken,
     user: auth.user,
     config,
+    selectedTokenValue,
     tokenPlacements: {},
   });
   scene.setResultDisplayDuration(
@@ -288,7 +309,12 @@ async function handleLogin(credentials: { account: string; password: string }) {
 async function refreshConfig() {
   try {
     const { data: config } = await api.fetchGameConfig();
-    updateState({ config });
+    const tokenValues = normalizeTokenValues(config?.tokenValues);
+    const selectedTokenValue = resolveSelectedTokenValue(
+      state.selectedTokenValue,
+      tokenValues,
+    );
+    updateState({ config, selectedTokenValue });
     scene.setResultDisplayDuration(
       config.resultDisplayDurationMs ?? 8000,
     );

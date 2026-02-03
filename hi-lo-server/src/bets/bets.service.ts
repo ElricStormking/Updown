@@ -550,7 +550,10 @@ export class BetsService {
     payoutMultiplier: number,
     updates: SettlementStats['balanceUpdates'],
   ) {
-    const payout = new Prisma.Decimal(bet.amount).mul(payoutMultiplier);
+    // Digit payout multipliers are net winnings; return stake + winnings on win.
+    const payout = new Prisma.Decimal(bet.amount).mul(
+      new Prisma.Decimal(payoutMultiplier).add(1),
+    );
     const wallet = await this.walletService.adjustBalance(
       bet.userId,
       payout,
