@@ -77,6 +77,7 @@ export class AuthService {
     const payload: JwtPayload = {
       sub: user.id,
       account: user.email,
+      type: 'user',
     };
 
     const expiresInRaw =

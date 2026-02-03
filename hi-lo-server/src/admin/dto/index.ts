@@ -8,3 +8,4 @@ export * from './query-merchants.dto';
 export * from './admin-accounts.dto';
 export * from './query-price-snapshots.dto';
 export * from './query-player-logins.dto';
+export * from './admin-auth.dto';

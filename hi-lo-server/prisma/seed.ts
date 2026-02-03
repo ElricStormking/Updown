@@ -96,6 +96,43 @@ async function seedAdminUser() {
   return user;
 }
 
+async function seedQaAdminAccount() {
+  const account = 'qamerchant';
+  const password = 'qa1234';
+  const merchantId = 'qamerchant1';
+  const saltRounds = Number(process.env.PASSWORD_SALT_ROUNDS ?? 12);
+
+  await prisma.merchant.upsert({
+    where: { merchantId },
+    update: { isActive: true },
+    create: {
+      merchantId,
+      name: 'QA Merchant',
+      hashKey: 'cWFtZXJjaGFudDE=',
+      isActive: true,
+    },
+  });
+
+  const passwordHash = await bcrypt.hash(password, saltRounds);
+  const admin = await prisma.adminAccount.upsert({
+    where: { account },
+    update: {
+      password: passwordHash,
+      status: 'ENABLED',
+      merchantId,
+    },
+    create: {
+      account,
+      password: passwordHash,
+      status: 'ENABLED',
+      merchantId,
+    },
+  });
+
+  console.log(`✅ Seeded admin account ${admin.account} (${admin.merchantId})`);
+  return admin;
+}
+
 async function seedTestPlayerTopUp() {
   const account = process.env.SEED_TESTPLAYER_ACCOUNT ?? 'testplayer';
   const password = process.env.SEED_TESTPLAYER_PASSWORD ?? 'changeme';
@@ -151,6 +188,7 @@ async function main() {
   await seedTestMerchant();
   await seedDemoUser();
   await seedAdminUser();
+  await seedQaAdminAccount();
   await seedTestPlayerTopUp();
 }
 

@@ -133,6 +133,23 @@
       .status.error {
         color: #f87171;
       }
+      .divider {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        margin: 1.2rem 0;
+        color: var(--muted);
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+      }
+      .divider::before,
+      .divider::after {
+        content: "";
+        flex: 1;
+        height: 1px;
+        background: var(--border);
+      }
       .grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
@@ -492,6 +509,9 @@
       .badge.error { background: rgba(239, 68, 68, 0.2); color: #f87171; }
       .badge.info { background: rgba(59, 130, 246, 0.2); color: #60a5fa; }
       button.small { padding: 0.35rem 0.75rem; font-size: 0.8rem; }
+      .admin-limited .limited-hide {
+        display: none;
+      }
       @media (max-width: 760px) {
         header {
           flex-direction: column;
@@ -538,6 +558,27 @@
           </div>
           <div class="status" id="login-status"></div>
         </form>
+        <div class="divider">or</div>
+        <form id="register-form">
+          <div class="grid">
+            <label>
+              New account
+              <input id="register-account" type="text" autocomplete="username" required />
+            </label>
+            <label>
+              New password
+              <input id="register-password" type="password" autocomplete="new-password" required />
+            </label>
+            <label>
+              Merchant ID
+              <input id="register-merchant" type="text" required />
+            </label>
+          </div>
+          <div class="form-actions">
+            <button class="secondary" type="submit">Create admin account</button>
+          </div>
+          <div class="status" id="register-status"></div>
+        </form>
       </section>
 
       <!-- Main Content with Tabs -->
@@ -571,22 +612,6 @@
         </div>
         <form id="config-form">
           <div class="grid">
-            <label>
-              Betting duration (ms)
-              <input id="cfg-betting-duration" type="number" min="0" step="100" />
-            </label>
-            <label>
-              Result duration (ms)
-              <input id="cfg-result-duration" type="number" min="0" step="100" />
-            </label>
-            <label>
-              Result display duration (ms)
-              <input id="cfg-result-display-duration" type="number" min="0" step="100" />
-            </label>
-            <label>
-              Price snapshot interval (ms)
-              <input id="cfg-snapshot-interval" type="number" min="1" step="100" />
-            </label>
             <label class="bonus-mode-toggle">
               Bonus Mode
               <div class="bonus-mode-controls">
@@ -596,6 +621,24 @@
                 </select>
                 <span class="bonus-mode-chip" id="bonus-mode-chip">On</span>
               </div>
+            </label>
+          </div>
+          <div class="grid">
+            <label class="limited-hide">
+              Betting duration (ms)
+              <input id="cfg-betting-duration" type="number" min="0" step="100" />
+            </label>
+            <label class="limited-hide">
+              Result duration (ms)
+              <input id="cfg-result-duration" type="number" min="0" step="100" />
+            </label>
+            <label class="limited-hide">
+              Result display duration (ms)
+              <input id="cfg-result-display-duration" type="number" min="0" step="100" />
+            </label>
+            <label class="limited-hide">
+              Price snapshot interval (ms)
+              <input id="cfg-snapshot-interval" type="number" min="1" step="100" />
             </label>
             <label>
               Bonus slot chance total
@@ -868,13 +911,20 @@
 
     <script>
       const tokenKey = 'adminToken';
+      const adminInfoKey = 'adminInfo';
       let token = localStorage.getItem(tokenKey) || '';
+      let currentAdmin = null;
       const $ = (sel) => document.querySelector(sel);
       const $$ = (sel) => document.querySelectorAll(sel);
       const loginSection = $('#login-section');
       const mainContent = $('#main-content');
       const loginForm = $('#login-form');
       const loginStatus = $('#login-status');
+      const registerForm = $('#register-form');
+      const registerStatus = $('#register-status');
+      const registerAccountInput = $('#register-account');
+      const registerPasswordInput = $('#register-password');
+      const registerMerchantInput = $('#register-merchant');
       const logoutBtn = $('#logout-btn');
       const configSection = $('#config-section');
       const configForm = document.querySelector('#config-form');
@@ -968,6 +1018,9 @@
         if (logoutBtn) logoutBtn.classList.toggle('hidden', !authed);
         if (authed) {
           scheduleBonusRatioScrollbarUpdate();
+          applyAdminPermissions();
+        } else {
+          document.body.classList.remove('admin-limited');
         }
       };
 
@@ -1140,6 +1193,7 @@
       const handleAuthFailure = (message) => {
         token = '';
         localStorage.removeItem(tokenKey);
+        saveAdminInfo(null);
         setAuthState(false);
         setStatus(loginStatus, message || 'Session expired. Please log in again.', true);
       };
@@ -1748,8 +1802,52 @@
       const cfgDeleteMerchant = document.getElementById('cfg-delete-merchant');
       let selectedMerchantId = '';
 
+      const loadStoredAdmin = () => {
+        const raw = localStorage.getItem(adminInfoKey);
+        if (!raw) return null;
+        try {
+          return JSON.parse(raw);
+        } catch (error) {
+          localStorage.removeItem(adminInfoKey);
+          return null;
+        }
+      };
+
+      const saveAdminInfo = (admin) => {
+        currentAdmin = admin || null;
+        if (!admin) {
+          localStorage.removeItem(adminInfoKey);
+          return;
+        }
+        localStorage.setItem(adminInfoKey, JSON.stringify(admin));
+      };
+
+      const isSuperAdmin = () => Boolean(currentAdmin && currentAdmin.isSuperAdmin);
+
+      const applyAdminPermissions = () => {
+        const limited = Boolean(currentAdmin && !currentAdmin.isSuperAdmin);
+        document.body.classList.toggle('admin-limited', limited);
+        if (limited && currentAdmin?.merchantId) {
+          selectedMerchantId = currentAdmin.merchantId;
+        }
+        if (cfgMerchantSelect) {
+          cfgMerchantSelect.disabled = limited;
+        }
+      };
+
       const loadMerchantList = async () => {
         if (!cfgMerchantSelect || !token) return;
+        if (currentAdmin && !currentAdmin.isSuperAdmin) {
+          cfgMerchantSelect.innerHTML = '';
+          const opt = document.createElement('option');
+          opt.value = currentAdmin.merchantId || '';
+          opt.textContent = currentAdmin.merchantId
+            ? currentAdmin.merchantId + ' (Limited)'
+            : 'Assigned merchant';
+          cfgMerchantSelect.appendChild(opt);
+          cfgMerchantSelect.value = currentAdmin.merchantId || '';
+          return;
+        }
         try {
           const merchants = await apiFetch('/admin/merchants?limit=100');
           if (!merchants || !merchants.items) return;
@@ -1766,7 +1864,12 @@
       };
 
       const loadConfig = async (merchantId) => {
-        const mid = merchantId !== undefined ? merchantId : selectedMerchantId;
+        const isLimited = Boolean(currentAdmin && !currentAdmin.isSuperAdmin);
+        const mid = isLimited
+          ? currentAdmin.merchantId || ''
+          : merchantId !== undefined
+            ? merchantId
+            : selectedMerchantId;
         setStatus(configStatus, 'Loading...');
         const url = mid ? '/config/game?merchantId=' + encodeURIComponent(mid) : '/config/game';
         const config = await apiFetch(url);
@@ -1999,7 +2102,7 @@
         const password = document.querySelector('#login-password').value.trim();
         let data;
         try {
-          const res = await fetch('/auth/login', {
+          const res = await fetch('/admin/auth/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ account: account, password: password }),
@@ -2025,6 +2128,7 @@
 
         token = data.accessToken;
         localStorage.setItem(tokenKey, token);
+        saveAdminInfo(data.user || null);
         setStatus(loginStatus, 'Login successful.');
         setAuthState(true);
         loadMerchantList().catch(err => console.error('Failed to load merchants:', err));
@@ -2034,6 +2138,52 @@
         loadRtp().catch((error) =>
           setStatus(rtpStatus, error.message || 'Failed to load RTP', true),
         );
+      });
+
+      registerForm?.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (!registerAccountInput || !registerPasswordInput || !registerMerchantInput) {
+          return;
+        }
+        setStatus(registerStatus, 'Creating admin account...');
+        const account = registerAccountInput.value.trim();
+        const password = registerPasswordInput.value.trim();
+        const merchantId = registerMerchantInput.value.trim();
+        if (!account || !password || !merchantId) {
+          setStatus(registerStatus, 'Account, password, and merchant ID are required', true);
+          return;
+        }
+        try {
+          const res = await fetch('/admin/auth/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ account, password, merchantId }),
+          });
+          if (!res.ok) {
+            const detail = await res.json().catch(() => ({}));
+            throw new Error(detail.message || 'Registration failed');
+          }
+          const data = await res.json();
+          setStatus(registerStatus, 'Admin account created. You can now log in.');
+          if (data?.accessToken) {
+            token = data.accessToken;
+            localStorage.setItem(tokenKey, token);
+            saveAdminInfo(data.user || null);
+            setAuthState(true);
+            loadMerchantList().catch(err => console.error('Failed to load merchants:', err));
+            loadConfig().catch((error) =>
+              setStatus(configStatus, error.message || 'Failed to load config', true),
+            );
+            loadRtp().catch((error) =>
+              setStatus(rtpStatus, error.message || 'Failed to load RTP', true),
+            );
+          } else {
+            $('#login-account').value = account;
+            $('#login-password').value = '';
+          }
+        } catch (error) {
+          setStatus(registerStatus, error.message || 'Registration failed', true);
+        }
       });
 
       configReload.addEventListener('click', async () => {
@@ -2073,15 +2223,33 @@
       logoutBtn.addEventListener('click', () => {
         token = '';
         localStorage.removeItem(tokenKey);
+        saveAdminInfo(null);
         setAuthState(false);
       });
 
       initDefaults();
+      const storedAdmin = loadStoredAdmin();
+      if (storedAdmin) {
+        saveAdminInfo(storedAdmin);
+      }
       setAuthState(Boolean(token));
       if (token) {
-        loadMerchantList().catch(err => console.error('Failed to load merchants:', err));
-        loadConfig().catch((error) => setStatus(configStatus, error.message || 'Failed to load config', true));
-        loadRtp().catch((error) => setStatus(rtpStatus, error.message || 'Failed to load RTP', true));
+        const hydrateAdminProfile = async () => {
+          if (currentAdmin) return;
+          try {
+            const me = await apiFetch('/admin/auth/me');
+            if (me?.user) {
+              saveAdminInfo(me.user);
+            }
+          } catch (error) {
+            // Ignore profile hydration errors; login will handle auth failures.
+          }
+        };
+        hydrateAdminProfile().finally(() => {
+          loadMerchantList().catch(err => console.error('Failed to load merchants:', err));
+          loadConfig().catch((error) => setStatus(configStatus, error.message || 'Failed to load config', true));
+          loadRtp().catch((error) => setStatus(rtpStatus, error.message || 'Failed to load RTP', true));
+        });
       }
     </script>
   </body>

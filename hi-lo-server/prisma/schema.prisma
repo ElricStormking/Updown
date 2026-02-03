@@ -190,6 +190,7 @@ enum RoundStatus {
 model AdminAccount {
   id           String             @id @default(cuid())
   account      String             @unique
+  merchantId   String             @default("hotcoregm")
   password     String
   status       AdminAccountStatus @default(ENABLED)
   createdAt    DateTime           @default(now())

@@ -1,4 +1,15 @@
-import { Body, Controller, Delete, Get, Param, Put, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  ForbiddenException,
+  Get,
+  Param,
+  Put,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AppConfig } from './configuration';
 import { DIGIT_SUM_RANGES } from '../game/digit-bet.constants';
@@ -25,20 +36,55 @@ export class GameConfigController {
   async updateGameConfig(
     @Body() dto: UpdateGameConfigDto,
     @Query('merchantId') merchantId?: string,
+    @Req()
+    request?: { adminContext?: { merchantId: string; isSuperAdmin: boolean } },
   ) {
-    const config = await this.gameConfigService.updateFromInput(dto, merchantId || null);
-    return this.buildResponse(config, merchantId || null);
+    const adminContext = request?.adminContext;
+    let targetMerchantId = merchantId || null;
+    if (adminContext && !adminContext.isSuperAdmin) {
+      if (merchantId && merchantId !== adminContext.merchantId) {
+        throw new ForbiddenException('Cannot update other merchant configs');
+      }
+      targetMerchantId = adminContext.merchantId;
+      const current = await this.gameConfigService.getActiveConfig(
+        targetMerchantId || null,
+      );
+      dto = {
+        ...dto,
+        bettingDurationMs: current.bettingDurationMs,
+        resultDurationMs: current.resultDurationMs,
+        resultDisplayDurationMs: current.resultDisplayDurationMs,
+        priceSnapshotInterval: current.priceSnapshotInterval,
+      };
+    }
+    const config = await this.gameConfigService.updateFromInput(dto, targetMerchantId);
+    return this.buildResponse(config, targetMerchantId);
   }
 
   @UseGuards(JwtAuthGuard, AdminGuard)
   @Get('game/merchants')
-  async listMerchantConfigs() {
+  async listMerchantConfigs(
+    @Req()
+    request?: { adminContext?: { merchantId: string; isSuperAdmin: boolean } },
+  ) {
+    const adminContext = request?.adminContext;
+    if (adminContext && !adminContext.isSuperAdmin) {
+      throw new ForbiddenException('Merchant listing is restricted');
+    }
     return this.gameConfigService.listMerchantConfigs();
   }
 
   @UseGuards(JwtAuthGuard, AdminGuard)
   @Delete('game/merchant/:merchantId')
-  async deleteConfigForMerchant(@Param('merchantId') merchantId: string) {
+  async deleteConfigForMerchant(
+    @Param('merchantId') merchantId: string,
+    @Req()
+    request?: { adminContext?: { merchantId: string; isSuperAdmin: boolean } },
+  ) {
+    const adminContext = request?.adminContext;
+    if (adminContext && !adminContext.isSuperAdmin) {
+      throw new ForbiddenException('Delete config is restricted');
+    }
     await this.gameConfigService.deleteConfigForMerchant(merchantId);
     return { success: true, message: `Config for merchant ${merchantId} deleted` };
   }

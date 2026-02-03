@@ -870,15 +870,4 @@ async function main() {
 main().catch(console.error);
 ```
 
----
 
-## 技術支援
-
-如有整合相關的技術支援或問題：
-
-- **電子郵件：** integration-support@your-domain.com
-- **文件網址：** https://docs.your-domain.com
-
----
-
-**注意：** 請將佔位符網址和憑證替換為入駐時提供的實際值。

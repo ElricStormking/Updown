@@ -67,6 +67,7 @@ export class AdminAccountsService {
       .map((a) => ({
         id: a.id,
         account: a.account,
+        merchantId: a.merchantId,
         status: a.status,
         createdAt: a.createdAt.toISOString(),
         updatedAt: a.updatedAt.toISOString(),
@@ -82,17 +83,27 @@ export class AdminAccountsService {
     if (existing) {
       throw new BadRequestException('Account already exists');
     }
+    if (dto.merchantId !== 'hotcoregm') {
+      const merchant = await this.prisma.merchant.findUnique({
+        where: { merchantId: dto.merchantId },
+      });
+      if (!merchant) {
+        throw new BadRequestException('Merchant ID not found');
+      }
+    }
     const passwordHash = await bcrypt.hash(dto.password, this.saltRounds);
     const account = await this.prisma.adminAccount.create({
       data: {
         account: dto.account,
         password: passwordHash,
         status: dto.status ?? AdminAccountStatus.ENABLED,
+        merchantId: dto.merchantId,
       },
     });
     return {
       id: account.id,
       account: account.account,
+      merchantId: account.merchantId,
       status: account.status,
       createdAt: account.createdAt.toISOString(),
       updatedAt: account.updatedAt.toISOString(),
@@ -121,6 +132,7 @@ export class AdminAccountsService {
     return {
       id: account.id,
       account: account.account,
+      merchantId: account.merchantId,
       status: account.status,
       createdAt: account.createdAt.toISOString(),
       updatedAt: account.updatedAt.toISOString(),
@@ -137,6 +149,7 @@ export class AdminAccountsService {
     return {
       id: account.id,
       account: account.account,
+      merchantId: account.merchantId,
       status: account.status,
       createdAt: account.createdAt.toISOString(),
       updatedAt: account.updatedAt.toISOString(),

@@ -21,6 +21,10 @@ export class CreateAdminAccountDto {
   @MinLength(6)
   password: string;
 
+  @IsString()
+  @MinLength(3)
+  merchantId: string;
+
   @IsOptional()
   @IsEnum(AdminAccountStatus)
   status?: AdminAccountStatus;
@@ -50,6 +54,7 @@ export class QueryLoginRecordsDto extends DateRangeQueryDto {
 export interface AdminAccountResponseItem {
   id: string;
   account: string;
+  merchantId: string;
   status: string;
   createdAt: string;
   updatedAt: string;
