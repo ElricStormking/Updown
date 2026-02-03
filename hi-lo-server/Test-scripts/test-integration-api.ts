@@ -64,7 +64,12 @@ async function createAccount(account: string) {
   });
 }
 
-async function transfer(account: string, type: number, amount: number, orderNo: string) {
+async function transfer(
+  account: string,
+  type: number,
+  amount: number,
+  transferId: string,
+) {
   const timestamp = getTimestamp();
   const params = [
     CONFIG.merchantId,
@@ -78,7 +83,7 @@ async function transfer(account: string, type: number, amount: number, orderNo: 
   await makeRequest('/integration/transfer', {
     merchantId: CONFIG.merchantId,
     account,
-    orderNo,
+    transferId,
     type,
     amount,
     timestamp,
@@ -151,19 +156,84 @@ async function getTransferHistory(startDate?: string) {
   });
 }
 
+async function getBetLimit() {
+  const timestamp = getTimestamp();
+  const params = [CONFIG.merchantId, timestamp.toString()];
+  const hash = generateSignature(params, CONFIG.hashKey);
+
+  await makeRequest('/integration/config/bet-limit/get', {
+    merchantId: CONFIG.merchantId,
+    timestamp,
+    hash,
+  });
+}
+
+async function setBetLimit(minBetAmount: number, maxBetAmount: number) {
+  const timestamp = getTimestamp();
+  const params = [
+    CONFIG.merchantId,
+    minBetAmount.toString(),
+    maxBetAmount.toString(),
+    timestamp.toString(),
+  ];
+  const hash = generateSignature(params, CONFIG.hashKey);
+
+  await makeRequest('/integration/config/bet-limit', {
+    merchantId: CONFIG.merchantId,
+    minBetAmount,
+    maxBetAmount,
+    timestamp,
+    hash,
+  });
+}
+
+async function getTokenValues() {
+  const timestamp = getTimestamp();
+  const params = [CONFIG.merchantId, timestamp.toString()];
+  const hash = generateSignature(params, CONFIG.hashKey);
+
+  await makeRequest('/integration/config/token-values/get', {
+    merchantId: CONFIG.merchantId,
+    timestamp,
+    hash,
+  });
+}
+
+async function setTokenValues(tokenValues: number[]) {
+  const timestamp = getTimestamp();
+  const tokenValuesSignature = tokenValues.join(',');
+  const params = [
+    CONFIG.merchantId,
+    tokenValuesSignature,
+    timestamp.toString(),
+  ];
+  const hash = generateSignature(params, CONFIG.hashKey);
+
+  await makeRequest('/integration/config/token-values', {
+    merchantId: CONFIG.merchantId,
+    tokenValues,
+    timestamp,
+    hash,
+  });
+}
+
 function printUsage() {
   console.log(`
 Integration API Test Helper
 
-Usage: npx ts-node scripts/test-integration-api.ts <command> [args]
+Usage: npx ts-node Test-scripts/test-integration-api.ts <command> [args]
 
 Commands:
   create-account <account>                    Create a new player account
-  transfer-in <account> <amount> <orderNo>    Deposit funds to player
-  transfer-out <account> <amount> <orderNo>   Withdraw funds from player
+  transfer-in <account> <amount> <transferId> Deposit funds to player
+  transfer-out <account> <amount> <transferId> Withdraw funds from player
   launch <account>                            Get game launch URL
   bet-history [startDate]                     Get bet history
   transfer-history [startDate]                Get transfer history
+  get-bet-limit                               Get bet limits
+  set-bet-limit <min> <max>                   Set bet limits
+  get-token-values                            Get token values
+  set-token-values <v1,v2,v3,v4,v5,v6,v7>      Set token values
 
 Environment Variables:
   MERCHANT_ID   - Merchant ID (default: TEST_MERCHANT)
@@ -171,12 +241,16 @@ Environment Variables:
   API_BASE_URL  - API base URL (default: http://localhost:4000)
 
 Examples:
-  npx ts-node scripts/test-integration-api.ts create-account player001
-  npx ts-node scripts/test-integration-api.ts transfer-in player001 100 ORDER001
-  npx ts-node scripts/test-integration-api.ts transfer-out player001 50 ORDER002
-  npx ts-node scripts/test-integration-api.ts launch player001
-  npx ts-node scripts/test-integration-api.ts bet-history 2026-01-01
-  npx ts-node scripts/test-integration-api.ts transfer-history
+  npx ts-node Test-scripts/test-integration-api.ts create-account player001
+  npx ts-node Test-scripts/test-integration-api.ts transfer-in player001 100 TXN001
+  npx ts-node Test-scripts/test-integration-api.ts transfer-out player001 50 TXN002
+  npx ts-node Test-scripts/test-integration-api.ts launch player001
+  npx ts-node Test-scripts/test-integration-api.ts bet-history 2026-01-01
+  npx ts-node Test-scripts/test-integration-api.ts transfer-history
+  npx ts-node Test-scripts/test-integration-api.ts get-bet-limit
+  npx ts-node Test-scripts/test-integration-api.ts set-bet-limit 0 1000
+  npx ts-node Test-scripts/test-integration-api.ts get-token-values
+  npx ts-node Test-scripts/test-integration-api.ts set-token-values 5,10,20,50,100,200,500
 `);
 }
 
@@ -206,7 +280,7 @@ async function main() {
 
     case 'transfer-in':
       if (!args[0] || !args[1] || !args[2]) {
-        console.error('Error: account, amount, and orderNo required');
+        console.error('Error: account, amount, and transferId required');
         process.exit(1);
       }
       await transfer(args[0], 0, Number(args[1]), args[2]);
@@ -214,7 +288,7 @@ async function main() {
 
     case 'transfer-out':
       if (!args[0] || !args[1] || !args[2]) {
-        console.error('Error: account, amount, and orderNo required');
+        console.error('Error: account, amount, and transferId required');
         process.exit(1);
       }
       await transfer(args[0], 1, Number(args[1]), args[2]);
@@ -234,6 +308,30 @@ async function main() {
 
     case 'transfer-history':
       await getTransferHistory(args[0]);
+      break;
+
+    case 'get-bet-limit':
+      await getBetLimit();
+      break;
+
+    case 'set-bet-limit':
+      if (!args[0] || !args[1]) {
+        console.error('Error: min and max bet amounts required');
+        process.exit(1);
+      }
+      await setBetLimit(Number(args[0]), Number(args[1]));
+      break;
+
+    case 'get-token-values':
+      await getTokenValues();
+      break;
+
+    case 'set-token-values':
+      if (!args[0]) {
+        console.error('Error: token values required');
+        process.exit(1);
+      }
+      await setTokenValues(args[0].split(',').map((v) => Number(v)));
       break;
 
     default:

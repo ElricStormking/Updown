@@ -20,6 +20,8 @@ import {
   BetHistoryItem,
   GetTransferHistoryResponseData,
   TransferHistoryItem,
+  GetBetLimitResponseData,
+  GetTokenValuesResponseData,
   LaunchGameResponseData,
   UpdateBetLimitResponseData,
   UpdateTokenValuesResponseData,
@@ -96,7 +98,7 @@ export class IntegrationService {
   async transfer(
     merchant: Merchant,
     account: string,
-    orderNo: string,
+    transferId: string,
     type: number,
     amount: number,
     timestamp: number,
@@ -144,7 +146,7 @@ export class IntegrationService {
       where: {
         merchantId_orderNo: {
           merchantId: merchant.merchantId,
-          orderNo,
+          orderNo: transferId,
         },
       },
     });
@@ -180,7 +182,7 @@ export class IntegrationService {
             visibleId,
             merchantId: merchant.merchantId,
             userId: user.id,
-            orderNo,
+            orderNo: transferId,
             type,
             amount: amountDecimal,
             balanceAfter: wallet.balance,
@@ -377,7 +379,7 @@ export class IntegrationService {
       const transferItems: TransferHistoryItem[] = transfers.map((t) => ({
         id: t.visibleId,
         account: t.user.merchantAccount ?? '',
-        orderNo: t.orderNo,
+        transferId: t.orderNo,
         type: t.type,
         amount: Number(t.amount),
         balanceAfter: Number(t.balanceAfter),
@@ -463,16 +465,47 @@ export class IntegrationService {
     }
   }
 
-  async updateBetLimit(
+  async getBetLimit(
     merchant: Merchant,
+    timestamp: number,
+    hash: string,
+  ): Promise<IntegrationResponseDto<GetBetLimitResponseData>> {
+    const params = [merchant.merchantId, timestamp.toString()];
+    if (!validateSignature(params, merchant.hashKey, hash)) {
+      return IntegrationResponseDto.error(
+        IntegrationErrorCodes.INVALID_SIGNATURE,
+        IntegrationErrorMessages[IntegrationErrorCodes.INVALID_SIGNATURE],
+      );
+    }
+
+    try {
+      const current = await this.gameConfigService.getActiveConfig(
+        merchant.merchantId,
+      );
+      return IntegrationResponseDto.success({
+        minBetAmount: current.minBetAmount,
+        maxBetAmount: current.maxBetAmount,
+      });
+    } catch (error) {
+      this.logger.error('Failed to get bet limit', error);
+      return IntegrationResponseDto.error(
+        IntegrationErrorCodes.INTERNAL_ERROR,
+        IntegrationErrorMessages[IntegrationErrorCodes.INTERNAL_ERROR],
+      );
+    }
+  }
+
+  async setBetLimit(
+    merchant: Merchant,
+    minBetAmount: number,
     maxBetAmount: number,
     timestamp: number,
     hash: string,
   ): Promise<IntegrationResponseDto<UpdateBetLimitResponseData>> {
-    const maxBetAmountText = String(maxBetAmount ?? '');
     const params = [
       merchant.merchantId,
-      maxBetAmountText,
+      String(minBetAmount ?? ''),
+      String(maxBetAmount ?? ''),
       timestamp.toString(),
     ];
     if (!validateSignature(params, merchant.hashKey, hash)) {
@@ -482,7 +515,13 @@ export class IntegrationService {
       );
     }
 
-    if (!Number.isFinite(maxBetAmount) || maxBetAmount < 0) {
+    if (
+      !Number.isFinite(minBetAmount) ||
+      !Number.isFinite(maxBetAmount) ||
+      minBetAmount < 0 ||
+      maxBetAmount < 0 ||
+      maxBetAmount < minBetAmount
+    ) {
       return IntegrationResponseDto.error(
         IntegrationErrorCodes.INVALID_BET_AMOUNT_LIMIT,
         IntegrationErrorMessages[IntegrationErrorCodes.INVALID_BET_AMOUNT_LIMIT],
@@ -493,8 +532,15 @@ export class IntegrationService {
       const current = await this.gameConfigService.getActiveConfig(
         merchant.merchantId,
       );
+      const minTokenValue = Math.min(...current.tokenValues);
+      if (minBetAmount > minTokenValue) {
+        return IntegrationResponseDto.error(
+          IntegrationErrorCodes.INVALID_BET_AMOUNT_LIMIT,
+          'minBetAmount cannot exceed lowest token value',
+        );
+      }
       const updated = await this.gameConfigService.updateConfig(
-        { ...current, maxBetAmount },
+        { ...current, minBetAmount, maxBetAmount },
         merchant.merchantId,
       );
       return IntegrationResponseDto.success({
@@ -510,6 +556,14 @@ export class IntegrationService {
           ],
         );
       }
+      if (error instanceof Error && error.message.includes('minBetAmount')) {
+        return IntegrationResponseDto.error(
+          IntegrationErrorCodes.INVALID_BET_AMOUNT_LIMIT,
+          IntegrationErrorMessages[
+            IntegrationErrorCodes.INVALID_BET_AMOUNT_LIMIT
+          ],
+        );
+      }
       this.logger.error('Failed to update bet limit', error);
       return IntegrationResponseDto.error(
         IntegrationErrorCodes.INTERNAL_ERROR,
@@ -518,7 +572,36 @@ export class IntegrationService {
     }
   }
 
-  async updateTokenValues(
+  async getTokenValues(
+    merchant: Merchant,
+    timestamp: number,
+    hash: string,
+  ): Promise<IntegrationResponseDto<GetTokenValuesResponseData>> {
+    const params = [merchant.merchantId, timestamp.toString()];
+    if (!validateSignature(params, merchant.hashKey, hash)) {
+      return IntegrationResponseDto.error(
+        IntegrationErrorCodes.INVALID_SIGNATURE,
+        IntegrationErrorMessages[IntegrationErrorCodes.INVALID_SIGNATURE],
+      );
+    }
+
+    try {
+      const current = await this.gameConfigService.getActiveConfig(
+        merchant.merchantId,
+      );
+      return IntegrationResponseDto.success({
+        tokenValues: current.tokenValues,
+      });
+    } catch (error) {
+      this.logger.error('Failed to get token values', error);
+      return IntegrationResponseDto.error(
+        IntegrationErrorCodes.INTERNAL_ERROR,
+        IntegrationErrorMessages[IntegrationErrorCodes.INTERNAL_ERROR],
+      );
+    }
+  }
+
+  async setTokenValues(
     merchant: Merchant,
     tokenValues: number[],
     timestamp: number,
@@ -554,6 +637,13 @@ export class IntegrationService {
       const current = await this.gameConfigService.getActiveConfig(
         merchant.merchantId,
       );
+      const minTokenValue = Math.min(...tokenValues);
+      if (current.minBetAmount > minTokenValue) {
+        return IntegrationResponseDto.error(
+          IntegrationErrorCodes.INVALID_TOKEN_VALUES,
+          'Lowest token value must be >= minBetAmount',
+        );
+      }
       const updated = await this.gameConfigService.updateConfig(
         { ...current, tokenValues },
         merchant.merchantId,

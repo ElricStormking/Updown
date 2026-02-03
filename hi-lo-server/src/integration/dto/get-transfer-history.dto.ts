@@ -29,7 +29,7 @@ export class GetTransferHistoryDto {
 export class TransferHistoryItem {
   id: string;
   account: string;
-  orderNo: string;
+  transferId: string;
   type: number;
   amount: number;
   balanceAfter: number;

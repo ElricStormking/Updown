@@ -313,6 +313,12 @@ export class GameConfigService {
     ) {
       throw new BadRequestException('tokenValues must be > 0');
     }
+    const minTokenValue = Math.min(...config.tokenValues);
+    if (config.minBetAmount > minTokenValue) {
+      throw new BadRequestException(
+        'minBetAmount cannot exceed lowest token value',
+      );
+    }
     if (config.payoutMultiplierUp < 0 || config.payoutMultiplierDown < 0) {
       throw new BadRequestException('Payout multipliers must be >= 0');
     }

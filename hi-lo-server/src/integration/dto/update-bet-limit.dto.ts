@@ -7,6 +7,10 @@ export class UpdateBetLimitDto {
 
   @IsNumber()
   @Min(0)
+  minBetAmount: number;
+
+  @IsNumber()
+  @Min(0)
   maxBetAmount: number;
 
   @IsNumber()

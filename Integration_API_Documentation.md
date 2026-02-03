@@ -1,7 +1,7 @@
 # Platform Integration API Documentation
 
 **Version:** 1.0  
-**Last Updated:** February 2026  
+**Last Updated:** February 3, 2026  
 
 ---
 
@@ -19,8 +19,10 @@
    - [Get Bet History](#3-get-bet-history)
    - [Get Transfer History](#4-get-transfer-history)
    - [Launch Game](#5-launch-game)
-   - [Update Bet Amount Limit](#6-update-bet-amount-limit)
-   - [Update Token Values](#7-update-token-values)
+   - [Get Bet Limit](#6-get-bet-limit)
+   - [Set Bet Limit](#7-set-bet-limit)
+   - [Get Token Values](#8-get-token-values)
+   - [Set Token Values](#9-set-token-values)
 8. [Data Types](#data-types)
 9. [Code Examples](#code-examples)
 
@@ -35,7 +37,7 @@ This document describes the Integration API for platform partners to integrate t
 - Query bet history
 - Query transfer history
 - Launch the game with authenticated player sessions
-- Configure bet amount limits and token values
+- Retrieve and configure bet limits and token values
 
 All API endpoints use **HTTP POST** method and accept/return **JSON** payloads.
 
@@ -51,7 +53,7 @@ Every API request requires authentication through:
 
 ### Timestamp Validation
 
-- The timestamp must be within **10 seconds** of the server's current time
+- The timestamp must be within **5-10 seconds** of the server's current time
 - Timestamps outside this window will be rejected with error code `1002`
 
 ---
@@ -173,13 +175,13 @@ All API responses follow this structure:
 |------|------|-------------|
 | `0` | SUCCESS | Request completed successfully |
 | `1001` | INVALID_SIGNATURE | Signature verification failed |
-| `1002` | TIMESTAMP_EXPIRED | Timestamp is outside valid window (±10 seconds) |
+| `1002` | TIMESTAMP_EXPIRED | Timestamp is outside valid window (5-10 seconds) |
 | `1003` | MERCHANT_NOT_FOUND | Merchant ID not found in system |
 | `1004` | MERCHANT_INACTIVE | Merchant account is deactivated |
 | `2001` | ACCOUNT_ALREADY_EXISTS | Player account already exists |
 | `2002` | ACCOUNT_NOT_FOUND | Player account not found |
 | `3001` | INSUFFICIENT_BALANCE | Insufficient balance for withdrawal |
-| `3002` | DUPLICATE_ORDER_NUMBER | Transfer order number already used |
+| `3002` | DUPLICATE_ORDER_NUMBER | Transfer ID already used |
 | `3003` | INVALID_TRANSFER_TYPE | Invalid transfer type (must be 0 or 1) |
 | `4001` | INVALID_PAGE_SIZE | Page size must be between 1 and 100 |
 | `4002` | INVALID_PAGE_NUMBER | Page number must be >= 1 |
@@ -258,7 +260,7 @@ Transfer funds into or out of a player's game wallet.
 |-----------|------|----------|-------------|
 | `merchantId` | string | Yes | Your merchant ID |
 | `account` | string | Yes | Player account identifier |
-| `orderNo` | string | Yes | Unique transfer order number (for idempotency) |
+| `transferId` | string | Yes | Unique transfer ID (for idempotency) |
 | `type` | integer | Yes | `0` = Deposit (into game), `1` = Withdrawal (out to merchant) |
 | `amount` | number | Yes | Transfer amount (must be > 0) |
 | `timestamp` | integer | Yes | Unix timestamp in seconds |
@@ -275,7 +277,7 @@ hash = SHA256(merchantId + "&" + account + "&" + type + "&" + amount + "&" + tim
 {
   "merchantId": "MERCHANT001",
   "account": "player123",
-  "orderNo": "TXN20260202001",
+  "transferId": "TXN20260202001",
   "type": 0,
   "amount": 100.00,
   "timestamp": 1706886400,
@@ -289,7 +291,7 @@ hash = SHA256(merchantId + "&" + account + "&" + type + "&" + amount + "&" + tim
 {
   "merchantId": "MERCHANT001",
   "account": "player123",
-  "orderNo": "TXN20260202002",
+  "transferId": "TXN20260202002",
   "type": 1,
   "amount": 50.00,
   "timestamp": 1706886400,
@@ -350,7 +352,7 @@ hash = SHA256(merchantId + "&" + formattedStartTime + "&" + pageSize + "&" + pag
 ```
 
 **Date Format for Signature:** `yyyyMMddHHmmssfff` (UTC)
-- Example: `2026-02-02T10:30:00.123Z` → `20260202103000123`
+- Example: `2026-02-02T10:30:00.123Z` -> `20260202103000123`
 
 #### Request Example
 
@@ -475,7 +477,7 @@ hash = SHA256(merchantId + "&" + formattedStartTime + "&" + pageSize + "&" + pag
       {
         "id": "TF1A2B3C4D",
         "account": "player123",
-        "orderNo": "TXN20260202001",
+        "transferId": "TXN20260202001",
         "type": 0,
         "amount": 100.00,
         "balanceAfter": 150.00,
@@ -496,7 +498,7 @@ hash = SHA256(merchantId + "&" + formattedStartTime + "&" + pageSize + "&" + pag
 |-------|------|-------------|
 | `id` | string | Unique transfer identifier |
 | `account` | string | Player account |
-| `orderNo` | string | Your transfer order number |
+| `transferId` | string | Your transfer ID |
 | `type` | integer | `0` = Deposit, `1` = Withdrawal |
 | `amount` | number | Transfer amount |
 | `balanceAfter` | number | Balance after transfer |
@@ -558,25 +560,23 @@ Open the returned URL in a browser or iframe to launch the game for the player. 
 
 ---
 
-### 6. Update Bet Amount Limit
+### 6. Get Bet Limit
 
-Update the maximum bet amount allowed per round for this merchant.
-Default `maxBetAmount` is **5000** unless overridden.
+Retrieve the current bet limits for this merchant.
 
-**Endpoint:** `POST /integration/config/bet-limit`
+**Endpoint:** `POST /integration/config/bet-limit/get`
 
 #### Request
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `merchantId` | string | Yes | Your merchant ID |
-| `maxBetAmount` | number | Yes | Maximum amount a player can bet per round |
 | `timestamp` | integer | Yes | Unix timestamp in seconds |
 | `hash` | string | Yes | Request signature |
 
 **Signature Parameters (in order):**
 ```
-hash = SHA256(merchantId + "&" + maxBetAmount + "&" + timestamp + "&" + hashKey)
+hash = SHA256(merchantId + "&" + timestamp + "&" + hashKey)
 ```
 
 #### Request Example
@@ -584,7 +584,6 @@ hash = SHA256(merchantId + "&" + maxBetAmount + "&" + timestamp + "&" + hashKey)
 ```json
 {
   "merchantId": "MERCHANT001",
-  "maxBetAmount": 500,
   "timestamp": 1706886400,
   "hash": "a1b2c3d4e5f6..."
 }
@@ -598,15 +597,111 @@ hash = SHA256(merchantId + "&" + maxBetAmount + "&" + timestamp + "&" + hashKey)
   "errorCode": 0,
   "errorMessage": "",
   "data": {
-    "minBetAmount": 1,
-    "maxBetAmount": 500
+    "minBetAmount": 0,
+    "maxBetAmount": 1000
   }
 }
 ```
 
 ---
 
-### 7. Update Token Values
+### 7. Set Bet Limit
+
+Set the minimum and maximum bet amount allowed per round for this merchant.
+
+**Endpoint:** `POST /integration/config/bet-limit`
+
+#### Request
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `merchantId` | string | Yes | Your merchant ID |
+| `minBetAmount` | number | Yes | Minimum amount a player can bet per round |
+| `maxBetAmount` | number | Yes | Maximum amount a player can bet per round |
+| `timestamp` | integer | Yes | Unix timestamp in seconds |
+| `hash` | string | Yes | Request signature |
+
+**Rules:**
+- `minBetAmount` must be less than or equal to the lowest token value.
+
+**Signature Parameters (in order):**
+```
+hash = SHA256(merchantId + "&" + minBetAmount + "&" + maxBetAmount + "&" + timestamp + "&" + hashKey)
+```
+
+#### Request Example
+
+```json
+{
+  "merchantId": "MERCHANT001",
+  "minBetAmount": 0,
+  "maxBetAmount": 1000,
+  "timestamp": 1706886400,
+  "hash": "a1b2c3d4e5f6..."
+}
+```
+
+#### Response
+
+```json
+{
+  "success": true,
+  "errorCode": 0,
+  "errorMessage": "",
+  "data": {
+    "minBetAmount": 0,
+    "maxBetAmount": 1000
+  }
+}
+```
+
+---
+
+### 8. Get Token Values
+
+Retrieve the 7 token values shown in the betting UI.
+
+**Endpoint:** `POST /integration/config/token-values/get`
+
+#### Request
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `merchantId` | string | Yes | Your merchant ID |
+| `timestamp` | integer | Yes | Unix timestamp in seconds |
+| `hash` | string | Yes | Request signature |
+
+**Signature Parameters (in order):**
+```
+hash = SHA256(merchantId + "&" + timestamp + "&" + hashKey)
+```
+
+#### Request Example
+
+```json
+{
+  "merchantId": "MERCHANT001",
+  "timestamp": 1706886400,
+  "hash": "a1b2c3d4e5f6..."
+}
+```
+
+#### Response
+
+```json
+{
+  "success": true,
+  "errorCode": 0,
+  "errorMessage": "",
+  "data": {
+    "tokenValues": [5, 10, 20, 50, 100, 200, 500]
+  }
+}
+```
+
+---
+
+### 9. Set Token Values
 
 Customize the 7 token values shown in the betting UI.
 
@@ -620,6 +715,9 @@ Customize the 7 token values shown in the betting UI.
 | `tokenValues` | number[] | Yes | Array of 7 token values (order is left-to-right slots) |
 | `timestamp` | integer | Yes | Unix timestamp in seconds |
 | `hash` | string | Yes | Request signature |
+
+**Rules:**
+- The lowest token value must be greater than or equal to the current `minBetAmount`.
 
 **Signature Parameters (in order):**
 ```
@@ -736,7 +834,7 @@ class GameIntegration {
     return response.data;
   }
 
-  async transfer(account, orderNo, type, amount) {
+  async transfer(account, transferId, type, amount) {
     const timestamp = this.getTimestamp();
     const hash = this.generateSignature([
       this.merchantId,
@@ -749,7 +847,7 @@ class GameIntegration {
     const response = await axios.post(`${this.baseUrl}/integration/transfer`, {
       merchantId: this.merchantId,
       account,
-      orderNo,
+      transferId,
       type,
       amount,
       timestamp,
@@ -869,4 +967,5 @@ async function main() {
 
 main().catch(console.error);
 ```
+
 

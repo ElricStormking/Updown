@@ -25,7 +25,7 @@ export const IntegrationErrorMessages: Record<number, string> = {
   [IntegrationErrorCodes.ACCOUNT_ALREADY_EXISTS]: 'Account already exists',
   [IntegrationErrorCodes.ACCOUNT_NOT_FOUND]: 'Account not found',
   [IntegrationErrorCodes.INSUFFICIENT_BALANCE]: 'Insufficient balance',
-  [IntegrationErrorCodes.DUPLICATE_ORDER_NUMBER]: 'Duplicate order number',
+  [IntegrationErrorCodes.DUPLICATE_ORDER_NUMBER]: 'Duplicate transfer ID',
   [IntegrationErrorCodes.INVALID_TRANSFER_TYPE]: 'Invalid transfer type',
   [IntegrationErrorCodes.INVALID_PAGE_SIZE]:
     'Page size must be between 1 and 100',

@@ -7,6 +7,8 @@ import {
   TransferDto,
   GetBetHistoryDto,
   GetTransferHistoryDto,
+  GetBetLimitDto,
+  GetTokenValuesDto,
   LaunchGameDto,
   UpdateBetLimitDto,
   UpdateTokenValuesDto,
@@ -31,10 +33,11 @@ export class IntegrationController {
   @Post('transfer')
   async transfer(@Body() dto: TransferDto, @Req() req: any) {
     const merchant: Merchant = req[MERCHANT_KEY];
+    const transferId = dto.transferId ?? dto.orderNo;
     return this.integrationService.transfer(
       merchant,
       dto.account,
-      dto.orderNo,
+      transferId,
       dto.type,
       dto.amount,
       dto.timestamp,
@@ -83,22 +86,43 @@ export class IntegrationController {
   }
 
   @Post('config/bet-limit')
-  async updateBetLimit(@Body() dto: UpdateBetLimitDto, @Req() req: any) {
+  async setBetLimit(@Body() dto: UpdateBetLimitDto, @Req() req: any) {
     const merchant: Merchant = req[MERCHANT_KEY];
-    return this.integrationService.updateBetLimit(
+    return this.integrationService.setBetLimit(
       merchant,
+      dto.minBetAmount,
       dto.maxBetAmount,
       dto.timestamp,
       dto.hash,
     );
   }
 
-  @Post('config/token-values')
-  async updateTokenValues(@Body() dto: UpdateTokenValuesDto, @Req() req: any) {
+  @Post('config/bet-limit/get')
+  async getBetLimit(@Body() dto: GetBetLimitDto, @Req() req: any) {
     const merchant: Merchant = req[MERCHANT_KEY];
-    return this.integrationService.updateTokenValues(
+    return this.integrationService.getBetLimit(
+      merchant,
+      dto.timestamp,
+      dto.hash,
+    );
+  }
+
+  @Post('config/token-values')
+  async setTokenValues(@Body() dto: UpdateTokenValuesDto, @Req() req: any) {
+    const merchant: Merchant = req[MERCHANT_KEY];
+    return this.integrationService.setTokenValues(
       merchant,
       dto.tokenValues,
+      dto.timestamp,
+      dto.hash,
+    );
+  }
+
+  @Post('config/token-values/get')
+  async getTokenValues(@Body() dto: GetTokenValuesDto, @Req() req: any) {
+    const merchant: Merchant = req[MERCHANT_KEY];
+    return this.integrationService.getTokenValues(
+      merchant,
       dto.timestamp,
       dto.hash,
     );
