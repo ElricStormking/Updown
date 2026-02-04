@@ -81,6 +81,9 @@ export class HiLoScene extends Phaser.Scene {
   private priceTextY = 465;
   private timerText?: Phaser.GameObjects.Text;
   private roundSumText?: Phaser.GameObjects.Text;
+  private sumTriangleText?: Phaser.GameObjects.Text;
+  private lastSumTriangleValue: string | null = null;
+  private sumTriangleTimer?: Phaser.Time.TimerEvent;
   private timerUrgencyTween?: Phaser.Tweens.Tween;
   private lastTimerSeconds = -1;
   private roundText?: Phaser.GameObjects.Text;
@@ -110,7 +113,11 @@ export class HiLoScene extends Phaser.Scene {
   private bonusOddsByKey = new Map<string, number>();
   private bonusTweens = new Map<string, Phaser.Tweens.Tween>();
   private winnerTweens = new Map<string, Phaser.Tweens.Tween>();
-  private bonusEmitters = new Map<string, Phaser.GameObjects.Particles.ParticleEmitter>();
+  private winnerLightTweens = new Map<string, Phaser.Tweens.Tween>();
+  private bonusEmitters = new Map<string, Phaser.GameObjects.Particles.ParticleEmitter[]>();
+  private winnerLightSprites = new Map<string, Phaser.GameObjects.Sprite>();
+  private bonusLightTweens = new Map<string, Phaser.Tweens.Tween>();
+  private bonusLightSprites = new Map<string, Phaser.GameObjects.Sprite>();
 
   private clearTokensButton?: Phaser.GameObjects.Image;
   private settingButton?: Phaser.GameObjects.Image;
@@ -122,6 +129,7 @@ export class HiLoScene extends Phaser.Scene {
   private resultPlayerWinsText?: Phaser.GameObjects.Text;
   private resultRoundId?: number;
   private resultDisplayDurationMs = 8000;
+  private plusLightSprite?: Phaser.GameObjects.Sprite;
 
   private unsubscribeState?: () => void;
   private statusListener?: (event: Event) => void;
@@ -133,6 +141,9 @@ export class HiLoScene extends Phaser.Scene {
 
   // Locked layout mode state
   private isLockedLayoutMode = false;
+  private isLockedLayoutPending = false;
+  private lockedLayoutDelayTimer?: Phaser.Time.TimerEvent;
+  private readonly LOCKED_LAYOUT_DELAY_MS = 3500;
   private lockedLayoutTween?: Phaser.Tweens.Tween;
   private betSlotsContainer?: Phaser.GameObjects.Container;
   private betSlotsOriginalY = 0;
@@ -199,6 +210,18 @@ export class HiLoScene extends Phaser.Scene {
     for (let sum = 3; sum <= 27; sum += 1) {
       loadImage(`number_sum_${String(sum).padStart(2, '0')}`);
     }
+
+    this.load.spritesheet(
+      'plus_light_anim',
+      '../UI_sprites/plus_light_anim/plus_light_anim.png',
+      { frameWidth: 1074, frameHeight: 580 },
+    );
+
+    this.load.spritesheet(
+      'number_light_box_1',
+      '../UI_sprites/number_light_box/number_light_box.png',
+      { frameWidth: 298, frameHeight: 136 },
+    );
   }
 
   create() {
@@ -584,6 +607,17 @@ export class HiLoScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
+    this.sumTriangleText = this.add
+      .text(535, 290, '--', {
+        fontFamily: 'Rajdhani',
+        fontSize: '50px',
+        color: '#ffd166',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5)
+      .setDepth(45)
+      .setVisible(false);
+
     this.timerText = this.add
       .text(298, 209, '--s', {
         fontFamily: 'Roboto Mono',
@@ -940,10 +974,7 @@ export class HiLoScene extends Phaser.Scene {
   private enterLockedLayout() {
     if (this.isLockedLayoutMode) return;
     this.isLockedLayoutMode = true;
-
-    // Toggle CSS class on game container for chart expansion
-    const container = document.getElementById('game-container');
-    container?.classList.add('locked-layout');
+    this.isLockedLayoutPending = true;
 
     // Disable scrolling during locked phase
     this.dragScrollActive = false;
@@ -958,6 +989,40 @@ export class HiLoScene extends Phaser.Scene {
         ease: 'Sine.easeInOut',
       });
     }
+
+    this.scheduleLockedLayoutTransform();
+  }
+
+  private scheduleLockedLayoutTransform() {
+    if (!this.isLockedLayoutMode || !this.isLockedLayoutPending) return;
+    this.lockedLayoutDelayTimer?.remove(false);
+    this.lockedLayoutDelayTimer = this.time.delayedCall(
+      this.LOCKED_LAYOUT_DELAY_MS,
+      () => {
+        this.lockedLayoutDelayTimer = undefined;
+        if (!this.isLockedLayoutMode || !this.isLockedLayoutPending) return;
+        this.applyLockedLayoutTransform();
+      },
+      undefined,
+      this,
+    );
+  }
+
+  private clearLockedLayoutDelay() {
+    if (this.lockedLayoutDelayTimer) {
+      this.lockedLayoutDelayTimer.remove(false);
+      this.lockedLayoutDelayTimer = undefined;
+    }
+    this.isLockedLayoutPending = false;
+  }
+
+  private applyLockedLayoutTransform() {
+    if (!this.isLockedLayoutMode || !this.isLockedLayoutPending) return;
+    this.isLockedLayoutPending = false;
+
+    // Expand chart only after the bonus visual window.
+    const container = document.getElementById('game-container');
+    container?.classList.add('locked-layout');
 
     // Animate all bet slot elements (elements below pivot Y)
     const pivotY = this.BET_SLOTS_PIVOT_Y;
@@ -1081,29 +1146,34 @@ export class HiLoScene extends Phaser.Scene {
       });
     });
 
-    // Scale bonus emitters
-    this.bonusEmitters.forEach((emitter) => {
-      if (!emitter.getData('originalScaleX')) {
-        emitter.setData('originalScaleX', emitter.scaleX);
-        emitter.setData('originalScaleY', emitter.scaleY);
-      }
-      this.tweens.add({
-        targets: emitter,
-        scaleX: (emitter.getData('originalScaleX') as number) * targetScale,
-        scaleY: (emitter.getData('originalScaleY') as number) * targetScale,
-        duration: 400,
-        ease: 'Sine.easeOut',
-      });
-    });
+    if (this.bonusOddsByKey.size) {
+      this.time.delayedCall(
+        420,
+        () => {
+          if (!this.isLockedLayoutMode || this.isLockedLayoutPending) return;
+          this.applyBonusHighlights();
+        },
+        undefined,
+        this,
+      );
+    }
   }
 
   private exitLockedLayout() {
-    if (!this.isLockedLayoutMode) return;
+    if (!this.isLockedLayoutMode && !this.isLockedLayoutPending) return;
+    const wasPending = this.isLockedLayoutPending;
+    const wasLocked = this.isLockedLayoutMode;
+    this.clearLockedLayoutDelay();
     this.isLockedLayoutMode = false;
+    this.isLockedLayoutPending = false;
 
     // Remove CSS class from game container
     const container = document.getElementById('game-container');
     container?.classList.remove('locked-layout');
+
+    if (!wasLocked || wasPending) {
+      return;
+    }
 
     // Restore all bet slot elements to original positions
     this.children.each((child) => {
@@ -1145,20 +1215,6 @@ export class HiLoScene extends Phaser.Scene {
         targets: sprite,
         x: originalX,
         y: originalY,
-        scaleX: originalScaleX ?? 1,
-        scaleY: originalScaleY ?? 1,
-        duration: 400,
-        ease: 'Sine.easeOut',
-      });
-    });
-
-    // Restore bonus emitters
-    this.bonusEmitters.forEach((emitter) => {
-      const originalScaleX = emitter.getData('originalScaleX') as number | undefined;
-      const originalScaleY = emitter.getData('originalScaleY') as number | undefined;
-
-      this.tweens.add({
-        targets: emitter,
         scaleX: originalScaleX ?? 1,
         scaleY: originalScaleY ?? 1,
         duration: 400,
@@ -1428,17 +1484,30 @@ export class HiLoScene extends Phaser.Scene {
     this.syncOddsText();
   }
 
+  private getLockedLayoutScale() {
+    return this.isLockedLayoutMode && !this.isLockedLayoutPending ? 0.5 : 1;
+  }
+
   private clearBonusHighlights() {
     this.bonusTweens.forEach((tween) => tween.stop());
     this.bonusTweens.clear();
-    this.bonusEmitters.forEach((emitter) => {
-      emitter.stop(true);
-      emitter.destroy();
+    this.bonusLightTweens.forEach((tween) => tween.stop());
+    this.bonusLightTweens.clear();
+    this.bonusLightSprites.forEach((sprite) => sprite.destroy());
+    this.bonusLightSprites.clear();
+    this.bonusEmitters.forEach((emitters) => {
+      emitters.forEach((emitter) => {
+        if (emitter.followOffset) {
+          this.tweens.killTweensOf(emitter.followOffset);
+        }
+        emitter.stop(true);
+        emitter.destroy();
+      });
     });
     this.bonusEmitters.clear();
     
     // When clearing highlights, respect locked layout mode
-    const lockedScale = this.isLockedLayoutMode ? 0.5 : 1;
+    const lockedScale = this.getLockedLayoutScale();
     
     this.betTargets.forEach((image) => {
       const baseScale = image.getData('baseScale');
@@ -1451,10 +1520,14 @@ export class HiLoScene extends Phaser.Scene {
 
   private applyBonusHighlights() {
     this.clearBonusHighlights();
-    this.ensureBonusSparkTexture();
+    this.ensureBonusFireTexture();
+    if (this.textures.exists('number_light_box_1')) {
+      this.ensureNumberLightAnimation();
+    }
     
     // If in locked layout mode, use scaled values
-    const lockedScale = this.isLockedLayoutMode ? 0.5 : 1;
+    const lockedScale = this.getLockedLayoutScale();
+    const shouldPause = this.isLockedLayoutMode && !this.isLockedLayoutPending;
     
     this.bonusOddsByKey.forEach((_ratio, key) => {
       const image = this.betTargets.get(key);
@@ -1477,11 +1550,42 @@ export class HiLoScene extends Phaser.Scene {
       });
       
       // If in locked mode, pause the tween immediately
-      if (this.isLockedLayoutMode) {
+      if (shouldPause) {
         tween.pause();
       }
       
       this.bonusTweens.set(key, tween);
+
+      if (this.textures.exists('number_light_box_1')) {
+        const light =
+          this.bonusLightSprites.get(key) ??
+          this.add.sprite(image.x, image.y, 'number_light_box_1', 0);
+        const frameWidth = 298;
+        const frameHeight = 136;
+        const scaleX = (image.displayWidth / frameWidth) * 1.08;
+        const scaleY = (image.displayHeight / frameHeight) * 1.08;
+        light.setPosition(image.x, image.y);
+        light.setScale(scaleX, scaleY);
+        light.setAlpha(0.85);
+        light.setDepth(19);
+        light.setBlendMode(Phaser.BlendModes.ADD);
+        if (!light.anims.isPlaying) {
+          light.play('number-light-box');
+        }
+        this.bonusLightSprites.set(key, light);
+
+        const lightTween = this.tweens.add({
+          targets: light,
+          alpha: 1,
+          scaleX: scaleX * 1.03,
+          scaleY: scaleY * 1.03,
+          duration: 520,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut',
+        });
+        this.bonusLightTweens.set(key, lightTween);
+      }
 
       // Calculate emit zone based on base image size multiplied by effective scale
       // Use texture dimensions multiplied by scale to get correct size
@@ -1489,42 +1593,96 @@ export class HiLoScene extends Phaser.Scene {
       const baseHeight = image.height * scale;
       const emitWidth = baseWidth * lockedScale;
       const emitHeight = baseHeight * lockedScale;
+      const stripHeight = Math.max(6, emitHeight * 0.22);
+      const stripY = emitHeight / 2 - stripHeight;
       
-      const emitter = this.add.particles(0, 0, 'bonusSpark', {
+      const primary = this.add.particles(0, 0, 'bonusFire', {
         follow: image,
-        lifespan: { min: 700, max: 1400 },
-        speed: { min: 20 * lockedScale, max: 80 * lockedScale },
-        angle: { min: 0, max: 360 },
-        scale: { start: 0.9 * lockedScale, end: 0.1 * lockedScale },
-        alpha: { start: 1, end: 0 },
-        tint: [0xfff1a8, 0xffd166, 0xffb703, 0xff7a18, 0xff4d4d],
+        lifespan: { min: 900, max: 1500 },
+        speed: { min: 10 * lockedScale, max: 45 * lockedScale },
+        angle: { min: 250, max: 290 },
+        scale: { start: 1.55 * lockedScale, end: 0.3 * lockedScale },
+        alpha: { start: 0.95, end: 0 },
+        tint: [0xfff1a8, 0xffd166, 0xff9f1a, 0xff6b1a, 0xff3b1f],
         blendMode: Phaser.BlendModes.ADD,
-        frequency: 60,
-        quantity: 2,
+        frequency: 40,
+        quantity: 3,
+        gravityY: -18 * lockedScale,
         emitZone: {
-          type: 'edge',
+          type: 'random',
           source: new Phaser.Geom.Rectangle(
             -emitWidth / 2,
-            -emitHeight / 2,
+            stripY,
             emitWidth,
-            emitHeight,
+            stripHeight,
           ),
-          quantity: 48,
-          yoyo: true,
         },
       });
-      emitter.setDepth(20);
-      this.bonusEmitters.set(key, emitter);
+      const embers = this.add.particles(0, 0, 'bonusFire', {
+        follow: image,
+        lifespan: { min: 700, max: 1300 },
+        speed: { min: 25 * lockedScale, max: 85 * lockedScale },
+        angle: { min: 240, max: 300 },
+        scale: { start: 0.85 * lockedScale, end: 0.08 * lockedScale },
+        alpha: { start: 0.85, end: 0 },
+        tint: [0xfff1a8, 0xffc15c, 0xff7a18],
+        blendMode: Phaser.BlendModes.ADD,
+        frequency: 70,
+        quantity: 2,
+        rotate: { min: 0, max: 360 },
+        gravityY: -28 * lockedScale,
+        emitZone: {
+          type: 'random',
+          source: new Phaser.Geom.Rectangle(
+            -emitWidth / 2,
+            stripY,
+            emitWidth,
+            stripHeight,
+          ),
+        },
+      });
+      const runner = this.add.particles(0, 0, 'bonusFire', {
+        follow: image,
+        followOffset: { x: -emitWidth * 0.45, y: stripY + stripHeight / 2 },
+        lifespan: { min: 600, max: 1000 },
+        speed: { min: 8 * lockedScale, max: 28 * lockedScale },
+        angle: { min: 260, max: 290 },
+        scale: { start: 1.1 * lockedScale, end: 0.2 * lockedScale },
+        alpha: { start: 1, end: 0 },
+        tint: [0xfff1a8, 0xffc15c, 0xff7a18, 0xff4d1a],
+        blendMode: Phaser.BlendModes.ADD,
+        frequency: 45,
+        quantity: 1,
+        gravityY: -12 * lockedScale,
+      });
+      if (runner.followOffset) {
+        this.tweens.add({
+          targets: runner.followOffset,
+          x: emitWidth * 0.45,
+          duration: 1400,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut',
+        });
+      }
+      primary.setDepth(20);
+      embers.setDepth(21);
+      runner.setDepth(22);
+      this.bonusEmitters.set(key, [primary, embers, runner]);
     });
   }
 
-  private ensureBonusSparkTexture() {
-    if (!this.textures.exists('bonusSpark')) {
-      const spark = this.add.graphics();
-      spark.fillStyle(0xffb703, 1);
-      spark.fillCircle(6, 6, 6);
-      spark.generateTexture('bonusSpark', 12, 12);
-      spark.destroy();
+  private ensureBonusFireTexture() {
+    if (!this.textures.exists('bonusFire')) {
+      const flame = this.add.graphics();
+      flame.fillStyle(0xff7a18, 1);
+      flame.fillCircle(8, 8, 8);
+      flame.fillStyle(0xffc15c, 0.9);
+      flame.fillCircle(8, 8, 5);
+      flame.fillStyle(0xfff1a8, 0.85);
+      flame.fillCircle(8, 8, 3);
+      flame.generateTexture('bonusFire', 16, 16);
+      flame.destroy();
     }
   }
 
@@ -1585,15 +1743,15 @@ export class HiLoScene extends Phaser.Scene {
       const styleValue = this.getTokenStyleValue(placement.value);
       if (!container) {
         const chip = this.add.image(0, 0, `chip_${styleValue}`);
-        chip.setScale(0.52); // 15% larger than 0.45
+        chip.setScale(0.78); // 50% larger than previous 0.52
         const label = this.add
           .text(0, 0, String(total), {
             fontFamily: 'Rajdhani',
-            fontSize: '23px', // 15% larger than 20px
+            fontSize: '35px', // 50% larger than 23px
             color: '#00ff88', // bright green
             fontStyle: 'bold',
             stroke: '#003311',
-            strokeThickness: 2,
+            strokeThickness: 3,
           })
           .setOrigin(0.5);
         container = this.add.container(target.x + 58, target.y, [chip, label]);
@@ -1629,11 +1787,7 @@ export class HiLoScene extends Phaser.Scene {
     if (!digits || !/^\d{3}$/.test(digits)) {
       return;
     }
-    if (this.roundDigitsLeftText && this.roundDigitsCenterText && this.roundDigitsRightText) {
-      this.roundDigitsLeftText.setText(digits[0]);
-      this.roundDigitsCenterText.setText(digits[1]);
-      this.roundDigitsRightText.setText(digits[2]);
-    }
+    this.setRoundDigitText(digits);
   }
 
   private syncDigitSum(sum: number | null, digits?: string | null) {
@@ -1645,6 +1799,30 @@ export class HiLoScene extends Phaser.Scene {
     }
     const display = resolved === null ? '--' : String(resolved);
     this.roundSumText.setText(`3-digit SUM: ${display}`);
+    if (this.sumTriangleText) {
+      this.sumTriangleText.setText(display);
+    }
+    if (this.round?.status === 'COMPLETED' && resolved !== null) {
+      this.lastSumTriangleValue = display;
+    }
+  }
+
+  private setRoundDigitText(digits: string) {
+    if (!/^\d{3}$/.test(digits)) return;
+    if (this.roundDigitsLeftText && this.roundDigitsCenterText && this.roundDigitsRightText) {
+      this.roundDigitsLeftText.setText(digits[0]);
+      this.roundDigitsCenterText.setText(digits[1]);
+      this.roundDigitsRightText.setText(digits[2]);
+    }
+  }
+
+  private syncLiveDigitsFromPrice(price: number) {
+    if (!Number.isFinite(price)) return;
+    const priceStr = price.toFixed(2);
+    const [intPart, decPart = '00'] = priceStr.split('.');
+    const lastDigit = intPart.slice(-1) || '0';
+    const decimals = decPart.padEnd(2, '0').slice(0, 2);
+    this.setRoundDigitText(`${lastDigit}${decimals}`);
   }
 
   private syncBalance(balance: number) {
@@ -1728,6 +1906,10 @@ export class HiLoScene extends Phaser.Scene {
     const previous = this.lastPrice?.price;
     this.lastPrice = update;
 
+    if (!this.round || this.round.status !== 'COMPLETED') {
+      this.syncLiveDigitsFromPrice(update.price);
+    }
+
     // Split price into parts: prefix, last 3 digits (1 before decimal + 2 after decimal)
     // Example: "75649.99" -> "7564" + "9.99"
     const priceStr = update.price.toFixed(2);
@@ -1791,18 +1973,25 @@ export class HiLoScene extends Phaser.Scene {
     if (state.status === 'BETTING') {
       this.clearWinnerHighlights();
       this.exitLockedLayout();
+      this.sumTriangleText?.setVisible(false);
+      this.lastSumTriangleValue = null;
+      this.sumTriangleTimer?.remove(false);
+      this.sumTriangleTimer = undefined;
       this.statusText?.setText(t(this.language, 'scene.betsOpen'));
       this.statusText?.setColor('#00ffb2');
     } else if (state.status === 'RESULT_PENDING') {
       this.enterLockedLayout();
+      this.sumTriangleText?.setVisible(false);
       this.statusText?.setText(t(this.language, 'scene.locked'));
       this.statusText?.setColor('#ffd166');
     } else if (state.status === 'COMPLETED') {
       // Keep locked layout during result display phase
       this.enterLockedLayout();
+      this.sumTriangleText?.setVisible(false);
       this.statusText?.setText(t(this.language, 'scene.roundResult'));
       this.statusText?.setColor('#b2bec3');
     } else {
+      this.sumTriangleText?.setVisible(false);
       this.statusText?.setText(t(this.language, 'scene.roundResult'));
       this.statusText?.setColor('#b2bec3');
     }
@@ -1848,14 +2037,28 @@ export class HiLoScene extends Phaser.Scene {
 
     this.updateBonusOddsFromRound(this.round);
     this.showResultOverlay('SKIPPED', payload);
+    this.playResultPlusLight();
   }
 
   private clearWinnerHighlights() {
     this.winnerTweens.forEach((tween) => tween.stop());
     this.winnerTweens.clear();
+    this.winnerLightTweens.forEach((tween) => tween.stop());
+    this.winnerLightTweens.clear();
+    this.winnerLightSprites.forEach((sprite) => sprite.destroy());
+    this.winnerLightSprites.clear();
     this.betTargets.forEach((image) => {
       image.setAlpha(1);
       image.clearTint();
+      const baseScaleX = image.getData('winnerBaseScaleX') as number | undefined;
+      const baseScaleY = image.getData('winnerBaseScaleY') as number | undefined;
+      const baseBlend = image.getData('winnerBaseBlend') as number | undefined;
+      if (typeof baseScaleX === 'number' && typeof baseScaleY === 'number') {
+        image.setScale(baseScaleX, baseScaleY);
+      }
+      if (typeof baseBlend === 'number') {
+        image.setBlendMode(baseBlend);
+      }
     });
   }
 
@@ -1983,26 +2186,72 @@ export class HiLoScene extends Phaser.Scene {
 
   private applyWinnerHighlights(winKeys: Set<string>) {
     this.clearWinnerHighlights();
+    this.ensureNumberLightAnimation();
     winKeys.forEach((key) => {
       const image = this.betTargets.get(key);
       if (!image) return;
       const baseY = image.y;
+      const baseScaleX = image.scaleX;
+      const baseScaleY = image.scaleY;
+      if (image.getData('winnerBaseScaleX') === undefined) {
+        image.setData('winnerBaseScaleX', baseScaleX);
+        image.setData('winnerBaseScaleY', baseScaleY);
+        image.setData('winnerBaseBlend', image.blendMode);
+      }
       image.setTint(0x00ffb2);
+      image.setBlendMode(Phaser.BlendModes.ADD);
       const tween = this.tweens.add({
         targets: image,
         y: baseY - 6,
         alpha: 0.5,
+        scaleX: baseScaleX * 1.08,
+        scaleY: baseScaleY * 1.08,
         duration: 180,
         yoyo: true,
-        repeat: 8,
+        repeat: 16,
         ease: 'Sine.easeInOut',
         onComplete: () => {
           image.setAlpha(1);
           image.setTint(0x00ffb2);
           image.y = baseY;
+          image.setScale(baseScaleX, baseScaleY);
+          const baseBlend = image.getData('winnerBaseBlend') as number | undefined;
+          if (typeof baseBlend === 'number') {
+            image.setBlendMode(baseBlend);
+          }
         },
       });
       this.winnerTweens.set(key, tween);
+
+      const light =
+        this.winnerLightSprites.get(key) ??
+        this.add.sprite(image.x, image.y, 'number_light_box_1', 0);
+      const frameWidth = 298;
+      const frameHeight = 136;
+      const scaleX = (image.displayWidth / frameWidth) * 1.1;
+      const scaleY = (image.displayHeight / frameHeight) * 1.1;
+      light.setPosition(image.x, baseY);
+      light.setScale(scaleX, scaleY);
+      light.setAlpha(0.9);
+      light.setDepth(26);
+      light.setBlendMode(Phaser.BlendModes.ADD);
+      if (!light.anims.isPlaying) {
+        light.play('number-light-box');
+      }
+      this.winnerLightSprites.set(key, light);
+
+      const lightTween = this.tweens.add({
+        targets: light,
+        y: baseY - 6,
+        alpha: 1,
+        scaleX: scaleX * 1.04,
+        scaleY: scaleY * 1.04,
+        duration: 180,
+        yoyo: true,
+        repeat: 16,
+        ease: 'Sine.easeInOut',
+      });
+      this.winnerLightTweens.set(key, lightTween);
     });
   }
 
@@ -2131,6 +2380,72 @@ export class HiLoScene extends Phaser.Scene {
     });
   }
 
+  private ensurePlusLightAnimation() {
+    if (this.anims.exists('plus-light-anim')) {
+      return;
+    }
+    this.anims.create({
+      key: 'plus-light-anim',
+      frames: this.anims.generateFrameNumbers('plus_light_anim', {
+        start: 0,
+        end: 19,
+      }),
+      frameRate: 20,
+      repeat: 3,
+    });
+  }
+
+  private ensureNumberLightAnimation() {
+    if (this.anims.exists('number-light-box') || !this.textures.exists('number_light_box_1')) {
+      return;
+    }
+    this.anims.create({
+      key: 'number-light-box',
+      frames: this.anims.generateFrameNumbers('number_light_box_1', {
+        start: 0,
+        end: 18,
+      }),
+      frameRate: 30,
+      repeat: -1,
+    });
+  }
+
+  private playResultPlusLight() {
+    if (!this.textures.exists('plus_light_anim')) return;
+    this.ensurePlusLightAnimation();
+
+    if (this.plusLightSprite) {
+      this.plusLightSprite.destroy();
+      this.plusLightSprite = undefined;
+    }
+
+    const x = 540;
+    const y = 185;
+    const sprite = this.add.sprite(x, y, 'plus_light_anim', 0);
+    sprite.setScale(0.6);
+    sprite.setDepth(30);
+    sprite.play('plus-light-anim');
+    this.sumTriangleTimer?.remove(false);
+    this.sumTriangleTimer = this.time.delayedCall(
+      700,
+      () => {
+        if (this.sumTriangleText && this.lastSumTriangleValue !== null) {
+          this.sumTriangleText.setText(this.lastSumTriangleValue);
+          this.sumTriangleText.setVisible(true);
+        }
+      },
+      undefined,
+      this,
+    );
+    sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
+      sprite.destroy();
+      if (this.plusLightSprite === sprite) {
+        this.plusLightSprite = undefined;
+      }
+    });
+    this.plusLightSprite = sprite;
+  }
+
   private clearResultOverlay() {
     this.resultOverlay?.destroy();
     this.resultOverlay = undefined;
@@ -2139,5 +2454,9 @@ export class HiLoScene extends Phaser.Scene {
     this.resultWinnersText = undefined;
     this.resultPlayerWinsText = undefined;
     this.resultRoundId = undefined;
+    if (this.plusLightSprite) {
+      this.plusLightSprite.destroy();
+      this.plusLightSprite = undefined;
+    }
   }
 }

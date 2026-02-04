@@ -1162,6 +1162,19 @@ const render = (nextState: typeof state) => {
     tokenBarClearBtn.classList.toggle('is-disabled', tokenBarClearBtn.disabled);
   }
 
+  const tokenBarFloatingEl =
+    document.querySelector<HTMLElement>('#token-bar-floating') ?? null;
+  if (tokenBarFloatingEl) {
+    const round = nextState.currentRound;
+    const isBetting =
+      Boolean(nextState.token) &&
+      Boolean(round) &&
+      round.status === 'BETTING' &&
+      new Date(round.lockTime).getTime() > Date.now();
+    tokenBarFloatingEl.classList.toggle('is-hidden', !isBetting);
+    tokenBarFloatingEl.setAttribute('aria-hidden', isBetting ? 'false' : 'true');
+  }
+
   if (phaseEl) {
     const round = nextState.currentRound;
     if (!round) {
