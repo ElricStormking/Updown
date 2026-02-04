@@ -334,6 +334,7 @@ html {
   height: auto;
   display: block;
   margin-left: -10%;
+  pointer-events: none;
 }
 
 .token-bar-floating button {

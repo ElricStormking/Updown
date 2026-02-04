@@ -10,7 +10,7 @@ type Dict = Record<string, string>;
 
 const DICT: Record<LanguageCode, Dict> = {
   en: {
-    'auth.title': 'Guess The Digits',
+    'auth.title': 'Combi 3',
     'auth.subtitle': 'Predict the last 3 digits and ride the next round.',
     'auth.account': 'Account',
     'auth.password': 'Password',
@@ -74,7 +74,7 @@ const DICT: Record<LanguageCode, Dict> = {
     'scene.finalLabel': 'FINAL',
   },
   zh: {
-    'auth.title': '猜数字',
+    'auth.title': 'Combi 3',
     'auth.subtitle': '预测最后 3 位数字，赢下下一轮。',
     'auth.account': '账号',
     'auth.password': '密码',
@@ -138,7 +138,7 @@ const DICT: Record<LanguageCode, Dict> = {
     'scene.finalLabel': '最终',
   },
   ms: {
-    'auth.title': 'Teka Digit',
+    'auth.title': 'Combi 3',
     'auth.subtitle': 'Ramalkan 3 digit terakhir dan sertai pusingan seterusnya.',
     'auth.account': 'Akaun',
     'auth.password': 'Kata laluan',

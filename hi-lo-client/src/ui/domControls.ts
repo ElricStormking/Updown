@@ -30,6 +30,7 @@ let appShellEl: HTMLDivElement | null = null;
 let authStatusEl: HTMLElement | null = null;
 let tokenOptionsEl: HTMLDivElement | null = null;
 let tokenBarFloatingChipsEl: HTMLDivElement | null = null;
+let tokenBarFloatingEl: HTMLDivElement | null = null;
 let tokenOptionButtons: HTMLButtonElement[] = [];
 let renderTokenBars: ((values: number[]) => void) | null = null;
 let tokenBarMenuBtn: HTMLButtonElement | null = null;
@@ -573,6 +574,7 @@ export const initControls = (handlers: ControlHandlers) => {
   downBtn = root.querySelector('button[data-side="DOWN"]');
   tokenOptionsEl = root.querySelector('#token-options');
   tokenBarFloatingChipsEl = root.querySelector('#token-bar-floating-chips');
+  tokenBarFloatingEl = root.querySelector<HTMLDivElement>('#token-bar-floating');
   tokenBarMenuBtn =
     root.querySelector('#token-bar-menu-floating') ??
     root.querySelector('#token-bar-menu');
@@ -808,6 +810,9 @@ export const initControls = (handlers: ControlHandlers) => {
   };
 
   const toggleMenuModal = () => {
+    if (!menuModalBackdropEl || !document.contains(menuModalBackdropEl)) {
+      menuModalBackdropEl = root.querySelector('#menu-modal-backdrop');
+    }
     if (!menuModalBackdropEl) return;
     setMenuModalOpen(!menuModalBackdropEl.classList.contains('is-open'));
   };
@@ -852,6 +857,58 @@ export const initControls = (handlers: ControlHandlers) => {
   tokenBarMenuBtn?.addEventListener('click', () => {
     toggleMenuModal();
   });
+  tokenBarFloatingEl?.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement | null;
+    if (!target || !tokenBarFloatingEl) return;
+    if (
+      target.closest('#token-bar-menu-floating') ||
+      target.closest('#token-bar-clear-floating') ||
+      target.closest('.token-bar-floating-chip')
+    ) {
+      return;
+    }
+    const rect = tokenBarFloatingEl.getBoundingClientRect();
+    const clickX = (event as MouseEvent).clientX - rect.left;
+    const clickY = (event as MouseEvent).clientY - rect.top;
+    if (clickX < 0 || clickY < 0 || clickX > rect.width || clickY > rect.height) {
+      return;
+    }
+    if (clickX >= rect.width * 0.8) {
+      toggleMenuModal();
+    }
+  });
+  if (typeof document !== 'undefined') {
+    document.addEventListener(
+      'pointerdown',
+      (event) => {
+        if (!tokenBarFloatingEl || tokenBarFloatingEl.classList.contains('is-hidden')) {
+          return;
+        }
+        const target = event.target as HTMLElement | null;
+        if (
+          target?.closest('#token-bar-menu-floating') ||
+          target?.closest('#token-bar-clear-floating') ||
+          target?.closest('.token-bar-floating-chip')
+        ) {
+          return;
+        }
+        const rect = tokenBarFloatingEl.getBoundingClientRect();
+        const x = event.clientX;
+        const y = event.clientY;
+        if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+          return;
+        }
+        const localX = x - rect.left;
+        const localY = y - rect.top;
+        if (localX >= rect.width * 0.8 && localY >= rect.height * 0.4) {
+          event.preventDefault();
+          event.stopPropagation();
+          toggleMenuModal();
+        }
+      },
+      true,
+    );
+  }
 
   tokenBarClearBtn?.addEventListener('click', async () => {
     if (!tokenBarClearBtn || tokenBarClearBtn.disabled) return;
@@ -1162,8 +1219,10 @@ const render = (nextState: typeof state) => {
     tokenBarClearBtn.classList.toggle('is-disabled', tokenBarClearBtn.disabled);
   }
 
-  const tokenBarFloatingEl =
-    document.querySelector<HTMLElement>('#token-bar-floating') ?? null;
+  if (!tokenBarFloatingEl) {
+    tokenBarFloatingEl =
+      document.querySelector<HTMLDivElement>('#token-bar-floating');
+  }
   if (tokenBarFloatingEl) {
     const round = nextState.currentRound;
     const isBetting =

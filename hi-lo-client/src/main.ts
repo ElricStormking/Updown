@@ -10,6 +10,7 @@ import { state, updateState } from './state/gameState';
 import {
   initTradingViewWidget,
   pushPriceUpdate,
+  setPriceFreeze,
   setLockedPrice,
   setRoundTiming,
 } from './ui/tradingViewWidget';
@@ -149,6 +150,7 @@ const socket = createGameSocket(
     onRoundStart: (payload) => {
       scene.setRoundState(payload);
       setRoundTiming(payload.lockTime, payload.endTime);
+      setPriceFreeze(false);
       setLockedPrice(null);
       updateState({
         currentRound: payload,
@@ -169,6 +171,7 @@ const socket = createGameSocket(
     },
     onRoundResult: async (payload) => {
       scene.handleRoundResult(payload);
+      setPriceFreeze(true, payload.finalPrice ?? payload.lockedPrice ?? null);
       setLockedPrice(null);
       updateState({
         lastRoundResult: payload,

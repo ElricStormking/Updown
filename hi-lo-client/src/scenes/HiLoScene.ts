@@ -80,7 +80,6 @@ export class HiLoScene extends Phaser.Scene {
   private priceLabelText?: Phaser.GameObjects.Text;
   private priceTextY = 465;
   private timerText?: Phaser.GameObjects.Text;
-  private roundSumText?: Phaser.GameObjects.Text;
   private sumTriangleText?: Phaser.GameObjects.Text;
   private lastSumTriangleValue: string | null = null;
   private sumTriangleTimer?: Phaser.Time.TimerEvent;
@@ -118,6 +117,8 @@ export class HiLoScene extends Phaser.Scene {
   private winnerLightSprites = new Map<string, Phaser.GameObjects.Sprite>();
   private bonusLightTweens = new Map<string, Phaser.Tweens.Tween>();
   private bonusLightSprites = new Map<string, Phaser.GameObjects.Sprite>();
+  private winnerHighlightTimer?: Phaser.Time.TimerEvent;
+  private layoutRestoreEndsAt = 0;
 
   private clearTokensButton?: Phaser.GameObjects.Image;
   private settingButton?: Phaser.GameObjects.Image;
@@ -593,15 +594,6 @@ export class HiLoScene extends Phaser.Scene {
       .text(180, 199, `--`, {
         fontFamily: 'Rajdhani',
         fontSize: '20px',
-        color: '#f8fafc',
-        fontStyle: 'bold',
-      })
-      .setOrigin(0.5);
-
-    this.roundSumText = this.add
-      .text(180, 252, '3-digit SUM: --', {
-        fontFamily: 'Rajdhani',
-        fontSize: '40px',
         color: '#f8fafc',
         fontStyle: 'bold',
       })
@@ -1175,6 +1167,9 @@ export class HiLoScene extends Phaser.Scene {
       return;
     }
 
+    const restoreDuration = 400;
+    this.layoutRestoreEndsAt = this.time.now + restoreDuration;
+
     // Restore all bet slot elements to original positions
     this.children.each((child) => {
       if (child === this.resultOverlay) return;
@@ -1197,7 +1192,7 @@ export class HiLoScene extends Phaser.Scene {
         y: originalY,
         scaleX: originalScaleX ?? 1,
         scaleY: originalScaleY ?? 1,
-        duration: 400,
+        duration: restoreDuration,
         ease: 'Sine.easeOut',
       });
     });
@@ -1217,7 +1212,7 @@ export class HiLoScene extends Phaser.Scene {
         y: originalY,
         scaleX: originalScaleX ?? 1,
         scaleY: originalScaleY ?? 1,
-        duration: 400,
+        duration: restoreDuration,
         ease: 'Sine.easeOut',
       });
     });
@@ -1247,7 +1242,7 @@ export class HiLoScene extends Phaser.Scene {
         y: originalY,
         scaleX: origScale,
         scaleY: origScale,
-        duration: 400,
+        duration: restoreDuration,
         ease: 'Sine.easeOut',
         onComplete: () => {
           tween.resume();
@@ -1791,14 +1786,12 @@ export class HiLoScene extends Phaser.Scene {
   }
 
   private syncDigitSum(sum: number | null, digits?: string | null) {
-    if (!this.roundSumText) return;
     let resolved: number | null =
       typeof sum === 'number' && Number.isFinite(sum) ? sum : null;
     if (resolved === null && digits && /^\d{3}$/.test(digits)) {
       resolved = digits.split('').reduce((acc, digit) => acc + Number(digit), 0);
     }
     const display = resolved === null ? '--' : String(resolved);
-    this.roundSumText.setText(`3-digit SUM: ${display}`);
     if (this.sumTriangleText) {
       this.sumTriangleText.setText(display);
     }
@@ -1977,6 +1970,8 @@ export class HiLoScene extends Phaser.Scene {
       this.lastSumTriangleValue = null;
       this.sumTriangleTimer?.remove(false);
       this.sumTriangleTimer = undefined;
+      this.winnerHighlightTimer?.remove(false);
+      this.winnerHighlightTimer = undefined;
       this.statusText?.setText(t(this.language, 'scene.betsOpen'));
       this.statusText?.setColor('#00ffb2');
     } else if (state.status === 'RESULT_PENDING') {
@@ -1985,8 +1980,8 @@ export class HiLoScene extends Phaser.Scene {
       this.statusText?.setText(t(this.language, 'scene.locked'));
       this.statusText?.setColor('#ffd166');
     } else if (state.status === 'COMPLETED') {
-      // Keep locked layout during result display phase
-      this.enterLockedLayout();
+      // Restore open layout during result display phase
+      this.exitLockedLayout();
       this.sumTriangleText?.setVisible(false);
       this.statusText?.setText(t(this.language, 'scene.roundResult'));
       this.statusText?.setColor('#b2bec3');
@@ -2034,8 +2029,7 @@ export class HiLoScene extends Phaser.Scene {
       this.syncDigitResult(payload.digitResult);
     }
     this.syncDigitSum(payload.digitSum, payload.digitResult);
-
-    this.updateBonusOddsFromRound(this.round);
+    this.setRoundState(this.round);
     this.showResultOverlay('SKIPPED', payload);
     this.playResultPlusLight();
   }
@@ -2150,7 +2144,21 @@ export class HiLoScene extends Phaser.Scene {
         .filter((b) => b.digitType)
         .map((b) => this.buildDigitKey(b.digitType as DigitBetType, b.selection ?? '')),
     );
-    this.applyWinnerHighlights(winKeys);
+    const triggerHighlights = () => {
+      this.applyWinnerHighlights(winKeys);
+    };
+    const delay = Math.max(0, this.layoutRestoreEndsAt - this.time.now);
+    if (delay > 0) {
+      this.winnerHighlightTimer?.remove(false);
+      this.winnerHighlightTimer = this.time.delayedCall(
+        delay,
+        triggerHighlights,
+        undefined,
+        this,
+      );
+    } else {
+      triggerHighlights();
+    }
 
     const text = labels.length ? `YOUR WINNING BETS: ${labels.join(' • ')}` : '';
 
@@ -2272,7 +2280,7 @@ export class HiLoScene extends Phaser.Scene {
       titleStr = t(this.language, 'scene.push');
     }
 
-    const modal = this.add.container(width / 2, height / 2 - 320); // Moved down 150px to center in enlarged chart area
+    const modal = this.add.container(width / 2, height / 2 - 485); // Move up 80px during result display
 
     const cardBg = this.add.graphics();
     cardBg.fillStyle(0x1e272e, 1);

@@ -26,6 +26,7 @@ let roundLockSec: number | null = null;
 let roundEndSec: number | null = null;
 let lockedBadgeEl: HTMLDivElement | null = null;
 let sonarDotEl: HTMLDivElement | null = null;
+let priceUpdatesFrozen = false;
 
 function getContainer() {
   const el = document.getElementById(CONTAINER_ID);
@@ -286,6 +287,22 @@ export function setLockedPrice(nextLockedPrice: number | null) {
   }
 }
 
+export function setPriceFreeze(
+  frozen: boolean,
+  finalPrice?: number | null,
+  timestampMs?: number | null,
+) {
+  priceUpdatesFrozen = frozen;
+  if (!frozen) return;
+  if (typeof finalPrice === 'number' && Number.isFinite(finalPrice)) {
+    const ts =
+      typeof timestampMs === 'number' && Number.isFinite(timestampMs)
+        ? timestampMs
+        : Date.now();
+    applyPriceUpdate({ price: finalPrice, timestamp: ts }, true);
+  }
+}
+
 // Update the sonar dot position to match the last point on the chart
 function updateSonarPosition(time: number, price: number) {
   if (!chart || !series || !sonarDotEl) return;
@@ -320,9 +337,9 @@ function updateSonarPosition(time: number, price: number) {
   }
 }
 
-// Feed this from the server price stream. We sample at 2Hz (every 0.5s).
-export function pushPriceUpdate(update: PriceUpdate) {
+function applyPriceUpdate(update: PriceUpdate, force = false) {
   if (typeof window === 'undefined') return;
+  if (!force && priceUpdatesFrozen) return;
   ensureChart();
   if (!series) return;
 
@@ -364,4 +381,9 @@ export function pushPriceUpdate(update: PriceUpdate) {
   renderRange(t);
   updatePriceScaleRange(price);
   updateSonarPosition(t, price);
+}
+
+// Feed this from the server price stream. We sample at 2Hz (every 0.5s).
+export function pushPriceUpdate(update: PriceUpdate) {
+  applyPriceUpdate(update);
 }
