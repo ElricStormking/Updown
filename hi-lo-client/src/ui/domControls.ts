@@ -87,8 +87,13 @@ const isMobileViewport = () => {
   const hasNoHover = window.matchMedia?.('(hover: none)')?.matches ?? false;
   // Method 5: Viewport width check
   const narrowViewport = window.innerWidth <= 1024;
-  // Consider mobile if: User agent says mobile, OR has coarse pointer AND no hover, OR has touch AND narrow viewport
-  return mobileUA || (hasCoarsePointer && hasNoHover) || (hasTouch && narrowViewport);
+  // Consider mobile if: UA says mobile, coarse pointer+no hover, or narrow viewport matches mobile CSS.
+  return (
+    mobileUA ||
+    (hasCoarsePointer && hasNoHover) ||
+    (hasTouch && narrowViewport) ||
+    narrowViewport
+  );
 };
 
 const tokenStackByKey = new Map<string, HTMLElement>();

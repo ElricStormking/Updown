@@ -9,7 +9,7 @@
 
 1. [概要](#概要)
 2. [驗證機制](#驗證機制)
-3. [簽名生成](#簽名生成)
+3. [簽章生成](#簽章生成)
 4. [基本 URL](#基本-url)
 5. [通用回應格式](#通用回應格式)
 6. [錯誤代碼](#錯誤代碼)
@@ -49,7 +49,7 @@
 
 1. **商家 ID**（`merchantId`）：上線申請時系統分配給您的唯一商家識別碼
 2. **時戳**（`timestamp`）：當前的 Unix 時戳，單位為秒（10 位數）
-3. **簽名**（`hash`）：將請求參數與您的密鑑拼接後，經 SHA256 演算法生成的哈希值
+3. **簽章**（`hash`）：將請求參數與您的密鑑拼接後，經 SHA256 演算法生成的哈希值
 
 ### 時戳驗證
 
@@ -58,13 +58,13 @@
 
 ---
 
-## 簽名生成
+## 簽章生成
 
 ### 哈希密鑑
 
 您的哈希密鑑為上線申請時系統提供的一個 **32 位元 BASE64** 字串。請妥善保管此密鑑，絕不得暴露於客戶端程碼中。
 
-### 簽名演算法
+### 簽章演算法
 
 ```
 hash = SHA256(param1 + "&" + param2 + "&" + ... + "&" + hashKey)
@@ -174,7 +174,7 @@ public String generateSignature(String[] params, String hashKey) {
 | 代碼 | 名稱 | 說明 |
 |------|------|------|
 | `0` | SUCCESS | 請求成功 |
-| `1001` | INVALID_SIGNATURE | 簽名驗證失敗 |
+| `1001` | INVALID_SIGNATURE | 簽章驗證失敗 |
 | `1002` | TIMESTAMP_EXPIRED | 時戳超出有效範圍（5～10 秒） |
 | `1003` | MERCHANT_NOT_FOUND | 系統中未找到該商家 ID |
 | `1004` | MERCHANT_INACTIVE | 商家帳號已被停用 |
@@ -206,9 +206,9 @@ public String generateSignature(String[] params, String hashKey) {
 | `merchantId` | string | 是 | 您的商家 ID |
 | `account` | string | 是 | 唯一的玩家帳號識別碼 |
 | `timestamp` | integer | 是 | Unix 時戳，單位為秒（10 位數） |
-| `hash` | string | 是 | 請求簽名 |
+| `hash` | string | 是 | 請求簽章 |
 
-**簽名參數（依序）：**
+**簽章參數（依序）：**
 ```
 hash = SHA256(merchantId + "&" + account + "&" + timestamp + "&" + hashKey)
 ```
@@ -264,9 +264,9 @@ hash = SHA256(merchantId + "&" + account + "&" + timestamp + "&" + hashKey)
 | `type` | integer | 是 | `0` = 充款（充入遊戲），`1` = 提款（從遊戲提出至商家） |
 | `amount` | number | 是 | 轉款金額（必須 > 0） |
 | `timestamp` | integer | 是 | Unix 時戳，單位為秒 |
-| `hash` | string | 是 | 請求簽名 |
+| `hash` | string | 是 | 請求簽章 |
 
-**簽名參數（依序）：**
+**簽章參數（依序）：**
 ```
 hash = SHA256(merchantId + "&" + account + "&" + type + "&" + amount + "&" + timestamp + "&" + hashKey)
 ```
@@ -344,14 +344,14 @@ hash = SHA256(merchantId + "&" + account + "&" + type + "&" + amount + "&" + tim
 | `pageSize` | integer | 是 | 每頁筆數（1～100） |
 | `pageNumber` | integer | 是 | 頁碼（從 1 開始） |
 | `timestamp` | integer | 是 | Unix 時戳，單位為秒 |
-| `hash` | string | 是 | 請求簽名 |
+| `hash` | string | 是 | 請求簽章 |
 
-**簽名參數（依序）：**
+**簽章參數（依序）：**
 ```
 hash = SHA256(merchantId + "&" + formattedStartTime + "&" + pageSize + "&" + pageNumber + "&" + timestamp + "&" + hashKey)
 ```
 
-**簽名中的日期格式：** `yyyyMMddHHmmssfff`（UTC）  
+**簽章中的日期格式：** `yyyyMMddHHmmssfff`（UTC）  
 - 範例：`2026-02-02T10:30:00.123Z` → `20260202103000123`
 
 #### 請求範例
@@ -443,14 +443,14 @@ hash = SHA256(merchantId + "&" + formattedStartTime + "&" + pageSize + "&" + pag
 | `pageSize` | integer | 是 | 每頁筆數（1～100） |
 | `pageNumber` | integer | 是 | 頁碼（從 1 開始） |
 | `timestamp` | integer | 是 | Unix 時戳，單位為秒 |
-| `hash` | string | 是 | 請求簽名 |
+| `hash` | string | 是 | 請求簽章 |
 
-**簽名參數（依序）：**
+**簽章參數（依序）：**
 ```
 hash = SHA256(merchantId + "&" + formattedStartTime + "&" + pageSize + "&" + pageNumber + "&" + timestamp + "&" + hashKey)
 ```
 
-**簽名中的日期格式：** `yyyyMMddHHmmssfff`（UTC）
+**簽章中的日期格式：** `yyyyMMddHHmmssfff`（UTC）
 
 #### 請求範例
 
@@ -519,9 +519,9 @@ hash = SHA256(merchantId + "&" + formattedStartTime + "&" + pageSize + "&" + pag
 | `merchantId` | string | 是 | 您的商家 ID |
 | `account` | string | 是 | 玩家帳號識別碼 |
 | `timestamp` | integer | 是 | Unix 時戳，單位為秒 |
-| `hash` | string | 是 | 請求簽名 |
+| `hash` | string | 是 | 請求簽章 |
 
-**簽名參數（依序）：**
+**簽章參數（依序）：**
 ```
 hash = SHA256(merchantId + "&" + account + "&" + timestamp + "&" + hashKey)
 ```
@@ -572,9 +572,9 @@ hash = SHA256(merchantId + "&" + account + "&" + timestamp + "&" + hashKey)
 |------|------|------|------|
 | `merchantId` | string | 是 | 您的商家 ID |
 | `timestamp` | integer | 是 | Unix 時戳，單位為秒 |
-| `hash` | string | 是 | 請求簽名 |
+| `hash` | string | 是 | 請求簽章 |
 
-**簽名參數（依序）：**
+**簽章參數（依序）：**
 ```
 hash = SHA256(merchantId + "&" + timestamp + "&" + hashKey)
 ```
@@ -619,12 +619,12 @@ hash = SHA256(merchantId + "&" + timestamp + "&" + hashKey)
 | `minBetAmount` | number | 是 | 玩家每回合的最低下注金額 |
 | `maxBetAmount` | number | 是 | 玩家每回合的最高下注金額 |
 | `timestamp` | integer | 是 | Unix 時戳，單位為秒 |
-| `hash` | string | 是 | 請求簽名 |
+| `hash` | string | 是 | 請求簽章 |
 
 **規則：**
 - `minBetAmount` 必須小於或等於目前最低的筹码面額。
 
-**簽名參數（依序）：**
+**簽章參數（依序）：**
 ```
 hash = SHA256(merchantId + "&" + minBetAmount + "&" + maxBetAmount + "&" + timestamp + "&" + hashKey)
 ```
@@ -669,9 +669,9 @@ hash = SHA256(merchantId + "&" + minBetAmount + "&" + maxBetAmount + "&" + times
 |------|------|------|------|
 | `merchantId` | string | 是 | 您的商家 ID |
 | `timestamp` | integer | 是 | Unix 時戳，單位為秒 |
-| `hash` | string | 是 | 請求簽名 |
+| `hash` | string | 是 | 請求簽章 |
 
-**簽名參數（依序）：**
+**簽章參數（依序）：**
 ```
 hash = SHA256(merchantId + "&" + timestamp + "&" + hashKey)
 ```
@@ -714,12 +714,12 @@ hash = SHA256(merchantId + "&" + timestamp + "&" + hashKey)
 | `merchantId` | string | 是 | 您的商家 ID |
 | `tokenValues` | number[] | 是 | 7 個筹码面額的陣列（順序為從左到右) |
 | `timestamp` | integer | 是 | Unix 時戳，單位為秒 |
-| `hash` | string | 是 | 請求簽名 |
+| `hash` | string | 是 | 請求簽章 |
 
 **規則：**
 - 最低的筹码面額必須大於或等於目前設定的 `minBetAmount`。
 
-**簽名參數（依序）：**
+**簽章參數（依序）：**
 ```
 hash = SHA256(merchantId + "&" + tokenValuesCSV + "&" + timestamp + "&" + hashKey)
 ```

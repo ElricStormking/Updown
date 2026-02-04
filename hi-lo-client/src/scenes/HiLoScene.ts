@@ -204,6 +204,7 @@ export class HiLoScene extends Phaser.Scene {
   create() {
     this.createMainLayout();
     this.updateCameraBounds();
+    this.fitCameraZoom();
     this.enableVerticalScroll();
     this.startBackgroundMusic();
 
@@ -693,8 +694,76 @@ export class HiLoScene extends Phaser.Scene {
       this.makeInteractive(this.settingButton, () => this.openSettings());
     }
 
-    this.compressBodyLayout(500, 0.82);
+    this.fitBodyToViewport(500);
     this.alignLayoutToVisibleTop(8);
+  }
+
+  private getContentBounds(excludeBg = true) {
+    const items = this.children.list.filter((item) => {
+      if (!item || typeof (item as { getBounds?: () => Phaser.Geom.Rectangle }).getBounds !== 'function') {
+        return false;
+      }
+      if (item === this.resultOverlay) return false;
+      if (
+        excludeBg &&
+        item instanceof Phaser.GameObjects.Image &&
+        (item.texture?.key === 'bg' || item.texture?.key === 'bg_light')
+      ) {
+        return false;
+      }
+      return true;
+    });
+
+    let minY = Number.POSITIVE_INFINITY;
+    let maxY = Number.NEGATIVE_INFINITY;
+    let minX = Number.POSITIVE_INFINITY;
+    let maxX = Number.NEGATIVE_INFINITY;
+    items.forEach((item) => {
+      const bounds = (item as Phaser.GameObjects.GameObject & {
+        getBounds: () => Phaser.Geom.Rectangle;
+      }).getBounds();
+      if (!Number.isFinite(bounds.top) || !Number.isFinite(bounds.bottom)) return;
+      if (!Number.isFinite(bounds.left) || !Number.isFinite(bounds.right)) return;
+      minY = Math.min(minY, bounds.top);
+      maxY = Math.max(maxY, bounds.bottom);
+      minX = Math.min(minX, bounds.left);
+      maxX = Math.max(maxX, bounds.right);
+    });
+
+    if (!Number.isFinite(minY) || !Number.isFinite(maxY) || !Number.isFinite(minX) || !Number.isFinite(maxX)) {
+      return undefined;
+    }
+    return { minY, maxY, minX, maxX };
+  }
+
+  private getTokenBarSafeHeight(viewHeight: number) {
+    const fallback = Math.round(Math.max(viewHeight * 0.12, 240));
+    if (typeof document === 'undefined') return fallback;
+    const tokenBar = document.getElementById('token-bar-floating');
+    if (!tokenBar) return fallback;
+    if (tokenBar.parentElement?.id !== 'game-container') return fallback;
+    const rect = tokenBar.getBoundingClientRect();
+    if (!Number.isFinite(rect.height) || rect.height <= 0) return fallback;
+    const displayHeight = this.scale.displaySize?.height ?? this.scale.height;
+    if (!Number.isFinite(displayHeight) || displayHeight <= 0) return fallback;
+    const pxToGame = viewHeight / displayHeight;
+    return Math.max(fallback, Math.round(rect.height * pxToGame + 24));
+  }
+
+  private fitBodyToViewport(pivotY: number) {
+    const bounds = this.getContentBounds();
+    if (!bounds) return;
+
+    const viewHeight = this.scale.height;
+    const bottomSafe = this.getTokenBarSafeHeight(viewHeight);
+    const available = viewHeight - pivotY - bottomSafe;
+    const bodyHeight = bounds.maxY - pivotY;
+    if (bodyHeight <= 0 || available <= 0) return;
+
+    const scale = Phaser.Math.Clamp(available / bodyHeight, 0.68, 1);
+    if (scale < 1) {
+      this.compressBodyLayout(pivotY, scale);
+    }
   }
 
   private compressBodyLayout(pivotY: number, scale: number) {
@@ -804,11 +873,19 @@ export class HiLoScene extends Phaser.Scene {
       ? Math.max(0, (headerTop as number) - topPadding)
       : Math.max(0, minY);
     const viewHeight = this.scale.height;
-    const bottomPadding = Math.round(viewHeight * 0.13);
+    // Keep padding consistent with the floating token bar margin so content doesn't get hidden.
+    const bottomPadding = this.getTokenBarSafeHeight(viewHeight);
     const contentHeight = Math.max(viewHeight, maxY - topAnchor + bottomPadding);
     this.scrollBounds = { minY: topAnchor, maxY: topAnchor + contentHeight };
     this.cameras.main.setBounds(0, topAnchor, this.scale.width, contentHeight);
     this.cameras.main.scrollY = topAnchor;
+  }
+
+  private fitCameraZoom() {
+    // Keep camera zoom at 1 to avoid horizontal letterboxing.
+    const cam = this.cameras.main;
+    cam.setZoom(1);
+    cam.setScroll(0, cam.scrollY);
   }
 
   private enableVerticalScroll() {
