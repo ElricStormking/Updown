@@ -166,6 +166,16 @@ const socket = createGameSocket(
     onRoundLocked: async (payload) => {
       scene.handleRoundLock(payload);
       setLockedPrice(payload.lockedPrice ?? null);
+      const current = state.currentRound;
+      if (current && current.id === payload.roundId) {
+        updateState({
+          currentRound: {
+            ...current,
+            status: 'RESULT_PENDING',
+            lockedPrice: payload.lockedPrice ?? current.lockedPrice ?? null,
+          },
+        });
+      }
       // Batch-write mode: wallet is debited at lock (when slips are committed on server).
       await refreshPlayerData();
     },
@@ -173,10 +183,22 @@ const socket = createGameSocket(
       scene.handleRoundResult(payload);
       setPriceFreeze(true, payload.finalPrice ?? payload.lockedPrice ?? null);
       setLockedPrice(null);
+      const current = state.currentRound;
+      const nextRound =
+        current && current.id === payload.roundId
+          ? {
+              ...current,
+              status: 'COMPLETED',
+              lockedPrice: payload.lockedPrice ?? current.lockedPrice ?? null,
+              finalPrice: payload.finalPrice ?? current.finalPrice ?? null,
+              winningSide: payload.winningSide ?? current.winningSide ?? null,
+            }
+          : current;
       updateState({
         lastRoundResult: payload,
         lastDigitResult: payload.digitResult ?? null,
         lastDigitSum: payload.digitSum ?? null,
+        currentRound: nextRound,
       });
       await refreshPlayerData();
 

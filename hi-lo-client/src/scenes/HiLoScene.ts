@@ -91,6 +91,7 @@ export class HiLoScene extends Phaser.Scene {
   private oddsLeftText?: Phaser.GameObjects.Text;
   private oddsCenterText?: Phaser.GameObjects.Text;
   private oddsRightText?: Phaser.GameObjects.Text;
+  private bgLightOverlay?: Phaser.GameObjects.Image;
   private doublePayoutText?: Phaser.GameObjects.Text;
   private triplePayoutText?: Phaser.GameObjects.Text;
   private singlePayoutText?: Phaser.GameObjects.Text;
@@ -101,6 +102,7 @@ export class HiLoScene extends Phaser.Scene {
   private roundDigitsCenterText?: Phaser.GameObjects.Text;
   private roundDigitsRightText?: Phaser.GameObjects.Text;
   private bgm?: Phaser.Sound.BaseSound;
+  private lockedBackground?: Phaser.GameObjects.Image;
 
   private chipButtons = new Map<number, { image: Phaser.GameObjects.Image; baseScale: number }>();
   private tokenStyleValues = [10, 50, 100, 150, 200, 300, 500];
@@ -122,6 +124,7 @@ export class HiLoScene extends Phaser.Scene {
 
   private clearTokensButton?: Phaser.GameObjects.Image;
   private settingButton?: Phaser.GameObjects.Image;
+  private menuHitButton?: Phaser.GameObjects.Image;
 
   private resultOverlay?: Phaser.GameObjects.Container;
   private resultTitleText?: Phaser.GameObjects.Text;
@@ -201,6 +204,7 @@ export class HiLoScene extends Phaser.Scene {
       'chip_300',
       'chip_500',
     ].forEach((key) => loadImage(key));
+    this.load.image('bg_lockedphase', '../bg_lockedphase.png');
 
     for (let i = 0; i <= 9; i += 1) {
       loadImage(`number_${i}`);
@@ -348,6 +352,14 @@ export class HiLoScene extends Phaser.Scene {
 
     const bg = addImage(this.scale.width / 2, this.scale.height * 1.1, 'bg', 1.1, 1.5);
     bg.setDepth(-100);
+    this.lockedBackground = addImage(
+      this.scale.width / 2,
+      this.scale.height * 1.1,
+      'bg_lockedphase',
+      1.1,
+      1.5,
+    );
+    this.lockedBackground.setDepth(-95).setVisible(false).setScrollFactor(0);
 
     const buttonAnyTriple = addImage(543, 868, 'button_any triple', 0.75);
     const buttonBig = addImage(950, 868, 'button_big', 0.75);
@@ -543,9 +555,14 @@ export class HiLoScene extends Phaser.Scene {
       });
 
       this.settingButton = addImage(1022, 2262, 'setting', 0.75);
+    } else {
+      // Invisible hit target over the gear area so mobile taps open the DOM menu.
+      this.menuHitButton = this.add.image(1022, 2262, 'setting', 1.0);
+      this.menuHitButton.setAlpha(0.001).setDepth(1000);
+      this.makeInteractive(this.menuHitButton, () => this.openMenu());
     }
 
-    addImage(540, 973, 'bg_light', 0.72);
+    this.bgLightOverlay = addImage(540, 973, 'bg_light', 0.72);
     addImage(936, 115, 'bg_line_right', 0.7);
     addImage(539, 66, 'logo_combi3', 0.7);
     addImage(141, 115, 'bg_line_left', 0.7);
@@ -733,7 +750,9 @@ export class HiLoScene extends Phaser.Scene {
       if (
         excludeBg &&
         item instanceof Phaser.GameObjects.Image &&
-        (item.texture?.key === 'bg' || item.texture?.key === 'bg_light')
+        (item.texture?.key === 'bg' ||
+          item.texture?.key === 'bg_light' ||
+          item.texture?.key === 'bg_lockedphase')
       ) {
         return false;
       }
@@ -809,7 +828,9 @@ export class HiLoScene extends Phaser.Scene {
       if (item === this.resultOverlay) return false;
       if (
         item instanceof Phaser.GameObjects.Image &&
-        (item.texture?.key === 'bg' || item.texture?.key === 'bg_light')
+        (item.texture?.key === 'bg' ||
+          item.texture?.key === 'bg_light' ||
+          item.texture?.key === 'bg_lockedphase')
       ) {
         return false;
       }
@@ -874,7 +895,9 @@ export class HiLoScene extends Phaser.Scene {
       if (item === this.resultOverlay) return false;
       if (
         item instanceof Phaser.GameObjects.Image &&
-        (item.texture?.key === 'bg' || item.texture?.key === 'bg_light')
+        (item.texture?.key === 'bg' ||
+          item.texture?.key === 'bg_light' ||
+          item.texture?.key === 'bg_lockedphase')
       ) {
         return false;
       }
@@ -967,6 +990,7 @@ export class HiLoScene extends Phaser.Scene {
     if (this.isLockedLayoutMode) return;
     this.isLockedLayoutMode = true;
     this.isLockedLayoutPending = true;
+    this.setLockedBackgroundVisible(true);
 
     // Disable scrolling during locked phase
     this.dragScrollActive = false;
@@ -1040,7 +1064,9 @@ export class HiLoScene extends Phaser.Scene {
       // Skip background elements
       if (
         child instanceof Phaser.GameObjects.Image &&
-        (child.texture?.key === 'bg' || child.texture?.key === 'bg_light')
+        (child.texture?.key === 'bg' ||
+          child.texture?.key === 'bg_light' ||
+          child.texture?.key === 'bg_lockedphase')
       ) {
         return;
       }
@@ -1158,6 +1184,7 @@ export class HiLoScene extends Phaser.Scene {
     this.clearLockedLayoutDelay();
     this.isLockedLayoutMode = false;
     this.isLockedLayoutPending = false;
+    this.setLockedBackgroundVisible(false);
 
     // Remove CSS class from game container
     const container = document.getElementById('game-container');
@@ -1329,6 +1356,20 @@ export class HiLoScene extends Phaser.Scene {
     this.runHandler(() => this.handlers?.onClearTokens());
   }
 
+  private setLockedBackgroundVisible(visible: boolean) {
+    if (!this.lockedBackground) return;
+    this.lockedBackground.setVisible(visible);
+    if (visible) {
+      this.lockedBackground
+        .setDisplaySize(this.scale.width, this.scale.height)
+        .setPosition(this.scale.width / 2, this.scale.height / 2)
+        .setScrollFactor(0);
+    }
+    if (this.bgLightOverlay) {
+      this.bgLightOverlay.setVisible(!visible);
+    }
+  }
+
   private openSettings() {
     if (this.handlers?.onOpenSettings) {
       this.handlers.onOpenSettings();
@@ -1336,6 +1377,12 @@ export class HiLoScene extends Phaser.Scene {
     }
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('app:open-settings'));
+    }
+  }
+
+  private openMenu() {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('app:open-menu'));
     }
   }
 

@@ -1135,6 +1135,12 @@ export const initControls = (handlers: ControlHandlers) => {
     window.addEventListener('app:open-settings', () => {
       openModal(settingsModalBackdropEl, true, settingsModalCloseBtn);
     });
+    window.addEventListener('app:open-menu', () => {
+      if (!menuModalBackdropEl || !document.contains(menuModalBackdropEl)) {
+        menuModalBackdropEl = root.querySelector('#menu-modal-backdrop');
+      }
+      setMenuModalOpen(true);
+    });
   }
 
   subscribe(render);
@@ -1230,8 +1236,13 @@ const render = (nextState: typeof state) => {
       Boolean(round) &&
       round.status === 'BETTING' &&
       new Date(round.lockTime).getTime() > Date.now();
-    tokenBarFloatingEl.classList.toggle('is-hidden', !isBetting);
-    tokenBarFloatingEl.setAttribute('aria-hidden', isBetting ? 'false' : 'true');
+    const isResultDisplay =
+      Boolean(nextState.token) &&
+      Boolean(round) &&
+      round.status === 'COMPLETED';
+    const shouldShow = isBetting || isResultDisplay;
+    tokenBarFloatingEl.classList.toggle('is-hidden', !shouldShow);
+    tokenBarFloatingEl.setAttribute('aria-hidden', shouldShow ? 'false' : 'true');
   }
 
   if (phaseEl) {
