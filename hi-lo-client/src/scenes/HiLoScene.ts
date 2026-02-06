@@ -135,6 +135,15 @@ export class HiLoScene extends Phaser.Scene {
   private resultDisplayDurationMs = 8000;
   private plusLightSprite?: Phaser.GameObjects.Sprite;
 
+  private roundStartText?: Phaser.GameObjects.Text;
+  private roundStartTween?: Phaser.Tweens.Tween;
+  private lastSeenRoundId?: number;
+  private chartRevealTimer?: Phaser.Time.TimerEvent;
+  private chartRevealExpectedStatus?: RoundStatePayload['status'];
+  private lockedBannerText?: Phaser.GameObjects.Text;
+  private lockedBannerTween?: Phaser.Tweens.Tween;
+  private lockedBannerTimers: Phaser.Time.TimerEvent[] = [];
+
   private unsubscribeState?: () => void;
   private statusListener?: (event: Event) => void;
   private audioSettingsListener?: (event: Event) => void;
@@ -149,6 +158,7 @@ export class HiLoScene extends Phaser.Scene {
   private lockedLayoutDelayTimer?: Phaser.Time.TimerEvent;
   private readonly LOCKED_LAYOUT_DELAY_MS = 3500;
   private lockedLayoutTween?: Phaser.Tweens.Tween;
+  private lockedLayoutScale = 1;
   private betSlotsContainer?: Phaser.GameObjects.Container;
   private betSlotsOriginalY = 0;
   private readonly BET_SLOTS_PIVOT_Y = 550; // Includes odds boxes (Y~699 after compression)
@@ -1042,11 +1052,46 @@ export class HiLoScene extends Phaser.Scene {
 
     // Animate all bet slot elements (elements below pivot Y)
     const pivotY = this.BET_SLOTS_PIVOT_Y;
-    const targetScale = 0.5;
     const viewHeight = this.scale.height;
     const viewWidth = this.scale.width;
     const centerX = viewWidth / 2;
-    const targetY = viewHeight * 0.65; // Move to bottom 40%
+    const bottomTop = viewHeight * 0.45;
+    const bottomHeight = viewHeight * 0.55;
+
+    let minSlotY = Number.POSITIVE_INFINITY;
+    let maxSlotY = Number.NEGATIVE_INFINITY;
+    this.children.list.forEach((child) => {
+      if (child === this.resultOverlay) return;
+      const node = child as Phaser.GameObjects.GameObject & {
+        y?: number;
+        getBounds?: () => Phaser.Geom.Rectangle;
+      };
+      if (typeof node.y !== 'number' || node.y < pivotY) return;
+
+      if (
+        child instanceof Phaser.GameObjects.Image &&
+        (child.texture?.key === 'bg' ||
+          child.texture?.key === 'bg_light' ||
+          child.texture?.key === 'bg_lockedphase')
+      ) {
+        return;
+      }
+
+      if (typeof node.getBounds !== 'function') return;
+      const bounds = node.getBounds();
+      if (!Number.isFinite(bounds.top) || !Number.isFinite(bounds.bottom)) return;
+      minSlotY = Math.min(minSlotY, bounds.top);
+      maxSlotY = Math.max(maxSlotY, bounds.bottom);
+    });
+
+    if (!Number.isFinite(minSlotY) || !Number.isFinite(maxSlotY)) {
+      minSlotY = pivotY;
+      maxSlotY = pivotY + bottomHeight;
+    }
+
+    const slotHeight = Math.max(1, maxSlotY - minSlotY);
+    const targetScale = Math.min(1, bottomHeight / slotHeight);
+    this.lockedLayoutScale = targetScale;
 
     this.children.each((child) => {
       if (child === this.resultOverlay) return;
@@ -1084,9 +1129,9 @@ export class HiLoScene extends Phaser.Scene {
       const originalX = (node.getData?.('originalX') as number) ?? node.x ?? centerX;
       const originalY = (node.getData?.('originalY') as number) ?? node.y;
       const relativeX = originalX - centerX;
-      const relativeY = originalY - pivotY;
+      const relativeY = originalY - minSlotY;
       const newX = centerX + relativeX * targetScale;
-      const newY = targetY + relativeY * targetScale;
+      const newY = bottomTop + relativeY * targetScale;
 
       this.tweens.add({
         targets: node,
@@ -1111,9 +1156,9 @@ export class HiLoScene extends Phaser.Scene {
       const originalX = sprite.getData('originalX') as number;
       const originalY = sprite.getData('originalY') as number;
       const relativeX = originalX - centerX;
-      const relativeY = originalY - pivotY;
+      const relativeY = originalY - minSlotY;
       const newX = centerX + relativeX * targetScale;
-      const newY = targetY + relativeY * targetScale;
+      const newY = bottomTop + relativeY * targetScale;
 
       this.tweens.add({
         targets: sprite,
@@ -1147,9 +1192,9 @@ export class HiLoScene extends Phaser.Scene {
       const originalX = image.getData('originalX') as number;
       const originalY = image.getData('originalY') as number;
       const relativeX = originalX - centerX;
-      const relativeY = originalY - pivotY;
+      const relativeY = originalY - minSlotY;
       const newX = centerX + relativeX * targetScale;
-      const newY = targetY + relativeY * targetScale;
+      const newY = bottomTop + relativeY * targetScale;
       
       // Kill any existing tweens on this image and apply new transform
       this.tweens.killTweensOf(image);
@@ -1185,6 +1230,7 @@ export class HiLoScene extends Phaser.Scene {
     this.isLockedLayoutMode = false;
     this.isLockedLayoutPending = false;
     this.setLockedBackgroundVisible(false);
+    this.lockedLayoutScale = 1;
 
     // Remove CSS class from game container
     const container = document.getElementById('game-container');
@@ -1276,6 +1322,40 @@ export class HiLoScene extends Phaser.Scene {
         },
       });
     });
+  }
+
+  private setResultLayoutVisible(visible: boolean) {
+    if (typeof document === 'undefined') return;
+    const container = document.getElementById('game-container');
+    container?.classList.toggle('result-layout', visible);
+  }
+
+  private clearChartRevealTimer() {
+    if (this.chartRevealTimer) {
+      this.chartRevealTimer.remove(false);
+      this.chartRevealTimer = undefined;
+    }
+    this.chartRevealExpectedStatus = undefined;
+  }
+
+  private scheduleChartReveal(
+    delayMs: number,
+    roundId: number,
+    expectedStatus: RoundStatePayload['status'],
+  ) {
+    this.clearChartRevealTimer();
+    this.chartRevealExpectedStatus = expectedStatus;
+    this.chartRevealTimer = this.time.delayedCall(
+      delayMs,
+      () => {
+        this.chartRevealTimer = undefined;
+        this.chartRevealExpectedStatus = undefined;
+        if (this.round?.status !== expectedStatus || this.round.id !== roundId) return;
+        this.setResultLayoutVisible(false);
+      },
+      undefined,
+      this,
+    );
   }
 
   private buildDigitKey(digitType: DigitBetType, selection?: string) {
@@ -1527,7 +1607,9 @@ export class HiLoScene extends Phaser.Scene {
   }
 
   private getLockedLayoutScale() {
-    return this.isLockedLayoutMode && !this.isLockedLayoutPending ? 0.5 : 1;
+    return this.isLockedLayoutMode && !this.isLockedLayoutPending
+      ? this.lockedLayoutScale
+      : 1;
   }
 
   private clearBonusHighlights() {
@@ -2005,8 +2087,35 @@ export class HiLoScene extends Phaser.Scene {
   }
 
   setRoundState(state: RoundStatePayload) {
+    const enteringLocked = state.status === 'RESULT_PENDING' && !this.isLockedLayoutMode;
     this.round = state;
     this.roundText?.setText(`${state.id}`);
+    const isNewRound = this.lastSeenRoundId !== state.id;
+
+    if (this.chartRevealTimer && this.chartRevealExpectedStatus !== state.status) {
+      this.clearChartRevealTimer();
+    }
+    if (state.status !== 'RESULT_PENDING') {
+      this.clearLockedBanners();
+    }
+
+    if (state.status === 'COMPLETED') {
+      this.setResultLayoutVisible(true);
+    } else if (state.status === 'BETTING') {
+      if (isNewRound) {
+        this.setResultLayoutVisible(true);
+        this.scheduleChartReveal(1000, state.id, 'BETTING');
+      } else if (!this.chartRevealTimer) {
+        this.setResultLayoutVisible(false);
+      }
+    } else if (state.status === 'RESULT_PENDING') {
+      if (enteringLocked) {
+        this.setResultLayoutVisible(true);
+        this.scheduleChartReveal(this.LOCKED_LAYOUT_DELAY_MS, state.id, 'RESULT_PENDING');
+      }
+    } else {
+      this.setResultLayoutVisible(false);
+    }
     
     // Handle layout transitions BEFORE updating bonus odds
     // so that applyBonusHighlights knows the correct layout mode
@@ -2021,7 +2130,16 @@ export class HiLoScene extends Phaser.Scene {
       this.winnerHighlightTimer = undefined;
       this.statusText?.setText(t(this.language, 'scene.betsOpen'));
       this.statusText?.setColor('#00ffb2');
+
+      // Show "Round Start!" banner once per new round
+      if (this.lastSeenRoundId !== state.id) {
+        this.lastSeenRoundId = state.id;
+        this.showRoundStartBanner();
+      }
     } else if (state.status === 'RESULT_PENDING') {
+      if (enteringLocked) {
+        this.showLockedPhaseBanners();
+      }
       this.enterLockedLayout();
       this.sumTriangleText?.setVisible(false);
       this.statusText?.setText(t(this.language, 'scene.locked'));
@@ -2307,6 +2425,159 @@ export class HiLoScene extends Phaser.Scene {
         ease: 'Sine.easeInOut',
       });
       this.winnerLightTweens.set(key, lightTween);
+    });
+  }
+
+  private showRoundStartBanner() {
+    // Clean up any existing banner
+    if (this.roundStartTween) {
+      this.roundStartTween.stop();
+      this.roundStartTween = undefined;
+    }
+    if (this.roundStartText) {
+      this.roundStartText.destroy();
+      this.roundStartText = undefined;
+    }
+
+    const cx = this.scale.width / 2;
+    const cy = this.scale.height / 2/3;
+
+    this.roundStartText = this.add
+      .text(cx, cy, 'Round Start!', {
+        fontFamily: 'Rajdhani',
+        fontSize: '92px',
+        color: '#00ffb2',
+        fontStyle: 'bold',
+        stroke: '#003311',
+        strokeThickness: 6,
+        shadow: {
+          offsetX: 0,
+          offsetY: 4,
+          color: 'rgba(0,0,0,0.6)',
+          blur: 12,
+          fill: true,
+        },
+      })
+      .setOrigin(0.5)
+      .setDepth(200)
+      .setScrollFactor(0)
+      .setScale(0.3)
+      .setAlpha(0);
+
+    // Scale-in & fade-in, hold, then fade-out
+    this.tweens.add({
+      targets: this.roundStartText,
+      scale: 1,
+      alpha: 1,
+      duration: 250,
+      ease: 'Back.Out',
+      onComplete: () => {
+        this.roundStartTween = this.tweens.add({
+          targets: this.roundStartText,
+          alpha: 0,
+          scale: 1.15,
+          delay: 550,
+          duration: 200,
+          ease: 'Sine.easeIn',
+          onComplete: () => {
+            this.roundStartText?.destroy();
+            this.roundStartText = undefined;
+            this.roundStartTween = undefined;
+          },
+        });
+      },
+    });
+  }
+
+  private clearLockedBanners() {
+    this.lockedBannerTimers.forEach((timer) => timer.remove(false));
+    this.lockedBannerTimers = [];
+    if (this.lockedBannerTween) {
+      this.lockedBannerTween.stop();
+      this.lockedBannerTween = undefined;
+    }
+    if (this.lockedBannerText) {
+      this.lockedBannerText.destroy();
+      this.lockedBannerText = undefined;
+    }
+  }
+
+  private showLockedPhaseBanners() {
+    this.clearLockedBanners();
+    const lockedDuration = 1000;
+    const bonusDuration = 2500;
+    this.showLockedBanner('Bets Locked', '#ffd166', lockedDuration);
+    const timer = this.time.delayedCall(
+      lockedDuration,
+      () => {
+        this.lockedBannerTimers = this.lockedBannerTimers.filter((item) => item !== timer);
+        this.showLockedBanner('Bonus Slots', '#00d2ff', bonusDuration);
+      },
+      undefined,
+      this,
+    );
+    this.lockedBannerTimers.push(timer);
+  }
+
+  private showLockedBanner(message: string, color: string, totalMs: number) {
+    if (this.lockedBannerTween) {
+      this.lockedBannerTween.stop();
+      this.lockedBannerTween = undefined;
+    }
+    if (this.lockedBannerText) {
+      this.lockedBannerText.destroy();
+      this.lockedBannerText = undefined;
+    }
+
+    const cx = this.scale.width / 2;
+    const cy = this.scale.height / 2/3;
+    const introDuration = Math.min(250, Math.max(120, Math.floor(totalMs * 0.25)));
+    const outroDuration = Math.min(200, Math.max(120, Math.floor(totalMs * 0.2)));
+    const holdDuration = Math.max(0, totalMs - introDuration - outroDuration);
+
+    this.lockedBannerText = this.add
+      .text(cx, cy, message, {
+        fontFamily: 'Rajdhani',
+        fontSize: '92px',
+        color,
+        fontStyle: 'bold',
+        stroke: '#003311',
+        strokeThickness: 6,
+        shadow: {
+          offsetX: 0,
+          offsetY: 4,
+          color: 'rgba(0,0,0,0.6)',
+          blur: 12,
+          fill: true,
+        },
+      })
+      .setOrigin(0.5)
+      .setDepth(200)
+      .setScrollFactor(0)
+      .setScale(0.3)
+      .setAlpha(0);
+
+    this.lockedBannerTween = this.tweens.add({
+      targets: this.lockedBannerText,
+      scale: 1,
+      alpha: 1,
+      duration: introDuration,
+      ease: 'Back.Out',
+      onComplete: () => {
+        this.lockedBannerTween = this.tweens.add({
+          targets: this.lockedBannerText,
+          alpha: 0,
+          scale: 1.15,
+          delay: holdDuration,
+          duration: outroDuration,
+          ease: 'Sine.easeIn',
+          onComplete: () => {
+            this.lockedBannerText?.destroy();
+            this.lockedBannerText = undefined;
+            this.lockedBannerTween = undefined;
+          },
+        });
+      },
     });
   }
 

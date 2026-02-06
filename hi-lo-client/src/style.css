@@ -270,13 +270,19 @@ html {
   backdrop-filter: none;
   z-index: 6;
   pointer-events: none;
-  transition: height 0.4s ease-out, top 0.4s ease-out;
+  transition: height 0.4s ease-out, top 0.4s ease-out, opacity 0.2s ease-out;
 }
 
 /* Locked layout mode: expand chart when round is locked */
 #game-container.locked-layout #tradingview-chart {
-  height: clamp(280px, 50%, 480px);
-  top: calc(var(--hud-chart-top, clamp(84px, 12%, 170px)) + 40px);
+  height: 45%;
+  top: var(--hud-chart-top, clamp(84px, 12%, 170px));
+}
+
+/* Result display + round-start + locked intro: hide line chart */
+#game-container.result-layout #tradingview-chart {
+  opacity: 0;
+  visibility: hidden;
 }
 
 .layout {
