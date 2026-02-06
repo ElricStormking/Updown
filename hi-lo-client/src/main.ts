@@ -323,9 +323,8 @@ async function handleLogin(credentials: { account: string; password: string }) {
     selectedTokenValue,
     tokenPlacements: {},
   });
-  scene.setResultDisplayDuration(
-    config.resultDisplayDurationMs ?? 8000,
-  );
+  const baseResultDuration = config.resultDisplayDurationMs ?? 8000;
+  scene.setResultDisplayDuration(baseResultDuration + 3000);
 
   await refreshPlayerData();
   authenticateGameSocket(socket, auth.accessToken);
@@ -340,9 +339,8 @@ async function refreshConfig() {
       tokenValues,
     );
     updateState({ config, selectedTokenValue });
-    scene.setResultDisplayDuration(
-      config.resultDisplayDurationMs ?? 8000,
-    );
+    const baseResultDuration = config.resultDisplayDurationMs ?? 8000;
+    scene.setResultDisplayDuration(baseResultDuration + 3000);
   } catch {
     // Ignore config refresh failures; we keep the last known config.
   }

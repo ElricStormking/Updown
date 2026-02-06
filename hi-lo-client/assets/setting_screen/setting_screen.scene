@@ -1,0 +1,104 @@
+{
+    "id": "b52ff9ae-6402-475e-867e-1e7a0565ec1b",
+    "sceneType": "SCENE",
+    "settings": {
+        "exportClass": true,
+        "autoImport": true,
+        "importFileExtension": true,
+        "preloadPackFiles": [],
+        "createMethodName": "editorCreate",
+        "sceneKey": "setting_screen",
+        "borderWidth": 1080,
+        "borderHeight": 1920
+    },
+    "displayList": [
+        {
+            "type": "Image",
+            "id": "fbef320d-611c-42b9-be87-d68f00075b0a",
+            "label": "setting_bg",
+            "texture": {
+                "key": "setting_bg"
+            },
+            "x": 544,
+            "y": 1111
+        },
+        {
+            "type": "Image",
+            "id": "e5194e7b-d64c-4d1b-a9f9-b28a18e28701",
+            "label": "setting_box",
+            "texture": {
+                "key": "setting_box"
+            },
+            "x": 544,
+            "y": 935
+        },
+        {
+            "type": "Image",
+            "id": "3f4e24d7-19bf-4916-9713-5d7b5e23582c",
+            "label": "setting_box_1",
+            "texture": {
+                "key": "setting_box"
+            },
+            "x": 544,
+            "y": 1132
+        },
+        {
+            "type": "Image",
+            "id": "c1122ee4-cbad-40d8-9b56-702cb64313c4",
+            "label": "setting_box_2",
+            "texture": {
+                "key": "setting_box"
+            },
+            "x": 544,
+            "y": 1331
+        },
+        {
+            "type": "Image",
+            "id": "5e97bb9e-34f3-46fc-a463-343de18ed1d4",
+            "label": "setting_off",
+            "texture": {
+                "key": "setting_off"
+            },
+            "x": 922,
+            "y": 806
+        },
+        {
+            "type": "Image",
+            "id": "4269d8e9-e38a-48ee-8923-cc9209751186",
+            "label": "check_box",
+            "texture": {
+                "key": "check_box"
+            },
+            "x": 818,
+            "y": 936
+        },
+        {
+            "type": "Image",
+            "id": "e1d0022b-34dd-4fe3-a8ee-c045d15abc9e",
+            "label": "check_box2",
+            "texture": {
+                "key": "check_box2"
+            },
+            "x": 818,
+            "y": 1132
+        },
+        {
+            "type": "Image",
+            "id": "79d0e874-d530-4d0b-8546-fa0d1ac98102",
+            "label": "setting_language",
+            "texture": {
+                "key": "setting_language"
+            },
+            "x": 711,
+            "y": 1330,
+            "scaleX": 1.2
+        }
+    ],
+    "plainObjects": [],
+    "meta": {
+        "app": "Phaser Editor - Scene Editor",
+        "url": "https://phaser.io/editor",
+        "contentType": "phasereditor2d.core.scene.SceneContentType",
+        "version": 5
+    }
+}

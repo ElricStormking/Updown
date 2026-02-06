@@ -11,10 +11,12 @@ import {
 } from 'lightweight-charts';
 import type { PriceUpdate } from '../types';
 
-const CONTAINER_ID = 'tradingview-chart';
+const CONTAINER_ID = 'tradingview-chart-inner';
 const WINDOW_SECONDS = 1 * 20; // 10 minutes
 const PRICE_LABEL_INTERVAL = 1; // dollars
 const MIN_PRICE_RANGE = PRICE_LABEL_INTERVAL * 5; // 5 dollars - smaller range makes price changes more visible
+const BARS_PER_SECOND = 2; // We plot at 2Hz (every 0.5s).
+const RIGHT_OFFSET_BARS = Math.round(WINDOW_SECONDS * BARS_PER_SECOND * 0.5);
 
 let chart: IChartApi | null = null;
 let series: ISeriesApi<'Line'> | null = null;
@@ -43,7 +45,12 @@ function ensureChart() {
   }
 
   container.innerHTML = '';
-  container.style.position = 'relative';
+  if (typeof window !== 'undefined') {
+    const computed = window.getComputedStyle(container);
+    if (computed.position === 'static') {
+      container.style.position = 'relative';
+    }
+  }
 
   lockedBadgeEl = document.createElement('div');
   lockedBadgeEl.style.position = 'absolute';
@@ -149,7 +156,7 @@ function ensureChart() {
       borderVisible: false,
       timeVisible: true,
       secondsVisible: false,
-      rightOffset: 0,
+      rightOffset: RIGHT_OFFSET_BARS,
       fixLeftEdge: true,
       fixRightEdge: true,
       tickMarkFormatter: (time: Time) => {

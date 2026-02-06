@@ -161,6 +161,7 @@ const buildTokenFloatingMarkup = (values: number[]) =>
     .join('');
 
 const WIN_CELEBRATE_FALLBACK_MS = 2600;
+const RESULT_DISPLAY_EXTENSION_MS = 3000;
 let lastTokenValuesSignature: string | null = null;
 let lastWinCelebrateSignature: string | null = null;
 
@@ -294,7 +295,9 @@ export const initControls = (handlers: ControlHandlers) => {
     <div class="page-wrapper" id="app-shell">
       <div class="layout">
         <div id="game-container">
-          <div id="tradingview-chart"></div>
+          <div id="tradingview-chart">
+            <div id="tradingview-chart-inner"></div>
+          </div>
           <div class="stats-dock" id="stats-dock">
             <button
               type="button"
@@ -1167,10 +1170,10 @@ const celebrateWinningBetSlots = (nextState: typeof state) => {
   const settledRoundId = nextState.lastRoundBets[0]?.roundId ?? null;
   if (!settledRoundId) return;
 
-  const durationMs = Math.max(
-    0,
-    Number(nextState.config?.resultDisplayDurationMs ?? WIN_CELEBRATE_FALLBACK_MS),
+  const baseDuration = Number(
+    nextState.config?.resultDisplayDurationMs ?? WIN_CELEBRATE_FALLBACK_MS,
   );
+  const durationMs = Math.max(0, baseDuration + RESULT_DISPLAY_EXTENSION_MS);
 
   const digitWinKeys = nextState.lastRoundBets
     .filter((bet) => bet.betType === 'DIGIT' && bet.result === 'WIN' && bet.digitType)

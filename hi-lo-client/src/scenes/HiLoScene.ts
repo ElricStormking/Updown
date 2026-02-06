@@ -132,7 +132,8 @@ export class HiLoScene extends Phaser.Scene {
   private resultWinnersText?: Phaser.GameObjects.Text;
   private resultPlayerWinsText?: Phaser.GameObjects.Text;
   private resultRoundId?: number;
-  private resultDisplayDurationMs = 8000;
+  private resultDisplayDurationMs = 11000;
+  private resultOverlayEndsAt = 0;
   private plusLightSprite?: Phaser.GameObjects.Sprite;
 
   private roundStartText?: Phaser.GameObjects.Text;
@@ -143,6 +144,8 @@ export class HiLoScene extends Phaser.Scene {
   private lockedBannerText?: Phaser.GameObjects.Text;
   private lockedBannerTween?: Phaser.Tweens.Tween;
   private lockedBannerTimers: Phaser.Time.TimerEvent[] = [];
+  private pendingRoundState?: RoundStatePayload;
+  private pendingRoundStateTimer?: Phaser.Time.TimerEvent;
 
   private unsubscribeState?: () => void;
   private statusListener?: (event: Event) => void;
@@ -1330,6 +1333,36 @@ export class HiLoScene extends Phaser.Scene {
     container?.classList.toggle('result-layout', visible);
   }
 
+  private clearPendingRoundState() {
+    if (this.pendingRoundStateTimer) {
+      this.pendingRoundStateTimer.remove(false);
+      this.pendingRoundStateTimer = undefined;
+    }
+    this.pendingRoundState = undefined;
+  }
+
+  private deferRoundState(state: RoundStatePayload, delayMs: number) {
+    this.pendingRoundState = state;
+    if (this.pendingRoundStateTimer) {
+      this.pendingRoundStateTimer.remove(false);
+    }
+    this.pendingRoundStateTimer = this.time.delayedCall(
+      delayMs,
+      () => {
+        this.pendingRoundStateTimer = undefined;
+        const pending = this.pendingRoundState;
+        this.pendingRoundState = undefined;
+        if (!pending) return;
+        if (this.round?.id !== pending.id || this.round?.status !== pending.status) {
+          return;
+        }
+        this.applyRoundState(pending);
+      },
+      undefined,
+      this,
+    );
+  }
+
   private clearChartRevealTimer() {
     if (this.chartRevealTimer) {
       this.chartRevealTimer.remove(false);
@@ -2087,7 +2120,31 @@ export class HiLoScene extends Phaser.Scene {
   }
 
   setRoundState(state: RoundStatePayload) {
+    const shouldDefer =
+      state.status === 'BETTING' &&
+      !!this.resultOverlay &&
+      this.resultOverlayEndsAt > this.time.now;
+
+    if (
+      this.pendingRoundState &&
+      (state.status !== 'BETTING' || state.id !== this.pendingRoundState.id)
+    ) {
+      this.clearPendingRoundState();
+    }
+
+    if (shouldDefer) {
+      this.round = state;
+      const delay = Math.max(0, this.resultOverlayEndsAt - this.time.now);
+      this.deferRoundState(state, delay);
+      return;
+    }
+
+    this.applyRoundState(state);
+  }
+
+  private applyRoundState(state: RoundStatePayload) {
     const enteringLocked = state.status === 'RESULT_PENDING' && !this.isLockedLayoutMode;
+    this.clearPendingRoundState();
     this.round = state;
     this.roundText?.setText(`${state.id}`);
     const isNewRound = this.lastSeenRoundId !== state.id;
@@ -2691,15 +2748,19 @@ export class HiLoScene extends Phaser.Scene {
       duration: 400,
     });
 
+    const fadeOutDuration = 300;
+    this.resultOverlayEndsAt = this.time.now + this.resultDisplayDurationMs + fadeOutDuration;
+
     this.time.delayedCall(this.resultDisplayDurationMs, () => {
       if (this.resultOverlay) {
         this.tweens.add({
           targets: this.resultOverlay,
           alpha: 0,
-          duration: 300,
+          duration: fadeOutDuration,
           onComplete: () => {
             this.resultOverlay?.destroy();
             this.resultOverlay = undefined;
+            this.resultOverlayEndsAt = 0;
           },
         });
       }
@@ -2780,6 +2841,7 @@ export class HiLoScene extends Phaser.Scene {
     this.resultWinnersText = undefined;
     this.resultPlayerWinsText = undefined;
     this.resultRoundId = undefined;
+    this.resultOverlayEndsAt = 0;
     if (this.plusLightSprite) {
       this.plusLightSprite.destroy();
       this.plusLightSprite = undefined;

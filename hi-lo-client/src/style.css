@@ -257,7 +257,7 @@ html {
 
 #tradingview-chart {
   position: absolute;
-  top: calc(var(--hud-chart-top, clamp(84px, 12%, 170px)) + 10px);
+  top: calc(var(--hud-chart-top, clamp(84px, 12%, 170px)) - 17px);
   left: 50%;
   transform: translateX(-50%);
   width: var(--hud-chart-width, min(74%, 640px));
@@ -273,10 +273,26 @@ html {
   transition: height 0.4s ease-out, top 0.4s ease-out, opacity 0.2s ease-out;
 }
 
+#tradingview-chart-inner {
+  position: absolute;
+  inset: var(--hud-chart-inset, 22px 20px 8px);
+  border-radius: 10px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* Open betting phase: show framed chart art */
+#game-container:not(.locked-layout):not(.result-layout) #tradingview-chart {
+  background: url('/main_screen_UI/Line_chart_box1.png') no-repeat center / 100% 100%;
+  border: none;
+}
+
 /* Locked layout mode: expand chart when round is locked */
 #game-container.locked-layout #tradingview-chart {
   height: 45%;
   top: var(--hud-chart-top, clamp(84px, 12%, 170px));
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 /* Result display + round-start + locked intro: hide line chart */

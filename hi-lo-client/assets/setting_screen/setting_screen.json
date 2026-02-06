@@ -1,0 +1,44 @@
+{
+    "section1": {
+        "files": [
+            {
+                "url": "assets/option_menu/setting_screen/check_box.png",
+                "type": "image",
+                "key": "check_box"
+            },
+            {
+                "url": "assets/option_menu/setting_screen/check_box2.png",
+                "type": "image",
+                "key": "check_box2"
+            },
+            {
+                "url": "assets/option_menu/setting_screen/setting_bg.png",
+                "type": "image",
+                "key": "setting_bg"
+            },
+            {
+                "url": "assets/option_menu/setting_screen/setting_box.png",
+                "type": "image",
+                "key": "setting_box"
+            },
+            {
+                "url": "assets/option_menu/setting_screen/setting_language.png",
+                "type": "image",
+                "key": "setting_language"
+            },
+            {
+                "url": "assets/option_menu/setting_screen/setting_off.png",
+                "type": "image",
+                "key": "setting_off"
+            }
+        ]
+    },
+    "meta": {
+        "app": "Phaser Editor 2D - Asset Pack Editor",
+        "contentType": "phasereditor2d.pack.core.AssetContentType",
+        "url": "https://phasereditor2d.com",
+        "version": 2,
+        "showAllFilesInBlocks": false,
+        "visible": true
+    }
+}
