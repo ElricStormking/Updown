@@ -160,6 +160,7 @@ export class HiLoScene extends Phaser.Scene {
   private isLockedLayoutPending = false;
   private lockedLayoutDelayTimer?: Phaser.Time.TimerEvent;
   private readonly LOCKED_LAYOUT_DELAY_MS = 3500;
+  private readonly LOCKED_BET_SLOTS_OFFSET_Y = 100;
   private lockedLayoutTween?: Phaser.Tweens.Tween;
   private lockedLayoutScale = 1;
   private betSlotsContainer?: Phaser.GameObjects.Container;
@@ -1058,7 +1059,7 @@ export class HiLoScene extends Phaser.Scene {
     const viewHeight = this.scale.height;
     const viewWidth = this.scale.width;
     const centerX = viewWidth / 2;
-    const bottomTop = viewHeight * 0.45;
+    const bottomTop = viewHeight * 0.45 + this.LOCKED_BET_SLOTS_OFFSET_Y;
     const bottomHeight = viewHeight * 0.55;
 
     let minSlotY = Number.POSITIVE_INFINITY;

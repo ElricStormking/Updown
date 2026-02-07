@@ -270,7 +270,7 @@ html {
   backdrop-filter: none;
   z-index: 6;
   pointer-events: none;
-  transition: height 0.4s ease-out, top 0.4s ease-out, opacity 0.2s ease-out;
+  transition: height 0.4s ease-out, top 0.4s ease-out, opacity 0.2s ease-out, transform 0.4s ease-out;
 }
 
 #tradingview-chart-inner {
@@ -291,6 +291,8 @@ html {
 #game-container.locked-layout #tradingview-chart {
   height: 45%;
   top: var(--hud-chart-top, clamp(84px, 12%, 170px));
+  transform: translateX(-50%) scale(0.9);
+  transform-origin: center top;
   background: url('/main_screen_UI/Line_chart_box2.png') no-repeat center / 100% 100%;
   border: none;
 }
