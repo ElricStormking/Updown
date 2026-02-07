@@ -1333,6 +1333,12 @@ export class HiLoScene extends Phaser.Scene {
     container?.classList.toggle('result-layout', visible);
   }
 
+  private setPendingLayoutVisible(visible: boolean) {
+    if (typeof document === 'undefined') return;
+    const container = document.getElementById('game-container');
+    container?.classList.toggle('pending-layout', visible);
+  }
+
   private clearPendingRoundState() {
     if (this.pendingRoundStateTimer) {
       this.pendingRoundStateTimer.remove(false);
@@ -2147,6 +2153,7 @@ export class HiLoScene extends Phaser.Scene {
     this.clearPendingRoundState();
     this.round = state;
     this.roundText?.setText(`${state.id}`);
+    this.setPendingLayoutVisible(state.status === 'PENDING');
     const isNewRound = this.lastSeenRoundId !== state.id;
 
     if (this.chartRevealTimer && this.chartRevealExpectedStatus !== state.status) {

@@ -282,17 +282,23 @@ html {
 }
 
 /* Open betting phase: show framed chart art */
-#game-container:not(.locked-layout):not(.result-layout) #tradingview-chart {
+#game-container:not(.locked-layout):not(.result-layout):not(.pending-layout) #tradingview-chart {
   background: url('/main_screen_UI/Line_chart_box1.png') no-repeat center / 100% 100%;
   border: none;
 }
 
-/* Locked layout mode: expand chart when round is locked */
+/* Locked layout mode (post-bonus in RESULT_PENDING): use alternate frame art */
 #game-container.locked-layout #tradingview-chart {
   height: 45%;
   top: var(--hud-chart-top, clamp(84px, 12%, 170px));
-  background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: url('/main_screen_UI/Line_chart_box2.png') no-repeat center / 100% 100%;
+  border: none;
+}
+
+/* PENDING phase: keep alternate frame art even outside locked-layout class */
+#game-container.pending-layout #tradingview-chart {
+  background: url('/main_screen_UI/Line_chart_box2.png') no-repeat center / 100% 100%;
+  border: none;
 }
 
 /* Result display + round-start + locked intro: hide line chart */
