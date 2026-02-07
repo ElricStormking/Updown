@@ -115,7 +115,6 @@ export class HiLoScene extends Phaser.Scene {
   private bonusTweens = new Map<string, Phaser.Tweens.Tween>();
   private winnerTweens = new Map<string, Phaser.Tweens.Tween>();
   private winnerLightTweens = new Map<string, Phaser.Tweens.Tween>();
-  private bonusEmitters = new Map<string, Phaser.GameObjects.Particles.ParticleEmitter[]>();
   private winnerLightSprites = new Map<string, Phaser.GameObjects.Sprite>();
   private bonusLightTweens = new Map<string, Phaser.Tweens.Tween>();
   private bonusLightSprites = new Map<string, Phaser.GameObjects.Sprite>();
@@ -237,9 +236,9 @@ export class HiLoScene extends Phaser.Scene {
     );
 
     this.load.spritesheet(
-      'number_light_box_1',
-      '../UI_sprites/number_light_box/number_light_box.png',
-      { frameWidth: 298, frameHeight: 136 },
+      'number_light_box_2',
+      '../UI_sprites/number_light_box_2/number_light_box2.png',
+      { frameWidth: 270, frameHeight: 109 },
     );
   }
 
@@ -1659,16 +1658,6 @@ export class HiLoScene extends Phaser.Scene {
     this.bonusLightTweens.clear();
     this.bonusLightSprites.forEach((sprite) => sprite.destroy());
     this.bonusLightSprites.clear();
-    this.bonusEmitters.forEach((emitters) => {
-      emitters.forEach((emitter) => {
-        if (emitter.followOffset) {
-          this.tweens.killTweensOf(emitter.followOffset);
-        }
-        emitter.stop(true);
-        emitter.destroy();
-      });
-    });
-    this.bonusEmitters.clear();
     
     // When clearing highlights, respect locked layout mode
     const lockedScale = this.getLockedLayoutScale();
@@ -1684,8 +1673,7 @@ export class HiLoScene extends Phaser.Scene {
 
   private applyBonusHighlights() {
     this.clearBonusHighlights();
-    this.ensureBonusFireTexture();
-    if (this.textures.exists('number_light_box_1')) {
+    if (this.textures.exists('number_light_box_2')) {
       this.ensureNumberLightAnimation();
     }
     
@@ -1720,12 +1708,12 @@ export class HiLoScene extends Phaser.Scene {
       
       this.bonusTweens.set(key, tween);
 
-      if (this.textures.exists('number_light_box_1')) {
+      if (this.textures.exists('number_light_box_2')) {
         const light =
           this.bonusLightSprites.get(key) ??
-          this.add.sprite(image.x, image.y, 'number_light_box_1', 0);
-        const frameWidth = 298;
-        const frameHeight = 136;
+          this.add.sprite(image.x, image.y, 'number_light_box_2', 0);
+        const frameWidth = 270;
+        const frameHeight = 109;
         const scaleX = (image.displayWidth / frameWidth) * 1.08;
         const scaleY = (image.displayHeight / frameHeight) * 1.08;
         light.setPosition(image.x, image.y);
@@ -1750,104 +1738,7 @@ export class HiLoScene extends Phaser.Scene {
         });
         this.bonusLightTweens.set(key, lightTween);
       }
-
-      // Calculate emit zone based on base image size multiplied by effective scale
-      // Use texture dimensions multiplied by scale to get correct size
-      const baseWidth = image.width * scale;
-      const baseHeight = image.height * scale;
-      const emitWidth = baseWidth * lockedScale;
-      const emitHeight = baseHeight * lockedScale;
-      const stripHeight = Math.max(6, emitHeight * 0.22);
-      const stripY = emitHeight / 2 - stripHeight;
-      
-      const primary = this.add.particles(0, 0, 'bonusFire', {
-        follow: image,
-        lifespan: { min: 900, max: 1500 },
-        speed: { min: 10 * lockedScale, max: 45 * lockedScale },
-        angle: { min: 250, max: 290 },
-        scale: { start: 1.55 * lockedScale, end: 0.3 * lockedScale },
-        alpha: { start: 0.95, end: 0 },
-        tint: [0xfff1a8, 0xffd166, 0xff9f1a, 0xff6b1a, 0xff3b1f],
-        blendMode: Phaser.BlendModes.ADD,
-        frequency: 40,
-        quantity: 3,
-        gravityY: -18 * lockedScale,
-        emitZone: {
-          type: 'random',
-          source: new Phaser.Geom.Rectangle(
-            -emitWidth / 2,
-            stripY,
-            emitWidth,
-            stripHeight,
-          ),
-        },
-      });
-      const embers = this.add.particles(0, 0, 'bonusFire', {
-        follow: image,
-        lifespan: { min: 700, max: 1300 },
-        speed: { min: 25 * lockedScale, max: 85 * lockedScale },
-        angle: { min: 240, max: 300 },
-        scale: { start: 0.85 * lockedScale, end: 0.08 * lockedScale },
-        alpha: { start: 0.85, end: 0 },
-        tint: [0xfff1a8, 0xffc15c, 0xff7a18],
-        blendMode: Phaser.BlendModes.ADD,
-        frequency: 70,
-        quantity: 2,
-        rotate: { min: 0, max: 360 },
-        gravityY: -28 * lockedScale,
-        emitZone: {
-          type: 'random',
-          source: new Phaser.Geom.Rectangle(
-            -emitWidth / 2,
-            stripY,
-            emitWidth,
-            stripHeight,
-          ),
-        },
-      });
-      const runner = this.add.particles(0, 0, 'bonusFire', {
-        follow: image,
-        followOffset: { x: -emitWidth * 0.45, y: stripY + stripHeight / 2 },
-        lifespan: { min: 600, max: 1000 },
-        speed: { min: 8 * lockedScale, max: 28 * lockedScale },
-        angle: { min: 260, max: 290 },
-        scale: { start: 1.1 * lockedScale, end: 0.2 * lockedScale },
-        alpha: { start: 1, end: 0 },
-        tint: [0xfff1a8, 0xffc15c, 0xff7a18, 0xff4d1a],
-        blendMode: Phaser.BlendModes.ADD,
-        frequency: 45,
-        quantity: 1,
-        gravityY: -12 * lockedScale,
-      });
-      if (runner.followOffset) {
-        this.tweens.add({
-          targets: runner.followOffset,
-          x: emitWidth * 0.45,
-          duration: 1400,
-          yoyo: true,
-          repeat: -1,
-          ease: 'Sine.easeInOut',
-        });
-      }
-      primary.setDepth(20);
-      embers.setDepth(21);
-      runner.setDepth(22);
-      this.bonusEmitters.set(key, [primary, embers, runner]);
     });
-  }
-
-  private ensureBonusFireTexture() {
-    if (!this.textures.exists('bonusFire')) {
-      const flame = this.add.graphics();
-      flame.fillStyle(0xff7a18, 1);
-      flame.fillCircle(8, 8, 8);
-      flame.fillStyle(0xffc15c, 0.9);
-      flame.fillCircle(8, 8, 5);
-      flame.fillStyle(0xfff1a8, 0.85);
-      flame.fillCircle(8, 8, 3);
-      flame.generateTexture('bonusFire', 16, 16);
-      flame.destroy();
-    }
   }
 
   private syncOddsText() {
@@ -2463,9 +2354,9 @@ export class HiLoScene extends Phaser.Scene {
 
       const light =
         this.winnerLightSprites.get(key) ??
-        this.add.sprite(image.x, image.y, 'number_light_box_1', 0);
-      const frameWidth = 298;
-      const frameHeight = 136;
+        this.add.sprite(image.x, image.y, 'number_light_box_2', 0);
+      const frameWidth = 270;
+      const frameHeight = 109;
       const scaleX = (image.displayWidth / frameWidth) * 1.1;
       const scaleY = (image.displayHeight / frameHeight) * 1.1;
       light.setPosition(image.x, baseY);
@@ -2791,16 +2682,16 @@ export class HiLoScene extends Phaser.Scene {
   }
 
   private ensureNumberLightAnimation() {
-    if (this.anims.exists('number-light-box') || !this.textures.exists('number_light_box_1')) {
+    if (this.anims.exists('number-light-box') || !this.textures.exists('number_light_box_2')) {
       return;
     }
     this.anims.create({
       key: 'number-light-box',
-      frames: this.anims.generateFrameNumbers('number_light_box_1', {
+      frames: this.anims.generateFrameNumbers('number_light_box_2', {
         start: 0,
-        end: 18,
+        end: 21,
       }),
-      frameRate: 30,
+      frameRate: 18,
       repeat: -1,
     });
   }

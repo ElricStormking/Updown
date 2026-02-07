@@ -844,10 +844,141 @@ html {
   color: rgba(255, 255, 255, 0.95);
 }
 
+/* Settings modal skin (setting_screen assets) */
+.settings-modal-backdrop {
+  background: rgba(0, 0, 0, 0.74);
+}
+
+.settings-modal {
+  width: min(904px, calc(100vw - 2rem), calc((100vh - 2rem) * 1.171));
+  aspect-ratio: 904 / 772;
+  max-height: none;
+  border-radius: 28px;
+  border: none;
+  overflow: hidden;
+  position: relative;
+  background: url('/setting_screen/setting_bg.png') no-repeat center / 100% 100%;
+  box-shadow: 0 24px 68px rgba(0, 0, 0, 0.62);
+}
+
+.settings-modal-header {
+  position: absolute;
+  top: 72px;
+  left: 34px;
+  right: 24px;
+  height: 56px;
+  padding: 0;
+  border-bottom: none;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.settings-modal-title {
+  color: #f3f7ff;
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+}
+
+.settings-modal-close {
+  width: 48px;
+  height: 48px;
+  border: none;
+  border-radius: 10px;
+  background: url('/setting_screen/setting_off.png') no-repeat center / 100% 100%;
+  color: transparent;
+  text-indent: -9999px;
+  overflow: hidden;
+  pointer-events: auto;
+  transition: transform 0.12s ease, filter 0.12s ease;
+}
+
+.settings-modal-close:hover {
+  transform: scale(1.03);
+  filter: brightness(1.08);
+}
+
+.settings-modal-close:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.8);
+  outline-offset: 2px;
+}
+
+.settings-modal-body {
+  position: absolute;
+  top: 170px;
+  left: 52px;
+  right: 52px;
+  bottom: 34px;
+  padding: 0;
+  gap: 24px;
+  overflow: hidden;
+}
+
+.settings-row {
+  min-height: 105px;
+  padding: 0 36px;
+  border: none;
+  border-radius: 16px;
+  background: url('/setting_screen/setting_box.png') no-repeat center / 100% 100%;
+  box-shadow: none;
+}
+
+.settings-label {
+  color: #f3f7ff;
+  font-size: 1.1rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.55);
+}
+
+.settings-toggle {
+  width: 52px;
+  height: 52px;
+  appearance: none;
+  -webkit-appearance: none;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  background: url('/setting_screen/check_box.png') no-repeat center / 100% 100%;
+}
+
+.settings-toggle:checked {
+  background-image: url('/setting_screen/check_box2.png');
+}
+
+.settings-select {
+  min-width: 230px;
+  height: 54px;
+  padding: 0 36px 0 16px;
+  border: none;
+  border-radius: 12px;
+  color: #f3f7ff;
+  font-size: 1rem;
+  font-weight: 700;
+  background-image:
+    url('/setting_screen/setting_language.png'),
+    linear-gradient(45deg, transparent 50%, rgba(241, 246, 255, 0.9) 50%),
+    linear-gradient(135deg, rgba(241, 246, 255, 0.9) 50%, transparent 50%);
+  background-repeat: no-repeat;
+  background-size: 100% 100%, 8px 8px, 8px 8px;
+  background-position: center center, calc(100% - 18px) calc(50% - 2px), calc(100% - 13px) calc(50% - 2px);
+  appearance: none;
+  -webkit-appearance: none;
+  color-scheme: dark;
+}
+
+.settings-select:focus-visible {
+  outline: 2px solid rgba(0, 255, 178, 0.55);
+  outline-offset: 2px;
+}
+
 .chart-modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.68);
+  background: rgba(0, 0, 0, 0.74);
   z-index: 6700;
   display: none;
   align-items: center;
@@ -860,46 +991,75 @@ html {
 }
 
 .chart-modal {
-  width: min(980px, 100%);
-  max-height: min(900px, 92vh);
+  width: min(1024px, calc(100vw - 2rem), calc((100vh - 2rem) * 1.3913));
+  aspect-ratio: 1024 / 736;
   display: flex;
   flex-direction: column;
-  border-radius: 18px;
+  border-radius: 28px;
   overflow: hidden;
-  background: rgba(9, 16, 24, 0.98);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55);
+  background: url('/chart_screen/chart_box.png') no-repeat center / 100% 100%;
+  border: none;
+  box-shadow: 0 24px 68px rgba(0, 0, 0, 0.62);
+  position: relative;
 }
 
 .chart-modal-header {
+  position: absolute;
+  top: 14px;
+  left: 22px;
+  right: 22px;
+  height: 54px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.75rem 1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  z-index: 2;
+  pointer-events: none;
 }
 
 .chart-modal-title {
+  color: #f3f7ff;
+  font-size: 2rem;
   font-weight: 800;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
 }
 
 .chart-modal-close {
   cursor: pointer;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.92);
-  width: 36px;
-  height: 36px;
-  border-radius: 999px;
-  display: grid;
-  place-items: center;
+  border: none;
+  background: url('/chart_screen/setting_off.png') no-repeat center / 100% 100%;
+  color: transparent;
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+  pointer-events: auto;
+  text-indent: -9999px;
+  overflow: hidden;
+  transition: transform 0.12s ease, filter 0.12s ease;
+}
+
+.chart-modal-close:hover {
+  transform: scale(1.03);
+  filter: brightness(1.08);
+}
+
+.chart-modal-close:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.8);
+  outline-offset: 2px;
 }
 
 .chart-modal-body {
+  position: absolute;
+  top: 76px;
+  left: 20px;
+  right: 20px;
+  bottom: 20px;
   padding: 0;
   overflow: hidden;
-  flex: 1;
+  border-radius: 0 0 18px 18px;
+  background: rgba(3, 8, 14, 0.34);
+  box-shadow: inset 0 0 0 1px rgba(94, 140, 172, 0.24);
 }
 
 .chart-tv {
@@ -1957,10 +2117,64 @@ li {
   .menu-modal,
   .settings-modal,
   .stats-modal,
-  .chart-modal,
   .betting-history-modal {
     width: 100%;
     max-height: 92vh;
+  }
+
+  .chart-modal {
+    width: min(100%, calc((92vh - 1rem) * 1.3913));
+    max-height: 92vh;
+  }
+
+  .settings-modal {
+    width: min(100%, calc((92vh - 1rem) * 1.171));
+    max-height: 92vh;
+  }
+
+  .settings-modal-header {
+    top: clamp(34px, 8%, 72px);
+    left: clamp(18px, 4.2vw, 34px);
+    right: clamp(16px, 3.5vw, 24px);
+    height: clamp(40px, 7.5%, 56px);
+  }
+
+  .settings-modal-title {
+    font-size: clamp(1.15rem, 5.4vw, 2rem);
+  }
+
+  .settings-modal-close {
+    width: clamp(34px, 8vw, 48px);
+    height: clamp(34px, 8vw, 48px);
+  }
+
+  .settings-modal-body {
+    top: clamp(95px, 22%, 170px);
+    left: clamp(18px, 5.5%, 52px);
+    right: clamp(18px, 5.5%, 52px);
+    bottom: clamp(16px, 4.5%, 34px);
+    gap: clamp(10px, 2.4vh, 24px);
+  }
+
+  .settings-row {
+    min-height: clamp(74px, 15%, 105px);
+    padding: 0 clamp(16px, 3.8vw, 36px);
+  }
+
+  .settings-label {
+    font-size: clamp(0.98rem, 4.1vw, 1.1rem);
+  }
+
+  .settings-toggle {
+    width: clamp(36px, 9vw, 52px);
+    height: clamp(36px, 9vw, 52px);
+  }
+
+  .settings-select {
+    min-width: clamp(130px, 37vw, 230px);
+    height: clamp(38px, 8.2vw, 54px);
+    font-size: clamp(0.85rem, 3.6vw, 1rem);
+    padding: 0 clamp(26px, 6vw, 36px) 0 clamp(10px, 2.5vw, 16px);
   }
 
   /* Fixed bottom dock: Token Bar + menu button */
