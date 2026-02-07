@@ -129,6 +129,7 @@ export class HiLoScene extends Phaser.Scene {
   private coinSprites: Phaser.GameObjects.Sprite[] = [];
   private pendingWinPayout = 0;
   private payoutFloatText?: Phaser.GameObjects.Text;
+  private winCoinSoundPlayed = false;
   private layoutRestoreEndsAt = 0;
 
   private clearTokensButton?: Phaser.GameObjects.Image;
@@ -187,6 +188,8 @@ export class HiLoScene extends Phaser.Scene {
   preload() {
     this.cameras.main.setBackgroundColor('#050505');
     this.load.audio('bgm', 'audio/BGM_Hi_Lo.mp3');
+    this.load.audio('bet_chip', 'audio/bet_chip.mp3');
+    this.load.audio('wining_gold_coin', 'audio/wining_gold_coin.mp3');
     this.load.setPath('main_screen_UI');
     const loadImage = (key: string, file = `${key}.png`) => {
       this.load.image(key, encodeURI(file));
@@ -1544,9 +1547,30 @@ export class HiLoScene extends Phaser.Scene {
 
   private handlePlaceDigitBet(digitType: DigitBetType, selection?: string) {
     if (!this.handlers?.onPlaceDigitBet) return;
+    this.playBetChipSound();
     this.runHandler(() =>
       this.handlers?.onPlaceDigitBet({ digitType, selection }),
     );
+  }
+
+  private playBetChipSound() {
+    if (!this.sound || !this.cache.audio.exists('bet_chip')) {
+      return;
+    }
+    if (this.sound.locked) {
+      return;
+    }
+    this.sound.play('bet_chip', { volume: 0.7 });
+  }
+
+  private playWinningCoinSound() {
+    if (!this.sound || !this.cache.audio.exists('wining_gold_coin')) {
+      return;
+    }
+    if (this.sound.locked) {
+      return;
+    }
+    this.sound.play('wining_gold_coin', { volume: 0.85 });
   }
 
   private runHandler(action: () => Promise<void> | void) {
@@ -2791,6 +2815,14 @@ export class HiLoScene extends Phaser.Scene {
       });
     }
 
+    // Winning coin sound (play once per round)
+    if (this.pendingWinPayout > 0 && !this.winCoinSoundPlayed) {
+      this.winCoinSoundPlayed = true;
+      this.time.delayedCall(arrivalDelay, () => {
+        this.playWinningCoinSound();
+      });
+    }
+
     // Floating "+X.XX" payout text (show only once across all slots)
     if (this.pendingWinPayout > 0 && !this.payoutFloatText) {
       const payoutStr = `+${this.pendingWinPayout.toFixed(2)}`;
@@ -3226,6 +3258,7 @@ export class HiLoScene extends Phaser.Scene {
     this.resultRoundId = undefined;
     this.resultOverlayEndsAt = 0;
     this.pendingWinPayout = 0;
+    this.winCoinSoundPlayed = false;
     if (this.payoutFloatText) {
       this.payoutFloatText.destroy();
       this.payoutFloatText = undefined;
