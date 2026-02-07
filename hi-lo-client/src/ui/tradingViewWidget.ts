@@ -29,6 +29,7 @@ let roundEndSec: number | null = null;
 let lockedBadgeEl: HTMLDivElement | null = null;
 let sonarDotEl: HTMLDivElement | null = null;
 let priceUpdatesFrozen = false;
+let currentSonarUrgent = false;
 
 function getContainer() {
   const el = document.getElementById(CONTAINER_ID);
@@ -82,7 +83,7 @@ function ensureChart() {
   sonarDotEl.style.zIndex = '15';
   sonarDotEl.style.pointerEvents = 'none';
   sonarDotEl.style.transform = 'translate(-50%, -50%)';
-  sonarDotEl.style.animation = 'sonarPulse 1.5s ease-out infinite';
+  sonarDotEl.style.animation = 'sonarPulse 1s ease-out infinite';
   container.appendChild(sonarDotEl);
 
   // Add CSS animation for the sonar pulse effect
@@ -107,6 +108,23 @@ function ensureChart() {
           box-shadow: 0 0 8px 2px #00d2ff, 0 0 16px 4px rgba(0,210,255,0.5);
         }
       }
+      @keyframes sonarPulseUrgent {
+        0% {
+          transform: translate(-50%, -50%) scale(1);
+          opacity: 1;
+          box-shadow: 0 0 8px 2px #ff4757, 0 0 16px 4px rgba(255,71,87,0.5);
+        }
+        50% {
+          transform: translate(-50%, -50%) scale(2);
+          opacity: 0.6;
+          box-shadow: 0 0 24px 10px #ff4757, 0 0 48px 20px rgba(255,71,87,0.35);
+        }
+        100% {
+          transform: translate(-50%, -50%) scale(1);
+          opacity: 1;
+          box-shadow: 0 0 8px 2px #ff4757, 0 0 16px 4px rgba(255,71,87,0.5);
+        }
+      }
       @keyframes sonarRing {
         0% {
           transform: translate(-50%, -50%) scale(1);
@@ -117,6 +135,20 @@ function ensureChart() {
           transform: translate(-50%, -50%) scale(3);
           opacity: 0;
           border-width: 1px;
+        }
+      }
+      @keyframes sonarRingUrgent {
+        0% {
+          transform: translate(-50%, -50%) scale(1);
+          opacity: 0.9;
+          border-width: 3px;
+          border-color: #ff4757;
+        }
+        100% {
+          transform: translate(-50%, -50%) scale(3.5);
+          opacity: 0;
+          border-width: 1px;
+          border-color: #ff4757;
         }
       }
     `;
@@ -134,7 +166,7 @@ function ensureChart() {
   sonarRingEl.style.zIndex = '14';
   sonarRingEl.style.pointerEvents = 'none';
   sonarRingEl.style.transform = 'translate(-50%, -50%)';
-  sonarRingEl.style.animation = 'sonarRing 1.5s ease-out infinite';
+  sonarRingEl.style.animation = 'sonarRing 1s ease-out infinite';
   sonarRingEl.id = 'sonar-ring';
   container.appendChild(sonarRingEl);
 
@@ -393,4 +425,38 @@ function applyPriceUpdate(update: PriceUpdate, force = false) {
 // Feed this from the server price stream. We sample at 2Hz (every 0.5s).
 export function pushPriceUpdate(update: PriceUpdate) {
   applyPriceUpdate(update);
+}
+
+/**
+ * Switch the sonar endpoint dot between normal blue and urgent red.
+ * Call with `true` when countdown ≤ 5 s during BETTING / PENDING.
+ */
+export function setSonarUrgent(urgent: boolean) {
+  if (urgent === currentSonarUrgent) return;
+  currentSonarUrgent = urgent;
+
+  if (sonarDotEl) {
+    if (urgent) {
+      sonarDotEl.style.background = '#ff4757';
+      sonarDotEl.style.boxShadow =
+        '0 0 8px 2px #ff4757, 0 0 16px 4px rgba(255,71,87,0.5)';
+      sonarDotEl.style.animation = 'sonarPulseUrgent 1s ease-out infinite';
+    } else {
+      sonarDotEl.style.background = '#00d2ff';
+      sonarDotEl.style.boxShadow =
+        '0 0 8px 2px #00d2ff, 0 0 16px 4px rgba(0,210,255,0.5)';
+      sonarDotEl.style.animation = 'sonarPulse 1s ease-out infinite';
+    }
+  }
+
+  const ringEl = document.getElementById('sonar-ring');
+  if (ringEl) {
+    if (urgent) {
+      ringEl.style.borderColor = '#ff4757';
+      ringEl.style.animation = 'sonarRingUrgent 1s ease-out infinite';
+    } else {
+      ringEl.style.borderColor = '#00d2ff';
+      ringEl.style.animation = 'sonarRing 1s ease-out infinite';
+    }
+  }
 }
