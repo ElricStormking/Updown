@@ -16,6 +16,58 @@ import {
 } from './ui/tradingViewWidget';
 import type { LanguageCode } from './i18n';
 
+type LaunchTokenPayload = {
+  sub?: string;
+  account?: string;
+  merchantId?: string;
+  type?: 'user' | 'admin' | string;
+};
+
+const MERCHANT_ID_STORAGE_KEY = 'merchantId';
+
+const readMerchantIdFromUrl = () => {
+  if (typeof window === 'undefined') return '';
+  return (new URLSearchParams(window.location.search).get('merchantId') ?? '').trim();
+};
+
+const readMerchantIdFromStorage = () => {
+  if (typeof window === 'undefined') return '';
+  return (window.localStorage.getItem(MERCHANT_ID_STORAGE_KEY) ?? '').trim();
+};
+
+const persistMerchantId = (merchantId: string) => {
+  if (typeof window === 'undefined') return;
+  const next = merchantId.trim();
+  if (!next) return;
+  window.localStorage.setItem(MERCHANT_ID_STORAGE_KEY, next);
+};
+
+const getMerchantId = () =>
+  state.merchantId?.trim() ||
+  readMerchantIdFromUrl() ||
+  readMerchantIdFromStorage() ||
+  '';
+
+const decodeJwtPayload = (token: string): LaunchTokenPayload | null => {
+  const parts = token.split('.');
+  if (parts.length < 2) return null;
+  try {
+    const normalized = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
+    return JSON.parse(atob(padded)) as LaunchTokenPayload;
+  } catch {
+    return null;
+  }
+};
+
+const clearLaunchTokenFromUrl = () => {
+  if (typeof window === 'undefined') return;
+  const url = new URL(window.location.href);
+  if (!url.searchParams.has('accessToken')) return;
+  url.searchParams.delete('accessToken');
+  window.history.replaceState({}, document.title, url.toString());
+};
+
 const scene = new HiLoScene();
 
 initControls({
@@ -173,6 +225,7 @@ const socket = createGameSocket(
             ...current,
             status: 'RESULT_PENDING',
             lockedPrice: payload.lockedPrice ?? current.lockedPrice ?? null,
+            digitBonus: payload.digitBonus ?? current.digitBonus,
           },
         });
       }
@@ -279,6 +332,8 @@ const socket = createGameSocket(
   () => state.token,
 );
 
+void bootstrapLaunchAuthFromUrl();
+
 const buildHiLoBetKey = (side: BetSide) => `HILO|${side}`;
 const buildDigitBetKey = (digitType: DigitBetType, selection?: string) =>
   `DIGIT|${digitType}|${selection ?? ''}`;
@@ -304,10 +359,79 @@ const getTotalPlacedStake = () =>
     0,
   );
 
-async function handleLogin(credentials: { account: string; password: string }) {
+async function bootstrapLaunchAuthFromUrl() {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  const launchToken = (new URLSearchParams(window.location.search).get('accessToken') ?? '').trim();
+  if (!launchToken) {
+    return;
+  }
+
+  const decoded = decodeJwtPayload(launchToken);
+  const merchantId =
+    (new URLSearchParams(window.location.search).get('merchantId') ?? '').trim() ||
+    (decoded?.merchantId ?? '').trim() ||
+    getMerchantId();
+
+  if (!merchantId) {
+    setStatus('Launch token missing merchant ID. Please login manually.', true);
+    return;
+  }
+
+  try {
+    const [{ data: config }, { data: wallet }] = await Promise.all([
+      api.fetchGameConfig(merchantId),
+      api.fetchWallet(launchToken),
+    ]);
+    const tokenValues = normalizeTokenValues(config?.tokenValues);
+    const selectedTokenValue = resolveSelectedTokenValue(
+      state.selectedTokenValue,
+      tokenValues,
+    );
+
+    updateState({
+      token: launchToken,
+      user: {
+        id: typeof decoded?.sub === 'string' ? decoded.sub : '',
+        account:
+          typeof decoded?.account === 'string' && decoded.account.trim()
+            ? decoded.account
+            : 'player',
+      },
+      merchantId,
+      config,
+      walletBalance: Number(wallet.balance),
+      selectedTokenValue,
+      tokenPlacements: {},
+    });
+    persistMerchantId(merchantId);
+    const baseResultDuration = config.resultDisplayDurationMs ?? 8000;
+    scene.setResultDisplayDuration(baseResultDuration + 3000);
+
+    authenticateGameSocket(socket, launchToken);
+    void refreshPlayerData();
+    clearLaunchTokenFromUrl();
+    setStatus('Authenticated. Waiting for round updates.');
+  } catch {
+    updateState({
+      token: undefined,
+      user: undefined,
+      tokenPlacements: {},
+    });
+    setStatus('Auto-launch authentication failed. Please login manually.', true);
+  }
+}
+
+async function handleLogin(credentials: { account: string; password: string; merchantId: string }) {
+  const merchantId = credentials.merchantId.trim() || getMerchantId() || '';
+  if (!merchantId) {
+    throw new Error('Merchant ID is required.');
+  }
   const [{ data: auth }, { data: config }] = await Promise.all([
     api.login(credentials.account, credentials.password),
-    api.fetchGameConfig(),
+    api.fetchGameConfig(merchantId),
   ]);
 
   const tokenValues = normalizeTokenValues(config?.tokenValues);
@@ -319,10 +443,12 @@ async function handleLogin(credentials: { account: string; password: string }) {
   updateState({
     token: auth.accessToken,
     user: auth.user,
+    merchantId,
     config,
     selectedTokenValue,
     tokenPlacements: {},
   });
+  persistMerchantId(merchantId);
   const baseResultDuration = config.resultDisplayDurationMs ?? 8000;
   scene.setResultDisplayDuration(baseResultDuration + 3000);
 
@@ -332,7 +458,7 @@ async function handleLogin(credentials: { account: string; password: string }) {
 
 async function refreshConfig() {
   try {
-    const { data: config } = await api.fetchGameConfig();
+    const { data: config } = await api.fetchGameConfig(state.merchantId ?? getMerchantId());
     const tokenValues = normalizeTokenValues(config?.tokenValues);
     const selectedTokenValue = resolveSelectedTokenValue(
       state.selectedTokenValue,

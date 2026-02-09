@@ -1676,7 +1676,7 @@ export class HiLoScene extends Phaser.Scene {
 
     for (let sum = 3; sum <= 27; sum += 1) {
       const odds =
-        payouts?.sum?.[sum] ??
+        (payouts?.sum as Record<string, number> | undefined)?.[String(sum)] ??
         DEFAULT_SUM_PAYOUTS[sum] ??
         0;
       this.baseOddsByKey.set(this.buildDigitKey('SUM', String(sum)), odds);
@@ -2241,6 +2241,7 @@ export class HiLoScene extends Phaser.Scene {
       ...this.round,
       status: 'RESULT_PENDING',
       lockedPrice: payload.lockedPrice,
+      digitBonus: payload.digitBonus ?? this.round.digitBonus,
     };
     this.setRoundState(this.round);
   }
@@ -2984,6 +2985,8 @@ export class HiLoScene extends Phaser.Scene {
       () => {
         this.lockedBannerTimers = this.lockedBannerTimers.filter((item) => item !== timer);
         this.showLockedBanner('Bonus Slots', '#00d2ff', bonusDuration);
+        // Re-apply as the bonus banner appears so pending-phase highlights are immediate.
+        this.updateBonusOddsFromRound(this.round);
       },
       undefined,
       this,

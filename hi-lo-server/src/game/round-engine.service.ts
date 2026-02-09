@@ -27,6 +27,7 @@ import {
   buildDigitBonusKey,
   getAllDigitBetSlots,
   pickBonusRatioWithChance,
+  pickWeightedBonusRatio,
   type DigitBonusSlot,
 } from './digit-bonus.utils';
 import { GameConfigService } from '../config/game-config.service';
@@ -106,31 +107,6 @@ export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
     const oddsUp = config.payoutMultiplierUp;
     const oddsDown = config.payoutMultiplierDown;
 
-    const bonusEnabled = Boolean(config.bonusModeEnabled);
-    const bonusFactor = Number(this.digitBonusConfig?.payoutFactor ?? 1);
-    const bonusSlots: DigitBonusSlot[] = [];
-    if (bonusEnabled) {
-      const bonusChanceTotal = Number(
-        config.bonusSlotChanceTotal ?? DEFAULT_BONUS_SLOT_CHANCE_TOTAL,
-      );
-      const allSlots = getAllDigitBetSlots();
-      allSlots.forEach((slot) => {
-        const key = buildDigitBonusKey(slot);
-        const entry = config.digitBonusRatios?.[key];
-        const bonusRatio = entry
-          ? pickBonusRatioWithChance(
-              entry.ratios,
-              entry.weights,
-              Math.random,
-              bonusChanceTotal,
-            )
-          : null;
-        if (bonusRatio !== null && bonusRatio !== undefined) {
-          bonusSlots.push({ ...slot, bonusRatio });
-        }
-      });
-    }
-
     const round = await this.prisma.round.create({
       data: {
         startTime: start,
@@ -139,8 +115,9 @@ export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
         oddsUp: new Prisma.Decimal(oddsUp),
         oddsDown: new Prisma.Decimal(oddsDown),
         gameConfigSnapshot: config as unknown as Prisma.InputJsonValue,
-        digitBonusSlots: bonusSlots as unknown as Prisma.InputJsonValue,
-        digitBonusFactor: bonusEnabled ? new Prisma.Decimal(bonusFactor) : null,
+        // Keep bonus slots hidden during BETTING; generate and reveal at lock.
+        digitBonusSlots: [] as unknown as Prisma.InputJsonValue,
+        digitBonusFactor: null,
         status: RoundStatus.BETTING,
       },
     });
@@ -163,13 +140,14 @@ export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
       CacheKeys.activeRoundState,
     );
     if (cachedState) {
-      this.currentRound = cachedState;
+      const normalizedCachedState = this.normalizeRoundStateForBroadcast(cachedState);
+      this.currentRound = normalizedCachedState;
       await this.loadRoundConfigSnapshot(cachedState.id);
-      if (this.resumeTimersAfterRestore(cachedState)) {
+      if (this.resumeTimersAfterRestore(normalizedCachedState)) {
         await this.cacheRoundState();
         this.eventsSubject.next({
           type: 'round:start',
-          payload: cachedState,
+          payload: normalizedCachedState,
         });
         return true;
       }
@@ -227,6 +205,9 @@ export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
     }
 
     const lockedPrice = await this.fetchLatestPrice();
+    const lockedPhaseBonus = this.buildLockedPhaseBonus(this.currentConfig);
+    const bonusSlots = lockedPhaseBonus?.slots ?? [];
+    const bonusFactor = lockedPhaseBonus?.factor ?? null;
 
     try {
       await this.prisma.round.update({
@@ -235,6 +216,9 @@ export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
           status: RoundStatus.RESULT_PENDING,
           lockedPrice:
             lockedPrice !== null ? new Prisma.Decimal(lockedPrice) : null,
+          digitBonusSlots: bonusSlots as unknown as Prisma.InputJsonValue,
+          digitBonusFactor:
+            bonusFactor !== null ? new Prisma.Decimal(bonusFactor) : null,
         },
       });
     } catch (error) {
@@ -255,6 +239,7 @@ export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
       ...this.currentRound,
       status: RoundStatus.RESULT_PENDING,
       lockedPrice,
+      digitBonus: lockedPhaseBonus,
     };
     await this.cacheRoundState();
     this.eventsSubject.next({
@@ -262,6 +247,7 @@ export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
       payload: {
         roundId: this.currentRound.id,
         lockedPrice,
+        digitBonus: lockedPhaseBonus,
       },
     });
 
@@ -393,6 +379,7 @@ export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
       round.digitBonusFactor !== null && round.digitBonusFactor !== undefined
         ? Number(round.digitBonusFactor)
         : null;
+    const shouldExposeBonus = round.status !== RoundStatus.BETTING;
     const configVersion =
       this.gameConfigService.normalizeSnapshot(round.gameConfigSnapshot)
         .configVersion ?? null;
@@ -406,12 +393,72 @@ export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
       oddsDown: Number(round.oddsDown),
       configVersion,
       digitBonus:
-        slots.length > 0 || (factor !== null && factor !== undefined)
+        shouldExposeBonus &&
+        (slots.length > 0 || (factor !== null && factor !== undefined))
           ? { factor: factor ?? 1, slots }
           : undefined,
       lockedPrice: round.lockedPrice ? Number(round.lockedPrice) : null,
       finalPrice: round.finalPrice ? Number(round.finalPrice) : null,
       winningSide: round.winningSide,
+    };
+  }
+
+  private buildLockedPhaseBonus(
+    config?: GameConfigSnapshot,
+  ): RoundState['digitBonus'] | undefined {
+    if (!config || !config.bonusModeEnabled) {
+      return undefined;
+    }
+
+    const bonusChanceTotal = Number(
+      config.bonusSlotChanceTotal ?? DEFAULT_BONUS_SLOT_CHANCE_TOTAL,
+    );
+    const slots: DigitBonusSlot[] = [];
+    const allSlots = getAllDigitBetSlots();
+    allSlots.forEach((slot) => {
+      const key = buildDigitBonusKey(slot);
+      const entry = config.digitBonusRatios?.[key];
+      const bonusRatio = entry
+        ? pickBonusRatioWithChance(
+            entry.ratios,
+            entry.weights,
+            Math.random,
+            bonusChanceTotal,
+          )
+        : null;
+      if (bonusRatio !== null && bonusRatio !== undefined) {
+        slots.push({ ...slot, bonusRatio });
+      }
+    });
+
+    // Ensure pending phase always has at least one visible bonus slot when bonus mode is enabled.
+    if (slots.length === 0) {
+      const fallbackSlots: DigitBonusSlot[] = [];
+      allSlots.forEach((slot) => {
+        const key = buildDigitBonusKey(slot);
+        const entry = config.digitBonusRatios?.[key];
+        if (!entry) return;
+        const bonusRatio = pickWeightedBonusRatio(
+          entry.ratios,
+          entry.weights,
+          Math.random,
+        );
+        if (bonusRatio !== null && bonusRatio !== undefined) {
+          fallbackSlots.push({ ...slot, bonusRatio });
+        }
+      });
+      if (fallbackSlots.length > 0) {
+        const picked =
+          fallbackSlots[Math.floor(Math.random() * fallbackSlots.length)];
+        if (picked) {
+          slots.push(picked);
+        }
+      }
+    }
+
+    return {
+      factor: Number(this.digitBonusConfig?.payoutFactor ?? 1),
+      slots,
     };
   }
 
@@ -456,6 +503,19 @@ export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
     return slots;
   }
 
+  private normalizeRoundStateForBroadcast(state: RoundState): RoundState {
+    if (state.status !== RoundStatus.BETTING) {
+      return state;
+    }
+    if (!state.digitBonus) {
+      return state;
+    }
+    return {
+      ...state,
+      digitBonus: undefined,
+    };
+  }
+
   private resumeTimersAfterRestore(state: RoundState) {
     if (state.status === RoundStatus.BETTING) {
       const delay = Math.max(
@@ -474,6 +534,7 @@ export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
         payload: {
           roundId: state.id,
           lockedPrice: state.lockedPrice ?? null,
+          digitBonus: state.digitBonus,
         },
       });
       const delay = Math.max(new Date(state.endTime).getTime() - Date.now(), 0);

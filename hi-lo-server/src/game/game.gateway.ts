@@ -28,7 +28,7 @@ import { BetsService } from '../bets/bets.service';
 import { WalletService } from '../wallet/wallet.service';
 import { ClientReadyDto } from './dto/client-ready.dto';
 import { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
-import { RoundStatus } from '@prisma/client';
+import { RoundStatus, UserStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { RoundEvent } from './interfaces/round-event.interface';
 
@@ -87,6 +87,7 @@ export class GameGateway
         client.emit('round:locked', {
           roundId: currentRound.id,
           lockedPrice: currentRound.lockedPrice ?? null,
+          digitBonus: currentRound.digitBonus,
         });
       }
     }
@@ -116,9 +117,17 @@ export class GameGateway
   ) {
     try {
       const payload = await this.verifyToken(body.token);
-      client.data.userId = payload.sub;
-      await client.join(this.getUserRoom(payload.sub));
-      const wallet = await this.walletService.getOrCreateWallet(payload.sub);
+      const user = await this.prisma.user.findUnique({
+        where: { id: payload.sub },
+        select: { id: true, status: true },
+      });
+      if (!user || user.status === UserStatus.DISABLED) {
+        throw new UnauthorizedException('Account is disabled');
+      }
+
+      client.data.userId = user.id;
+      await client.join(this.getUserRoom(user.id));
+      const wallet = await this.walletService.getOrCreateWallet(user.id);
 
       client.emit('balance:update', {
         balance: Number(wallet.balance),
@@ -126,7 +135,7 @@ export class GameGateway
 
       return {
         status: 'ok',
-        userId: payload.sub,
+        userId: user.id,
         account: payload.account,
       };
     } catch (error) {

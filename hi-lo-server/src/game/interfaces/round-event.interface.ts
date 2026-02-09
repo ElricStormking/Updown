@@ -9,7 +9,11 @@ export type RoundEvent =
     }
   | {
       type: 'round:locked';
-      payload: { roundId: number; lockedPrice: number | null };
+      payload: {
+        roundId: number;
+        lockedPrice: number | null;
+        digitBonus?: RoundState['digitBonus'];
+      };
     }
   | {
       type: 'round:result';

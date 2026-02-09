@@ -41,6 +41,7 @@ export interface RoundStatePayload {
 export interface RoundLockPayload {
   roundId: number;
   lockedPrice: number | null;
+  digitBonus?: RoundStatePayload['digitBonus'];
 }
 
 export interface RoundResultPayload {
