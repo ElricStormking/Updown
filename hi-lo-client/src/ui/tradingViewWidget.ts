@@ -226,7 +226,11 @@ function ensureChart() {
 
 function getRightEdgeSec(nowSec: number) {
   if (lockedPrice !== null && roundEndSec !== null) {
-    return Math.max(nowSec, roundEndSec);
+    // Keep a future-anchored right edge during LOCKED, but never so far
+    // ahead that the whole visible window contains no plotted data.
+    const maxSafeRightEdge = nowSec + WINDOW_SECONDS;
+    const pinnedRightEdge = Math.min(roundEndSec, maxSafeRightEdge);
+    return Math.max(nowSec, pinnedRightEdge);
   }
   return nowSec;
 }
@@ -238,15 +242,23 @@ function prune(nowSec: number) {
 }
 
 function renderRange(nowSec: number) {
-  if (!chart) return;
+  if (!chart || !Number.isFinite(nowSec)) return;
   const rightEdge = getRightEdgeSec(nowSec);
+  if (!Number.isFinite(rightEdge)) return;
   const from = (rightEdge - WINDOW_SECONDS) as UTCTimestamp;
   const to = rightEdge as UTCTimestamp;
-  chart.timeScale().setVisibleRange({ from, to });
+  if (!Number.isFinite(from) || !Number.isFinite(to) || from >= to) {
+    return;
+  }
+  try {
+    chart.timeScale().setVisibleRange({ from, to });
+  } catch {
+    // Ignore transient chart range errors; next tick will re-render.
+  }
 }
 
 function updatePriceScaleRange(latestPrice: number) {
-  if (!chart || points.length === 0) return;
+  if (!chart || points.length === 0 || !Number.isFinite(latestPrice)) return;
 
   const snapDown = (value: number) =>
     Math.floor(value / PRICE_LABEL_INTERVAL) * PRICE_LABEL_INTERVAL;
@@ -257,7 +269,10 @@ function updatePriceScaleRange(latestPrice: number) {
 
   // Keep the visible range aligned to PRICE_LABEL_INTERVAL boundaries.
   const last = snapNearest(latestPrice);
-  const values = points.map((p) => Math.round(p.value));
+  const values = points
+    .map((p) => Math.round(p.value))
+    .filter((value) => Number.isFinite(value));
+  if (values.length === 0) return;
   const min = Math.min(...values);
   const max = Math.max(...values);
 
@@ -344,7 +359,15 @@ export function setPriceFreeze(
 
 // Update the sonar dot position to match the last point on the chart
 function updateSonarPosition(time: number, price: number) {
-  if (!chart || !series || !sonarDotEl) return;
+  if (
+    !chart ||
+    !series ||
+    !sonarDotEl ||
+    !Number.isFinite(time) ||
+    !Number.isFinite(price)
+  ) {
+    return;
+  }
   
   const sonarRingEl = document.getElementById('sonar-ring');
   
@@ -382,10 +405,18 @@ function applyPriceUpdate(update: PriceUpdate, force = false) {
   ensureChart();
   if (!series) return;
 
+  const timestampMs = Number(update.timestamp);
+  const price = Number(update.price);
+  if (!Number.isFinite(timestampMs) || !Number.isFinite(price)) {
+    return;
+  }
+
   // Chart time is seconds; we encode half-second resolution as .0/.5 second values.
-  const halfTick = Math.floor(update.timestamp / 500);
+  const halfTick = Math.floor(timestampMs / 500);
   const t = halfTick / 2;
-  const price = update.price;
+  if (!Number.isFinite(t)) {
+    return;
+  }
 
   // First point
   if (lastPlottedTime === null) {
@@ -399,8 +430,8 @@ function applyPriceUpdate(update: PriceUpdate, force = false) {
     return;
   }
 
-  // Same half-second bucket: ignore (we want 2Hz updates)
-  if (t === lastPlottedTime) {
+  // Ignore stale/out-of-order updates and duplicates in the same bucket.
+  if (t <= lastPlottedTime) {
     return;
   }
 

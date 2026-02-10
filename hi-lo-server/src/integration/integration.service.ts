@@ -422,7 +422,6 @@ export class IntegrationService {
       where: {
         merchantId: merchant.merchantId,
         merchantAccount: account,
-        status: UserStatus.ENABLED,
       },
     });
 
@@ -430,6 +429,12 @@ export class IntegrationService {
       return IntegrationResponseDto.error(
         IntegrationErrorCodes.ACCOUNT_NOT_FOUND,
         IntegrationErrorMessages[IntegrationErrorCodes.ACCOUNT_NOT_FOUND],
+      );
+    }
+    if (user.status === UserStatus.DISABLED) {
+      return IntegrationResponseDto.error(
+        IntegrationErrorCodes.ACCOUNT_DISABLED,
+        IntegrationErrorMessages[IntegrationErrorCodes.ACCOUNT_DISABLED],
       );
     }
 

@@ -186,14 +186,9 @@ async function seedTestPlayerTopUp() {
 
 async function seedQaMerchantPlayers() {
   const merchantId = 'qamerchant1';
-  const accounts = [
-    'testplayer1',
-    'testplayer2',
-    'testplayer3',
-    'testplayer4',
-    'testplayer5',
-  ];
+  const accounts = Array.from({ length: 10 }, (_, index) => `testplayer${index + 1}`);
   const password = 'test1234';
+  const testBalance = new Prisma.Decimal(100000);
   const saltRounds = Number(process.env.PASSWORD_SALT_ROUNDS ?? 12);
   const passwordHash = await bcrypt.hash(password, saltRounds);
 
@@ -213,10 +208,13 @@ async function seedQaMerchantPlayers() {
         wallet: {
           upsert: {
             create: {
-              balance: new Prisma.Decimal(0),
+              balance: testBalance,
               currency: 'USDT',
             },
-            update: {},
+            update: {
+              balance: testBalance,
+              currency: 'USDT',
+            },
           },
         },
       },
@@ -228,7 +226,7 @@ async function seedQaMerchantPlayers() {
         status: 'ENABLED',
         wallet: {
           create: {
-            balance: new Prisma.Decimal(0),
+            balance: testBalance,
             currency: 'USDT',
           },
         },

@@ -497,7 +497,9 @@ async function handlePlaceDigitBet(selection: {
     throw new Error('Token value outside betting limits');
   }
   if (state.walletBalance < getTotalPlacedStake() + amount) {
-    throw new Error('Insufficient balance');
+    const message = 'Insufficient balance';
+    setStatus(message, true);
+    throw new Error(message);
   }
 
   try {
