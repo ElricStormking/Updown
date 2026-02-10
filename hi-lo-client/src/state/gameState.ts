@@ -26,6 +26,7 @@ export interface GameState {
     id: string;
     account: string;
   };
+  merchantId?: string;
   language: LanguageCode;
   walletBalance: number;
   selectedTokenValue: number;

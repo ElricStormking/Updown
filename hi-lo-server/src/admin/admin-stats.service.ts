@@ -44,7 +44,7 @@ const toNumber = (value: unknown) => {
 export class AdminStatsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getDailyRtp(start?: string, end?: string) {
+  async getDailyRtp(start?: string, end?: string, merchantId?: string) {
     const startDate = parseDateOnly(start);
     const endDate = parseDateOnly(end);
     const endExclusive = endDate
@@ -59,6 +59,9 @@ export class AdminStatsService {
     }
     if (endExclusive) {
       filters.push(Prisma.sql`b."createdAt" < ${endExclusive}`);
+    }
+    if (merchantId) {
+      filters.push(Prisma.sql`b."merchantId" = ${merchantId}`);
     }
 
     const where = Prisma.sql`WHERE ${Prisma.join(filters, ' AND ')}`;

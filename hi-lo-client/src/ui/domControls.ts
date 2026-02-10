@@ -5,7 +5,7 @@ import { LANGUAGES, setLanguage, t, type LanguageCode } from '../i18n';
 import { api } from '../services/api';
 
 interface ControlHandlers {
-  onLogin(credentials: { account: string; password: string }): Promise<void>;
+  onLogin(credentials: { account: string; password: string; merchantId: string }): Promise<void>;
   onPlaceHiLoBet(side: BetSide): Promise<void>;
   onPlaceDigitBet(selection: {
     digitType: DigitBetType;
@@ -160,8 +160,8 @@ const buildTokenFloatingMarkup = (values: number[]) =>
     })
     .join('');
 
-const WIN_CELEBRATE_FALLBACK_MS = 2600;
-const RESULT_DISPLAY_EXTENSION_MS = 3000;
+const COMPLETE_PHASE_DURATION_MS = 10000;
+const WIN_CELEBRATE_FALLBACK_MS = COMPLETE_PHASE_DURATION_MS;
 let lastTokenValuesSignature: string | null = null;
 let lastWinCelebrateSignature: string | null = null;
 
@@ -264,6 +264,7 @@ export const initControls = (handlers: ControlHandlers) => {
         </div>
         <form id="auth-form" class="auth-form">
           <label><span data-i18n="auth.account"></span> <input type="text" name="account" required /></label>
+          <label><span data-i18n="auth.merchant"></span> <input type="text" name="merchantId" required /></label>
           <label><span data-i18n="auth.password"></span> <input type="password" name="password" required /></label>
           <button type="submit"><span data-i18n="auth.enter"></span></button>
         </form>
@@ -635,10 +636,11 @@ export const initControls = (handlers: ControlHandlers) => {
     authForm.querySelectorAll('input').forEach((input) => input.blur());
     const formData = new FormData(authForm);
     const account = formData.get('account')?.toString() ?? '';
+    const merchantId = formData.get('merchantId')?.toString() ?? '';
     const password = formData.get('password')?.toString() ?? '';
     try {
       setStatus('Signing in...');
-      await handlers.onLogin({ account, password });
+      await handlers.onLogin({ account, password, merchantId });
       setStatus('Authenticated. Waiting for round updates.');
     } catch (error) {
       setStatus(
@@ -1170,10 +1172,7 @@ const celebrateWinningBetSlots = (nextState: typeof state) => {
   const settledRoundId = nextState.lastRoundBets[0]?.roundId ?? null;
   if (!settledRoundId) return;
 
-  const baseDuration = Number(
-    nextState.config?.resultDisplayDurationMs ?? WIN_CELEBRATE_FALLBACK_MS,
-  );
-  const durationMs = Math.max(0, baseDuration + RESULT_DISPLAY_EXTENSION_MS);
+  const durationMs = Math.max(0, WIN_CELEBRATE_FALLBACK_MS);
 
   const digitWinKeys = nextState.lastRoundBets
     .filter((bet) => bet.betType === 'DIGIT' && bet.result === 'WIN' && bet.digitType)
@@ -1720,7 +1719,9 @@ const updateDigitTableOdds = (nextState: typeof state) => {
       if (!selection) return;
       const key = Number(selection);
       if (!Number.isFinite(key)) return;
-      const oddsValue = payouts?.sum?.[key] ?? sumPayouts[key];
+      const oddsValue =
+        (payouts?.sum as Record<string, number> | undefined)?.[String(key)] ??
+        sumPayouts[key];
       const oddsEl = cell.querySelector<HTMLElement>('.digit-odds');
       if (!oddsEl) return;
       oddsEl.textContent = Number.isFinite(oddsValue)

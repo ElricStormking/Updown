@@ -13,6 +13,7 @@ const DICT: Record<LanguageCode, Dict> = {
     'auth.title': 'Combi 3',
     'auth.subtitle': 'Predict the last 3 digits and ride the next round.',
     'auth.account': 'Account',
+    'auth.merchant': 'Merchant ID',
     'auth.password': 'Password',
     'auth.enter': 'Enter Arena',
 
@@ -77,6 +78,7 @@ const DICT: Record<LanguageCode, Dict> = {
     'auth.title': 'Combi 3',
     'auth.subtitle': '预测最后 3 位数字，赢下下一轮。',
     'auth.account': '账号',
+    'auth.merchant': '商户 ID',
     'auth.password': '密码',
     'auth.enter': '进入',
 
@@ -141,6 +143,7 @@ const DICT: Record<LanguageCode, Dict> = {
     'auth.title': 'Combi 3',
     'auth.subtitle': 'Ramalkan 3 digit terakhir dan sertai pusingan seterusnya.',
     'auth.account': 'Akaun',
+    'auth.merchant': 'ID Pedagang',
     'auth.password': 'Kata laluan',
     'auth.enter': 'Masuk',
 

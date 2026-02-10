@@ -7,6 +7,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
+import { UserStatus } from '@prisma/client';
 import { UsersService, UserWithWallet } from '../users/users.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -44,6 +45,9 @@ export class AuthService {
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
     }
+    if (user.status === UserStatus.DISABLED) {
+      throw new UnauthorizedException('Account is disabled');
+    }
 
     const isValid = await bcrypt.compare(dto.password, user.password);
     if (!isValid) {
@@ -57,6 +61,9 @@ export class AuthService {
     const user = await this.usersService.findById(payload.sub);
     if (!user) {
       throw new UnauthorizedException('Invalid token');
+    }
+    if (user.status === UserStatus.DISABLED) {
+      throw new UnauthorizedException('Account is disabled');
     }
 
     return user;

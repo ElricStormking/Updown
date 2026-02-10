@@ -33,6 +33,8 @@ import {
 import { GameConfigService } from '../config/game-config.service';
 import { GameConfigSnapshot } from '../config/game-config.defaults';
 
+const COMPLETE_PHASE_DURATION_MS = 10_000;
+
 @Injectable()
 export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(RoundEngineService.name);
@@ -331,10 +333,7 @@ export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
     });
 
     this.currentRound = undefined;
-    const displayDelay = Math.max(
-      this.currentConfig?.resultDisplayDurationMs ?? 0,
-      0,
-    );
+    const displayDelay = COMPLETE_PHASE_DURATION_MS;
     this.currentConfig = undefined;
     await this.redis.del(CacheKeys.activeRoundState);
 

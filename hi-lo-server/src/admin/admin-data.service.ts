@@ -97,7 +97,7 @@ export class AdminDataService {
   }
 
   // Bets
-  async queryBets(dto: QueryBetsDto) {
+  async queryBets(dto: QueryBetsDto, merchantScope?: string) {
     const {
       page = 0,
       limit = 20,
@@ -118,7 +118,8 @@ export class AdminDataService {
 
     const where: Prisma.BetWhereInput = {};
     if (betId) where.id = betId;
-    if (merchantId) where.merchantId = merchantId;
+    if (merchantScope) where.merchantId = merchantScope;
+    else if (merchantId) where.merchantId = merchantId;
     if (playerId) where.userId = playerId;
     if (roundId !== undefined) where.roundId = roundId;
     if (betType) where.betType = betType;
@@ -163,11 +164,12 @@ export class AdminDataService {
   }
 
   // Players
-  async queryPlayers(dto: QueryPlayersDto) {
+  async queryPlayers(dto: QueryPlayersDto, merchantScope?: string) {
     const { page = 0, limit = 20, merchantId, account, status } = dto;
 
     const where: Prisma.UserWhereInput = {};
-    if (merchantId) where.merchantId = merchantId;
+    if (merchantScope) where.merchantId = merchantScope;
+    else if (merchantId) where.merchantId = merchantId;
     if (account) {
       where.OR = [
         { email: { contains: account, mode: 'insensitive' } },
@@ -202,9 +204,13 @@ export class AdminDataService {
     return { page, limit, hasNext, items };
   }
 
-  async updatePlayerStatus(playerId: string, status: UserStatus) {
+  async updatePlayerStatus(
+    playerId: string,
+    status: UserStatus,
+    merchantScope?: string,
+  ) {
     const user = await this.prisma.user.findUnique({ where: { id: playerId } });
-    if (!user) {
+    if (!user || (merchantScope && user.merchantId !== merchantScope)) {
       throw new NotFoundException('Player not found');
     }
     const updated = await this.prisma.user.update({
@@ -225,7 +231,7 @@ export class AdminDataService {
   }
 
   // Transfers
-  async queryTransfers(dto: QueryTransfersDto) {
+  async queryTransfers(dto: QueryTransfersDto, merchantScope?: string) {
     const { page = 0, limit = 20, start, end, merchantId, account, type } = dto;
     const startDate = parseDateOnly(start);
     const endDate = parseDateOnly(end);
@@ -234,7 +240,8 @@ export class AdminDataService {
       : null;
 
     const where: Prisma.TransferWhereInput = {};
-    if (merchantId) where.merchantId = merchantId;
+    if (merchantScope) where.merchantId = merchantScope;
+    else if (merchantId) where.merchantId = merchantId;
     if (type !== undefined) where.type = type;
     if (startDate || endExclusive) {
       where.createdAt = {};
@@ -281,7 +288,7 @@ export class AdminDataService {
   }
 
   // Wallet Transactions
-  async queryTransactions(dto: QueryTransactionsDto) {
+  async queryTransactions(dto: QueryTransactionsDto, merchantScope?: string) {
     const { page = 0, limit = 20, start, end, merchantId, account, type } = dto;
     const startDate = parseDateOnly(start);
     const endDate = parseDateOnly(end);
@@ -290,7 +297,8 @@ export class AdminDataService {
       : null;
 
     const where: Prisma.WalletTransactionWhereInput = {};
-    if (merchantId) where.merchantId = merchantId;
+    if (merchantScope) where.merchantId = merchantScope;
+    else if (merchantId) where.merchantId = merchantId;
     if (type) where.type = type;
     if (startDate || endExclusive) {
       where.createdAt = {};
@@ -337,11 +345,13 @@ export class AdminDataService {
   }
 
   // Merchants
-  async queryMerchants(dto: QueryMerchantsDto) {
+  async queryMerchants(dto: QueryMerchantsDto, merchantScope?: string) {
     const { page = 0, limit = 20, merchantId, name, isActive } = dto;
 
     const where: Prisma.MerchantWhereInput = {};
-    if (merchantId)
+    if (merchantScope) {
+      where.merchantId = merchantScope;
+    } else if (merchantId)
       where.merchantId = { contains: merchantId, mode: 'insensitive' };
     if (name) where.name = { contains: name, mode: 'insensitive' };
     if (isActive !== undefined) where.isActive = isActive;
@@ -398,9 +408,9 @@ export class AdminDataService {
     };
   }
 
-  async updateMerchant(id: string, dto: UpdateMerchantDto) {
+  async updateMerchant(id: string, dto: UpdateMerchantDto, merchantScope?: string) {
     const existing = await this.prisma.merchant.findUnique({ where: { id } });
-    if (!existing) {
+    if (!existing || (merchantScope && existing.merchantId !== merchantScope)) {
       throw new NotFoundException('Merchant not found');
     }
     const data: Prisma.MerchantUpdateInput = {};
@@ -423,9 +433,9 @@ export class AdminDataService {
     };
   }
 
-  async getMerchantById(id: string) {
+  async getMerchantById(id: string, merchantScope?: string) {
     const merchant = await this.prisma.merchant.findUnique({ where: { id } });
-    if (!merchant) {
+    if (!merchant || (merchantScope && merchant.merchantId !== merchantScope)) {
       throw new NotFoundException('Merchant not found');
     }
     return {

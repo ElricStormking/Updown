@@ -32,6 +32,7 @@ export class TransferHistoryItem {
   transferId: string;
   type: number;
   amount: number;
+  balanceBefore: number;
   balanceAfter: number;
   createdAt: string;
 }

@@ -117,6 +117,7 @@ const game = new Phaser.Game({
 });
 
 const DEFAULT_TOKEN_VALUES = [10, 50, 100, 150, 200, 300, 500];
+const COMPLETE_PHASE_DURATION_MS = 10000;
 const normalizeTokenValues = (values?: number[]) => {
   if (!Array.isArray(values) || values.length !== DEFAULT_TOKEN_VALUES.length) {
     return DEFAULT_TOKEN_VALUES.slice();
@@ -407,8 +408,7 @@ async function bootstrapLaunchAuthFromUrl() {
       tokenPlacements: {},
     });
     persistMerchantId(merchantId);
-    const baseResultDuration = config.resultDisplayDurationMs ?? 8000;
-    scene.setResultDisplayDuration(baseResultDuration + 3000);
+    scene.setResultDisplayDuration(COMPLETE_PHASE_DURATION_MS);
 
     authenticateGameSocket(socket, launchToken);
     void refreshPlayerData();
@@ -449,8 +449,7 @@ async function handleLogin(credentials: { account: string; password: string; mer
     tokenPlacements: {},
   });
   persistMerchantId(merchantId);
-  const baseResultDuration = config.resultDisplayDurationMs ?? 8000;
-  scene.setResultDisplayDuration(baseResultDuration + 3000);
+  scene.setResultDisplayDuration(COMPLETE_PHASE_DURATION_MS);
 
   await refreshPlayerData();
   authenticateGameSocket(socket, auth.accessToken);
@@ -465,8 +464,7 @@ async function refreshConfig() {
       tokenValues,
     );
     updateState({ config, selectedTokenValue });
-    const baseResultDuration = config.resultDisplayDurationMs ?? 8000;
-    scene.setResultDisplayDuration(baseResultDuration + 3000);
+    scene.setResultDisplayDuration(COMPLETE_PHASE_DURATION_MS);
   } catch {
     // Ignore config refresh failures; we keep the last known config.
   }

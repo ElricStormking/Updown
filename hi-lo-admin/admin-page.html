@@ -512,6 +512,35 @@
       .admin-limited .limited-hide {
         display: none;
       }
+      .modal-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(2, 6, 23, 0.72);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+        z-index: 2000;
+      }
+      .modal-backdrop.hidden {
+        display: none;
+      }
+      .modal-panel {
+        width: min(680px, 100%);
+        background: var(--panel-strong);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 1.1rem 1rem 1rem;
+        box-shadow: var(--shadow);
+      }
+      .modal-panel h3 {
+        margin: 0 0 0.9rem 0;
+        font-family: "Fraunces", "Times New Roman", serif;
+        font-size: 1.15rem;
+      }
+      .modal-panel .form-actions {
+        justify-content: flex-end;
+      }
       @media (max-width: 760px) {
         header {
           flex-direction: column;
@@ -862,7 +891,7 @@
               <label>Name<input id="merchants-name" type="text" /></label>
               <label>Active<select id="merchants-active"><option value="">All</option><option value="true">Active</option><option value="false">Inactive</option></select></label>
               <button class="primary" type="submit">Search</button>
-              <button type="button" id="merchants-new" class="secondary">+ New</button>
+              <button type="button" id="merchants-new" class="secondary limited-hide">+ New</button>
             </form>
             <div class="status" id="merchants-status"></div>
             <div class="table-wrapper"><table><thead><tr><th>ID</th><th>Merchant ID</th><th>Name</th><th>Hash Key</th><th>Active</th><th>Created</th><th>Actions</th></tr></thead><tbody id="merchants-table-body"></tbody></table></div>
@@ -909,6 +938,26 @@
       </div>
     </div>
 
+    <div id="merchant-admin-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="merchant-admin-modal-title">
+      <section class="modal-panel">
+        <h3 id="merchant-admin-modal-title">Create Merchant + Merchant Admin</h3>
+        <form id="merchant-admin-form">
+          <div class="grid">
+            <label>Merchant ID<input id="merchant-admin-merchant-id" type="text" required /></label>
+            <label>Merchant Name<input id="merchant-admin-merchant-name" type="text" required /></label>
+            <label>Merchant Hash Key<input id="merchant-admin-hash-key" type="text" minlength="8" required /></label>
+            <label>Admin Account<input id="merchant-admin-account" type="text" required /></label>
+            <label>Admin Password<input id="merchant-admin-password" type="password" minlength="6" required /></label>
+          </div>
+          <div class="form-actions">
+            <button id="merchant-admin-cancel" class="secondary" type="button">Cancel</button>
+            <button class="primary" type="submit">Create</button>
+          </div>
+          <div class="status" id="merchant-admin-status"></div>
+        </form>
+      </section>
+    </div>
+
     <script>
       const tokenKey = 'adminToken';
       const adminInfoKey = 'adminInfo';
@@ -925,6 +974,15 @@
       const registerAccountInput = $('#register-account');
       const registerPasswordInput = $('#register-password');
       const registerMerchantInput = $('#register-merchant');
+      const merchantAdminModal = $('#merchant-admin-modal');
+      const merchantAdminForm = $('#merchant-admin-form');
+      const merchantAdminStatus = $('#merchant-admin-status');
+      const merchantAdminCancel = $('#merchant-admin-cancel');
+      const merchantAdminMerchantIdInput = $('#merchant-admin-merchant-id');
+      const merchantAdminMerchantNameInput = $('#merchant-admin-merchant-name');
+      const merchantAdminHashKeyInput = $('#merchant-admin-hash-key');
+      const merchantAdminAccountInput = $('#merchant-admin-account');
+      const merchantAdminPasswordInput = $('#merchant-admin-password');
       const logoutBtn = $('#logout-btn');
       const configSection = $('#config-section');
       const configForm = document.querySelector('#config-form');
@@ -1012,6 +1070,21 @@
         }
       };
 
+      const closeMerchantAdminModal = () => {
+        if (!merchantAdminModal) return;
+        merchantAdminModal.classList.add('hidden');
+        setStatus(merchantAdminStatus, '');
+        merchantAdminForm?.reset();
+      };
+
+      const openMerchantAdminModal = () => {
+        if (!merchantAdminModal) return;
+        merchantAdminModal.classList.remove('hidden');
+        setStatus(merchantAdminStatus, '');
+        merchantAdminForm?.reset();
+        merchantAdminMerchantIdInput?.focus();
+      };
+
       const setAuthState = (authed) => {
         if (loginSection) loginSection.classList.toggle('hidden', authed);
         if (mainContent) mainContent.classList.toggle('hidden', !authed);
@@ -1021,6 +1094,7 @@
           applyAdminPermissions();
         } else {
           document.body.classList.remove('admin-limited');
+          closeMerchantAdminModal();
         }
       };
 
@@ -1032,6 +1106,20 @@
         $$('.tab-content').forEach(c => c.classList.remove('active'));
         e.target.classList.add('active');
         $('#tab-' + e.target.dataset.tab)?.classList.add('active');
+      });
+
+      merchantAdminCancel?.addEventListener('click', () => {
+        closeMerchantAdminModal();
+      });
+      merchantAdminModal?.addEventListener('click', (event) => {
+        if (event.target === merchantAdminModal) {
+          closeMerchantAdminModal();
+        }
+      });
+      document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && merchantAdminModal && !merchantAdminModal.classList.contains('hidden')) {
+          closeMerchantAdminModal();
+        }
       });
 
       // Pagination state
@@ -1119,10 +1207,63 @@
       };
       $('#merchants-form')?.addEventListener('submit', (e) => { e.preventDefault(); loadMerchants(0); });
       $('#merchants-new')?.addEventListener('click', () => {
-        const merchantId = prompt('Merchant ID:'); if (!merchantId) return;
-        const name = prompt('Name:'); if (!name) return;
-        const hashKey = prompt('Hash Key (min 8 chars):'); if (!hashKey || hashKey.length < 8) { alert('Hash key must be 8+ chars'); return; }
-        apiFetch('/admin/merchants', { method: 'POST', body: JSON.stringify({ merchantId, name, hashKey }) }).then(() => loadMerchants(0)).catch(err => alert(err.message));
+        if (!isSuperAdmin()) {
+          alert('Only superadmin can create new merchant IDs.');
+          return;
+        }
+        openMerchantAdminModal();
+      });
+      merchantAdminForm?.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (!isSuperAdmin()) {
+          setStatus(merchantAdminStatus, 'Only superadmin can create merchant IDs and merchant admin accounts.', true);
+          return;
+        }
+        const merchantId = merchantAdminMerchantIdInput?.value.trim() || '';
+        const name = merchantAdminMerchantNameInput?.value.trim() || '';
+        const hashKey = merchantAdminHashKeyInput?.value.trim() || '';
+        const account = merchantAdminAccountInput?.value.trim() || '';
+        const password = merchantAdminPasswordInput?.value.trim() || '';
+
+        if (!merchantId || !name || !hashKey || !account || !password) {
+          setStatus(merchantAdminStatus, 'Please fill all fields.', true);
+          return;
+        }
+        if (hashKey.length < 8) {
+          setStatus(merchantAdminStatus, 'Merchant hash key must be at least 8 characters.', true);
+          return;
+        }
+
+        setStatus(merchantAdminStatus, 'Creating merchant and admin account...');
+        try {
+          await apiFetch('/admin/merchants', {
+            method: 'POST',
+            body: JSON.stringify({ merchantId, name, hashKey }),
+          });
+        } catch (error) {
+          setStatus(merchantAdminStatus, error.message || 'Failed to create merchant.', true);
+          return;
+        }
+
+        try {
+          await apiFetch('/admin/accounts', {
+            method: 'POST',
+            body: JSON.stringify({
+              account,
+              password,
+              merchantId,
+            }),
+          });
+          await loadMerchants(0);
+          closeMerchantAdminModal();
+        } catch (error) {
+          await loadMerchants(0);
+          setStatus(
+            merchantAdminStatus,
+            'Merchant created, but admin account creation failed: ' + (error.message || 'Request failed'),
+            true,
+          );
+        }
       });
       window.editMerchant = async (id) => {
         const name = prompt('New name (empty to skip):'); const hashKey = prompt('New hash key (empty to skip):'); const activeStr = prompt('Active? (true/false, empty to skip):');
@@ -1829,6 +1970,7 @@
         document.body.classList.toggle('admin-limited', limited);
         if (limited && currentAdmin?.merchantId) {
           selectedMerchantId = currentAdmin.merchantId;
+          closeMerchantAdminModal();
         }
         if (cfgMerchantSelect) {
           cfgMerchantSelect.disabled = limited;

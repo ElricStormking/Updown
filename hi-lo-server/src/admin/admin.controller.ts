@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  ForbiddenException,
   Get,
   Header,
   NotFoundException,
@@ -8,6 +9,7 @@ import {
   Post,
   Put,
   Query,
+  Req,
   UseGuards,
 } from '@nestjs/common';
 import { existsSync } from 'fs';
@@ -35,6 +37,7 @@ import {
   UpdateAdminAccountDto,
   QueryLoginRecordsDto,
 } from './dto';
+import type { AdminContext } from '../auth/guards/admin.guard';
 
 const ADMIN_PAGE_RELATIVE_PATH = ['hi-lo-admin', 'admin-page.html'];
 const ADMIN_PAGE_CANDIDATES = [
@@ -81,8 +84,16 @@ export class AdminController {
 
   @UseGuards(JwtAuthGuard, AdminGuard)
   @Get('stats/daily-rtp')
-  getDailyRtp(@Query('start') start?: string, @Query('end') end?: string) {
-    return this.statsService.getDailyRtp(start, end);
+  getDailyRtp(
+    @Query('start') start?: string,
+    @Query('end') end?: string,
+    @Req() request?: { adminContext?: AdminContext },
+  ) {
+    return this.statsService.getDailyRtp(
+      start,
+      end,
+      this.resolveMerchantScope(request),
+    );
   }
 
   // Game Management - Rounds
@@ -95,8 +106,8 @@ export class AdminController {
   // Game Management - Bets
   @UseGuards(JwtAuthGuard, AdminGuard)
   @Get('bets')
-  queryBets(@Query() dto: QueryBetsDto) {
-    return this.dataService.queryBets(dto);
+  queryBets(@Query() dto: QueryBetsDto, @Req() request?: { adminContext?: AdminContext }) {
+    return this.dataService.queryBets(dto, this.resolveMerchantScope(request));
   }
 
   // Game Management - Price Snapshots
@@ -109,8 +120,11 @@ export class AdminController {
   // Player Management
   @UseGuards(JwtAuthGuard, AdminGuard)
   @Get('players')
-  queryPlayers(@Query() dto: QueryPlayersDto) {
-    return this.dataService.queryPlayers(dto);
+  queryPlayers(
+    @Query() dto: QueryPlayersDto,
+    @Req() request?: { adminContext?: AdminContext },
+  ) {
+    return this.dataService.queryPlayers(dto, this.resolveMerchantScope(request));
   }
 
   @UseGuards(JwtAuthGuard, AdminGuard)
@@ -118,8 +132,13 @@ export class AdminController {
   updatePlayerStatus(
     @Param('id') id: string,
     @Body() dto: UpdatePlayerStatusDto,
+    @Req() request?: { adminContext?: AdminContext },
   ) {
-    return this.dataService.updatePlayerStatus(id, dto.status);
+    return this.dataService.updatePlayerStatus(
+      id,
+      dto.status,
+      this.resolveMerchantScope(request),
+    );
   }
 
   @UseGuards(JwtAuthGuard, AdminGuard)
@@ -131,40 +150,77 @@ export class AdminController {
   // Merchant Management
   @UseGuards(JwtAuthGuard, AdminGuard)
   @Get('merchants')
-  queryMerchants(@Query() dto: QueryMerchantsDto) {
-    return this.dataService.queryMerchants(dto);
+  queryMerchants(
+    @Query() dto: QueryMerchantsDto,
+    @Req() request?: { adminContext?: AdminContext },
+  ) {
+    return this.dataService.queryMerchants(dto, this.resolveMerchantScope(request));
   }
 
   @UseGuards(JwtAuthGuard, AdminGuard)
   @Post('merchants')
-  createMerchant(@Body() dto: CreateMerchantDto) {
+  createMerchant(
+    @Body() dto: CreateMerchantDto,
+    @Req()
+    request?: {
+      adminContext?: { merchantId: string; isSuperAdmin: boolean };
+    },
+  ) {
+    if (!request?.adminContext?.isSuperAdmin) {
+      throw new ForbiddenException(
+        'Only superadmin can create new merchant IDs',
+      );
+    }
     return this.dataService.createMerchant(dto);
   }
 
   @UseGuards(JwtAuthGuard, AdminGuard)
   @Get('merchants/:id')
-  getMerchant(@Param('id') id: string) {
-    return this.dataService.getMerchantById(id);
+  getMerchant(
+    @Param('id') id: string,
+    @Req() request?: { adminContext?: AdminContext },
+  ) {
+    return this.dataService.getMerchantById(id, this.resolveMerchantScope(request));
   }
 
   @UseGuards(JwtAuthGuard, AdminGuard)
   @Put('merchants/:id')
-  updateMerchant(@Param('id') id: string, @Body() dto: UpdateMerchantDto) {
-    return this.dataService.updateMerchant(id, dto);
+  updateMerchant(
+    @Param('id') id: string,
+    @Body() dto: UpdateMerchantDto,
+    @Req() request?: { adminContext?: AdminContext },
+  ) {
+    return this.dataService.updateMerchant(
+      id,
+      dto,
+      this.resolveMerchantScope(request),
+    );
   }
 
   // Financial Management - Transfers
   @UseGuards(JwtAuthGuard, AdminGuard)
   @Get('transfers')
-  queryTransfers(@Query() dto: QueryTransfersDto) {
-    return this.dataService.queryTransfers(dto);
+  queryTransfers(
+    @Query() dto: QueryTransfersDto,
+    @Req() request?: { adminContext?: AdminContext },
+  ) {
+    return this.dataService.queryTransfers(
+      dto,
+      this.resolveMerchantScope(request),
+    );
   }
 
   // Financial Management - Wallet Transactions
   @UseGuards(JwtAuthGuard, AdminGuard)
   @Get('transactions')
-  queryTransactions(@Query() dto: QueryTransactionsDto) {
-    return this.dataService.queryTransactions(dto);
+  queryTransactions(
+    @Query() dto: QueryTransactionsDto,
+    @Req() request?: { adminContext?: AdminContext },
+  ) {
+    return this.dataService.queryTransactions(
+      dto,
+      this.resolveMerchantScope(request),
+    );
   }
 
   // Admin Account Management
@@ -176,7 +232,18 @@ export class AdminController {
 
   @UseGuards(JwtAuthGuard, AdminGuard)
   @Post('accounts')
-  createAdminAccount(@Body() dto: CreateAdminAccountDto) {
+  createAdminAccount(
+    @Body() dto: CreateAdminAccountDto,
+    @Req()
+    request?: {
+      adminContext?: { merchantId: string; isSuperAdmin: boolean };
+    },
+  ) {
+    if (!request?.adminContext?.isSuperAdmin) {
+      throw new ForbiddenException(
+        'Only superadmin can create admin accounts',
+      );
+    }
     return this.accountsService.createAccount(dto);
   }
 
@@ -199,5 +266,13 @@ export class AdminController {
   @Get('accounts/login-records')
   queryAdminLoginRecords(@Query() dto: QueryLoginRecordsDto) {
     return this.accountsService.queryLoginRecords(dto);
+  }
+
+  private resolveMerchantScope(request?: { adminContext?: AdminContext }) {
+    const adminContext = request?.adminContext;
+    if (!adminContext || adminContext.isSuperAdmin) {
+      return undefined;
+    }
+    return adminContext.merchantId;
   }
 }

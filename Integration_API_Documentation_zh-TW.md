@@ -1,83 +1,70 @@
-# 平台整合 API 文件
+﻿# 撟喳?游? API ?辣
 
-**版本：** 1.0  
-**最後更新：** 2026 年 2 月 3 日  
-
----
-
-## 目錄
-
-1. [概要](#概要)
-2. [驗證機制](#驗證機制)
-3. [簽章生成](#簽章生成)
-4. [基本 URL](#基本-url)
-5. [通用回應格式](#通用回應格式)
-6. [錯誤代碼](#錯誤代碼)
-7. [API 端點](#api-端點)
-   - [建立帳號](#1-建立帳號)
-   - [轉款](#2-轉款)
-   - [取得下注紀錄](#3-取得下注紀錄)
-   - [取得轉款紀錄](#4-取得轉款紀錄)
-   - [啟動遊戲](#5-啟動遊戲)
-   - [取得下注限額](#6-取得下注限額)
-   - [設定下注限額](#7-設定下注限額)
-   - [取得筹码面額](#8-取得筹码面額)
-   - [設定筹码面額](#9-設定筹码面額)
-8. [資料類型](#資料類型)
-9. [程碼範例](#程碼範例)
+**?嚗?* 1.0  
+**?敺?堆?** 2026 撟?2 ??3 ?? 
 
 ---
 
-## 概要
+## ?桅?
 
-本文件說明平台合作方如何透過整合 API 將 Hi-Lo BTC 遊戲接入己方系統。該 API 允許合作方執行以下操作：
-
-- 建立玩家帳號
-- 對玩家錢包進行充款 / 提款
-- 查詢下注紀錄
-- 查詢轉款紀錄
-- 以已驗證的玩家SESSION啟動遊戲
-- 取得並設定下注限額與筹码面額
-
-所有 API 端點均使用 **HTTP POST** 方法，請求與回應的內容均為 **JSON** 格式。
-
----
-
-## 驗證機制
-
-每個 API 請求都必須通過以下方式進行身分驗證：
-
-1. **商家 ID**（`merchantId`）：上線申請時系統分配給您的唯一商家識別碼
-2. **時戳**（`timestamp`）：當前的 Unix 時戳，單位為秒（10 位數）
-3. **簽章**（`hash`）：將請求參數與您的密鑑拼接後，經 SHA256 演算法生成的哈希值
-
-### 時戳驗證
-
-- 時戳必須在伺務器當前時間的 **5～10 秒** 範圍內
-- 超出此範圍的時戳將被拒絕，並傳回錯誤代碼 `1002`
+1. [璁?](#璁?)
+2. [撽?璈](#撽?璈)
+3. [蝪賜???](#蝪賜???)
+4. [?箸 URL](#?箸-url)
+5. [????澆?](#????澆?)
+6. [?航炊隞?Ⅳ](#?航炊隞?Ⅳ)
+7. [API 蝡舫?](#api-蝡舫?)
+   - [撱箇?撣唾?](#1-撱箇?撣唾?)
+   - [頧狡](#2-頧狡)
+   - [??銝釣蝝?(#3-??銝釣蝝??
+   - [??頧狡蝝?(#4-??頧狡蝝??
+   - [???](#5-???)
+   - [??銝釣??](#6-??銝釣??)
+   - [閮剖?銝釣??](#7-閮剖?銝釣??)
+   - [??蝑寧??ａ?](#8-??蝑寧??ａ?)
+   - [閮剖?蝑寧??ａ?](#9-閮剖?蝑寧??ａ?)
+8. [鞈?憿?](#鞈?憿?)
+9. [蝔Ⅳ蝭?](#蝔Ⅳ蝭?)
 
 ---
 
-## 簽章生成
+## 璁?
 
-### 哈希密鑑
+?祆?隞嗉牧?像?啣?雿憒????游? API 撠?Hi-Lo BTC ??亙撌望蝟餌絞?府 API ?迂???孵銵誑銝?雿?
 
-您的哈希密鑑為上線申請時系統提供的一個 **32 位元 BASE64** 字串。請妥善保管此密鑑，絕不得暴露於客戶端程碼中。
+- 撱箇??拙振撣唾?
+- 撠摰園?脰??狡 / ?狡
+- ?亥岷銝釣蝝??- ?亥岷頧狡蝝??- 隞亙歇撽??摰貶ESSION???
+- ??銝西身摰?瘜券?憿?蝑寧??ａ?
 
-### 簽章演算法
+???API 蝡舫??蝙??**HTTP POST** ?寞?嚗?瘙????摰孵???**JSON** ?澆???
+---
 
+## 撽?璈
+
+瘥?API 隢??賢???隞乩??孵??脰?頨怠?撽?嚗?
+1. **?振 ID**嚗merchantId`嚗?銝??唾??頂蝯勗??策?函??臭??振霅蝣?2. **?**嚗timestamp`嚗??嗅???Unix ?嚗雿蝘?10 雿嚗?3. **蝪賜?**嚗hash`嚗?撠?瘙??貉??函?撖??潭敺?蝬?SHA256 瞍?瘜???????
+### ?撽?
+
+- ?敹??其撩??嗅?????**5嚚?0 蝘?* 蝭???- 頞甇斤????撠◤??嚗蒂?喳??航炊隞?Ⅳ `1002`
+
+---
+
+## 蝪賜???
+
+### ??撖?
+
+?函???撖??箔?蝺隢?蝟餌絞??????**32 雿? BASE64** 摮葡??憒亙?靽恣甇文???蝯?敺?脫摰Ｘ蝡舐?蝣潔葉??
+### 蝪賜?瞍?瘜?
 ```
 hash = SHA256(param1 + "&" + param2 + "&" + ... + "&" + hashKey)
 ```
 
-**步驟：**
-1. 依照各 API 指定的順序，將所有參數以 `&` 作為分隔符拼接
-2. 在末尾追加 `&`，接著拼接您的 `hashKey`
-3. 對拼接後的字串計算 SHA256 哈希值
-4. 將結果轉換為小寫的十六進制字串（共 64 個字元）
+**甇仿?嚗?*
+1. 靘??API ????摨?撠????訾誑 `&` 雿??蝚行??2. ?冽撠曇蕭??`&`嚗??交??`hashKey`
+3. 撠?亙???銝脰?蝞?SHA256 ????4. 撠????撠神???剝脣摮葡嚗 64 ????
 
-### 範例（JavaScript / Node.js）
-
+### 蝭?嚗avaScript / Node.js嚗?
 ```javascript
 const crypto = require('crypto');
 
@@ -86,7 +73,7 @@ function generateSignature(params, hashKey) {
   return crypto.createHash('sha256').update(data).digest('hex');
 }
 
-// AccountCreate 範例
+// AccountCreate 蝭?
 const merchantId = 'MERCHANT001';
 const account = 'player123';
 const timestamp = Math.floor(Date.now() / 1000);
@@ -95,8 +82,7 @@ const hashKey = 'your-32-char-secret-key-here!!!';
 const hash = generateSignature([merchantId, account, timestamp.toString()], hashKey);
 ```
 
-### 範例（Python）
-
+### 蝭?嚗ython嚗?
 ```python
 import hashlib
 import time
@@ -105,7 +91,7 @@ def generate_signature(params, hash_key):
     data = '&'.join(params) + '&' + hash_key
     return hashlib.sha256(data.encode()).hexdigest()
 
-# AccountCreate 範例
+# AccountCreate 蝭?
 merchant_id = 'MERCHANT001'
 account = 'player123'
 timestamp = int(time.time())
@@ -114,8 +100,7 @@ hash_key = 'your-32-char-secret-key-here!!!'
 hash_value = generate_signature([merchant_id, account, str(timestamp)], hash_key)
 ```
 
-### 範例（Java）
-
+### 蝭?嚗ava嚗?
 ```java
 import java.security.MessageDigest;
 import java.nio.charset.StandardCharsets;
@@ -136,21 +121,20 @@ public String generateSignature(String[] params, String hashKey) {
 
 ---
 
-## 基本 URL
+## ?箸 URL
 
-| 環境 | 基本 URL |
+| ?啣? | ?箸 URL |
 |------|----------|
-| 正式環境（Production） | `https://api.your-game-domain.com` |
-| 測試環境（Sandbox） | `https://sandbox-api.your-game-domain.com` |
+| 甇???啣?嚗roduction嚗?| `https://api.your-game-domain.com` |
+| 皜祈岫?啣?嚗andbox嚗?| `https://sandbox-api.your-game-domain.com` |
 
-所有端點的路徑前綴均為 `/integration/`
+??垢暺?頝臬??韌? `/integration/`
 
 ---
 
-## 通用回應格式
+## ????澆?
 
-所有 API 的回應均遵循以下結構：
-
+???API ?????萄儐隞乩?蝯?嚗?
 ```json
 {
   "success": true | false,
@@ -160,60 +144,59 @@ public String generateSignature(String[] params, String hashKey) {
 }
 ```
 
-| 欄位 | 類型 | 說明 |
+| 甈? | 憿? | 隤芣? |
 |------|------|------|
-| `success` | boolean | 請求成功為 `true`，失敗為 `false` |
-| `errorCode` | integer | 成功時為 `0`，失敗時傳回對應的錯誤代碼 |
-| `errorMessage` | string | 成功時為空字串，失敗時傳回錯誤說明 |
-| `data` | object / null | 成功時傳回回應資料，失敗時為 `null` |
+| `success` | boolean | 隢?????`true`嚗仃? `false` |
+| `errorCode` | integer | ??? `0`嚗仃???喳?撠??隤支誨蝣?|
+| `errorMessage` | string | ???蝛箏?銝莎?憭望???隤方牧??|
+| `data` | object / null | ?????????憭望?? `null` |
 
 ---
 
-## 錯誤代碼
+## ?航炊隞?Ⅳ
 
-| 代碼 | 名稱 | 說明 |
+| 隞?Ⅳ | ?迂 | 隤芣? |
 |------|------|------|
-| `0` | SUCCESS | 請求成功 |
-| `1001` | INVALID_SIGNATURE | 簽章驗證失敗 |
-| `1002` | TIMESTAMP_EXPIRED | 時戳超出有效範圍（5～10 秒） |
-| `1003` | MERCHANT_NOT_FOUND | 系統中未找到該商家 ID |
-| `1004` | MERCHANT_INACTIVE | 商家帳號已被停用 |
-| `2001` | ACCOUNT_ALREADY_EXISTS | 玩家帳號已存在 |
-| `2002` | ACCOUNT_NOT_FOUND | 未找到玩家帳號 |
-| `3001` | INSUFFICIENT_BALANCE | 提款金額超過餘額，餘額不足 |
-| `3002` | DUPLICATE_ORDER_NUMBER | 轉款 ID 已被使用（重複訂單） |
-| `3003` | INVALID_TRANSFER_TYPE | 轉款類型無效（必須為 0 或 1） |
-| `4001` | INVALID_PAGE_SIZE | 每頁筆數必須在 1～100 之間 |
-| `4002` | INVALID_PAGE_NUMBER | 頁碼必須 >= 1 |
-| `5001` | INVALID_BET_AMOUNT_LIMIT | 下注限額數值無效 |
-| `5002` | INVALID_TOKEN_VALUES | 筹码面額數值無效 |
-| `9999` | INTERNAL_ERROR | 伺務器內部錯誤 |
+| `0` | SUCCESS | 隢??? |
+| `1001` | INVALID_SIGNATURE | 蝪賜?撽?憭望? |
+| `1002` | TIMESTAMP_EXPIRED | ?頞??蝭?嚗?嚚?0 蝘? |
+| `1003` | MERCHANT_NOT_FOUND | 蝟餌絞銝剜?曉閰脣?摰?ID |
+| `1004` | MERCHANT_INACTIVE | ?振撣唾?撌脰◤? |
+| `2001` | ACCOUNT_ALREADY_EXISTS | ?拙振撣唾?撌脣???|
+| `2002` | ACCOUNT_NOT_FOUND | ?芣?啁摰嗅董??|
+| `3001` | INSUFFICIENT_BALANCE | ?狡??頞?擗?嚗?憿?頞?|
+| `3002` | DUPLICATE_ORDER_NUMBER | 頧狡 ID 撌脰◤雿輻嚗?銴??殷? |
+| `3003` | INVALID_TRANSFER_TYPE | 頧狡憿??⊥?嚗?? 0 ??1嚗?|
+| `4001` | INVALID_PAGE_SIZE | 瘥?蝑敹???1嚚?00 銋? |
+| `4002` | INVALID_PAGE_NUMBER | ?Ⅳ敹? >= 1 |
+| `5001` | INVALID_BET_AMOUNT_LIMIT | 銝釣???詨潛??|
+| `5002` | INVALID_TOKEN_VALUES | 蝑寧??ａ??詨潛??|
+| `9999` | INTERNAL_ERROR | 隡箏??典?券隤?|
 
 ---
 
-## API 端點
+## API 蝡舫?
 
-### 1. 建立帳號
+### 1. 撱箇?撣唾?
 
-在遊戲系統中建立一個新的玩家帳號。
+?券??脩頂蝯曹葉撱箇?銝??摰嗅董??
+**蝡舫?嚗?* `POST /integration/account/create`
 
-**端點：** `POST /integration/account/create`
+#### 隢?
 
-#### 請求
-
-| 參數 | 類型 | 必填 | 說明 |
+| ? | 憿? | 敹‵ | 隤芣? |
 |------|------|------|------|
-| `merchantId` | string | 是 | 您的商家 ID |
-| `account` | string | 是 | 唯一的玩家帳號識別碼 |
-| `timestamp` | integer | 是 | Unix 時戳，單位為秒（10 位數） |
-| `hash` | string | 是 | 請求簽章 |
+| `merchantId` | string | ??| ?函??振 ID |
+| `account` | string | ??| ?臭??摰嗅董???亦Ⅳ |
+| `timestamp` | integer | ??| Unix ?嚗雿蝘?10 雿嚗?|
+| `hash` | string | ??| 隢?蝪賜? |
 
-**簽章參數（依序）：**
+**蝪賜??嚗?摨?嚗?*
 ```
 hash = SHA256(merchantId + "&" + account + "&" + timestamp + "&" + hashKey)
 ```
 
-#### 請求範例
+#### 隢?蝭?
 
 ```json
 {
@@ -224,9 +207,9 @@ hash = SHA256(merchantId + "&" + account + "&" + timestamp + "&" + hashKey)
 }
 ```
 
-#### 回應
+#### ??
 
-**成功：**
+**??嚗?*
 ```json
 {
   "success": true,
@@ -236,7 +219,7 @@ hash = SHA256(merchantId + "&" + account + "&" + timestamp + "&" + hashKey)
 }
 ```
 
-**失敗（帳號已存在）：**
+**憭望?嚗董?歇摮嚗?**
 ```json
 {
   "success": false,
@@ -248,30 +231,29 @@ hash = SHA256(merchantId + "&" + account + "&" + timestamp + "&" + hashKey)
 
 ---
 
-### 2. 轉款
+### 2. 頧狡
 
-對玩家的遊戲錢包進行充款或提款操作。
+撠摰嗥???Ｗ??脰??狡??甈暹?雿?
+**蝡舫?嚗?* `POST /integration/transfer`
 
-**端點：** `POST /integration/transfer`
+#### 隢?
 
-#### 請求
-
-| 參數 | 類型 | 必填 | 說明 |
+| ? | 憿? | 敹‵ | 隤芣? |
 |------|------|------|------|
-| `merchantId` | string | 是 | 您的商家 ID |
-| `account` | string | 是 | 玩家帳號識別碼 |
-| `transferId` | string | 是 | 唯一的轉款 ID（用於冪等性保障） |
-| `type` | integer | 是 | `0` = 充款（充入遊戲），`1` = 提款（從遊戲提出至商家） |
-| `amount` | number | 是 | 轉款金額（必須 > 0） |
-| `timestamp` | integer | 是 | Unix 時戳，單位為秒 |
-| `hash` | string | 是 | 請求簽章 |
+| `merchantId` | string | ??| ?函??振 ID |
+| `account` | string | ??| ?拙振撣唾?霅蝣?|
+| `transferId` | string | ??| ?臭???甈?ID嚗?澆蝑找??? |
+| `type` | integer | ??| `0` = ?狡嚗??仿??莎?嚗1` = ?狡嚗????喳?摰塚? |
+| `amount` | number | ??| 頧狡??嚗???> 0嚗?|
+| `timestamp` | integer | ??| Unix ?嚗雿蝘?|
+| `hash` | string | ??| 隢?蝪賜? |
 
-**簽章參數（依序）：**
+**蝪賜??嚗?摨?嚗?*
 ```
 hash = SHA256(merchantId + "&" + account + "&" + type + "&" + amount + "&" + timestamp + "&" + hashKey)
 ```
 
-#### 請求範例（充款）
+#### 隢?蝭?嚗?甈橘?
 
 ```json
 {
@@ -285,7 +267,7 @@ hash = SHA256(merchantId + "&" + account + "&" + type + "&" + amount + "&" + tim
 }
 ```
 
-#### 請求範例（提款）
+#### 隢?蝭?嚗?甈橘?
 
 ```json
 {
@@ -299,9 +281,9 @@ hash = SHA256(merchantId + "&" + account + "&" + type + "&" + amount + "&" + tim
 }
 ```
 
-#### 回應
+#### ??
 
-**成功：**
+**??嚗?*
 ```json
 {
   "success": true,
@@ -313,11 +295,11 @@ hash = SHA256(merchantId + "&" + account + "&" + type + "&" + amount + "&" + tim
 }
 ```
 
-| 欄位 | 類型 | 說明 |
+| 甈? | 憿? | 隤芣? |
 |------|------|------|
-| `balance` | number | 轉款後玩家的最新餘額 |
+| `balance` | number | 頧狡敺摰嗥???圈?憿?|
 
-**失敗（餘額不足）：**
+**憭望?嚗?憿?頞喉?嚗?*
 ```json
 {
   "success": false,
@@ -329,32 +311,30 @@ hash = SHA256(merchantId + "&" + account + "&" + type + "&" + amount + "&" + tim
 
 ---
 
-### 3. 取得下注紀錄
+### 3. ??銝釣蝝??
+??閰脣?摰嗆?銝??摰嗥???銝釣蝝??
+**蝡舫?嚗?* `POST /integration/bets`
 
-取得該商家旗下所有玩家的分頁下注紀錄。
+#### 隢?
 
-**端點：** `POST /integration/bets`
-
-#### 請求
-
-| 參數 | 類型 | 必填 | 說明 |
+| ? | 憿? | 敹‵ | 隤芣? |
 |------|------|------|------|
-| `merchantId` | string | 是 | 您的商家 ID |
-| `startBetTime` | string | 是 | 起始時間篩選條件（ISO 8601 UTC 格式） |
-| `pageSize` | integer | 是 | 每頁筆數（1～100） |
-| `pageNumber` | integer | 是 | 頁碼（從 1 開始） |
-| `timestamp` | integer | 是 | Unix 時戳，單位為秒 |
-| `hash` | string | 是 | 請求簽章 |
+| `merchantId` | string | ??| ?函??振 ID |
+| `startBetTime` | string | ??| 韏瑕???蝭拚璇辣嚗SO 8601 UTC ?澆?嚗?|
+| `pageSize` | integer | ??| 瘥?蝑嚗?嚚?00嚗?|
+| `pageNumber` | integer | ??| ?Ⅳ嚗? 1 ??嚗?|
+| `timestamp` | integer | ??| Unix ?嚗雿蝘?|
+| `hash` | string | ??| 隢?蝪賜? |
 
-**簽章參數（依序）：**
+**蝪賜??嚗?摨?嚗?*
 ```
 hash = SHA256(merchantId + "&" + formattedStartTime + "&" + pageSize + "&" + pageNumber + "&" + timestamp + "&" + hashKey)
 ```
 
-**簽章中的日期格式：** `yyyyMMddHHmmssfff`（UTC）  
-- 範例：`2026-02-02T10:30:00.123Z` → `20260202103000123`
+**蝪賜?銝剔??交??澆?嚗?* `yyyyMMddHHmmssfff`嚗TC嚗? 
+- 蝭?嚗2026-02-02T10:30:00.123Z` ??`20260202103000123`
 
-#### 請求範例
+#### 隢?蝭?
 
 ```json
 {
@@ -367,7 +347,7 @@ hash = SHA256(merchantId + "&" + formattedStartTime + "&" + pageSize + "&" + pag
 }
 ```
 
-#### 回應
+#### ??
 
 ```json
 {
@@ -404,55 +384,51 @@ hash = SHA256(merchantId + "&" + formattedStartTime + "&" + pageSize + "&" + pag
 }
 ```
 
-#### 下注紀錄欄位說明
-
-| 欄位 | 類型 | 說明 |
+#### 銝釣蝝??雿牧??
+| 甈? | 憿? | 隤芣? |
 |------|------|------|
-| `id` | string | 唯一的下注識別碼 |
-| `account` | string | 玩家帳號 |
-| `roundId` | integer | 遊戲回合 ID |
-| `betType` | string | `"DIGIT"`（數字投注）或 `"HILO"`（高低投注） |
-| `side` | string / null | HILO 投注時為 `"UP"` 或 `"DOWN"` |
-| `digitType` | string / null | 數字投注類型（請參閱 [數字投注類型](#數字投注類型)） |
-| `selection` | string / null | 投注選項值 |
-| `amount` | number | 下注金額 |
-| `odds` | number | 賠率倍數 |
-| `result` | string | `"PENDING"`（進行中）、`"WIN"`（勝）、`"LOSE"`（負）、或 `"REFUND"`（退款） |
-| `payout` | number | 派彩金額（輸則為 0） |
-| `betTime` | string | 下注時間（ISO 8601） |
-| `lockedPrice` | number / null | 回合鎖定時的 BTC 價格 |
-| `finalPrice` | number / null | 回合結束時的 BTC 價格 |
-| `winningSide` | string / null | `"UP"`、`"DOWN"`、或 null（平局） |
-| `digitResult` | string / null | 3 位數字開獎結果（例如 "025"） |
-| `digitSum` | integer / null | 3 位數字之和（0～27） |
+| `id` | string | ?臭???瘜刻??亦Ⅳ |
+| `account` | string | ?拙振撣唾? |
+| `roundId` | integer | ??? ID |
+| `betType` | string | `"DIGIT"`嚗摮?瘜剁???`"HILO"`嚗?雿?瘜剁? |
+| `side` | string / null | HILO ?釣? `"UP"` ??`"DOWN"` |
+| `digitType` | string / null | ?詨??釣憿?嚗?? [?詨??釣憿?](#?詨??釣憿?)嚗?|
+| `selection` | string / null | ?釣?賊???|
+| `amount` | number | 銝釣?? |
+| `odds` | number | 鞈?? |
+| `result` | string | `"PENDING"`嚗脰?銝哨??"WIN"`嚗?嚗"LOSE"`嚗?嚗? `"REFUND"`嚗甈橘? |
+| `payout` | number | 瘣曉蔗??嚗撓? 0嚗?|
+| `betTime` | string | 銝釣??嚗SO 8601嚗?|
+| `lockedPrice` | number / null | ?????? BTC ?寞 |
+| `finalPrice` | number / null | ??蝯??? BTC ?寞 |
+| `winningSide` | string / null | `"UP"`?"DOWN"`?? null嚗像撅嚗?|
+| `digitResult` | string / null | 3 雿摮?????靘? "025"嚗?|
+| `digitSum` | integer / null | 3 雿摮???0嚚?7嚗?|
 
 ---
 
-### 4. 取得轉款紀錄
+### 4. ??頧狡蝝??
+??閰脣?摰嗥???頧狡蝝??
+**蝡舫?嚗?* `POST /integration/transfers`
 
-取得該商家的分頁轉款紀錄。
+#### 隢?
 
-**端點：** `POST /integration/transfers`
-
-#### 請求
-
-| 參數 | 類型 | 必填 | 說明 |
+| ? | 憿? | 敹‵ | 隤芣? |
 |------|------|------|------|
-| `merchantId` | string | 是 | 您的商家 ID |
-| `startTime` | string | 是 | 起始時間篩選條件（ISO 8601 UTC 格式） |
-| `pageSize` | integer | 是 | 每頁筆數（1～100） |
-| `pageNumber` | integer | 是 | 頁碼（從 1 開始） |
-| `timestamp` | integer | 是 | Unix 時戳，單位為秒 |
-| `hash` | string | 是 | 請求簽章 |
+| `merchantId` | string | ??| ?函??振 ID |
+| `startTime` | string | ??| 韏瑕???蝭拚璇辣嚗SO 8601 UTC ?澆?嚗?|
+| `pageSize` | integer | ??| 瘥?蝑嚗?嚚?00嚗?|
+| `pageNumber` | integer | ??| ?Ⅳ嚗? 1 ??嚗?|
+| `timestamp` | integer | ??| Unix ?嚗雿蝘?|
+| `hash` | string | ??| 隢?蝪賜? |
 
-**簽章參數（依序）：**
+**蝪賜??嚗?摨?嚗?*
 ```
 hash = SHA256(merchantId + "&" + formattedStartTime + "&" + pageSize + "&" + pageNumber + "&" + timestamp + "&" + hashKey)
 ```
 
-**簽章中的日期格式：** `yyyyMMddHHmmssfff`（UTC）
-
-#### 請求範例
+**蝪賜?銝剔??交??澆?嚗?* `yyyyMMddHHmmssfff`嚗TC嚗?
+#### 隢?蝭?
 
 ```json
 {
@@ -465,7 +441,7 @@ hash = SHA256(merchantId + "&" + formattedStartTime + "&" + pageSize + "&" + pag
 }
 ```
 
-#### 回應
+#### ??
 
 ```json
 {
@@ -480,6 +456,7 @@ hash = SHA256(merchantId + "&" + formattedStartTime + "&" + pageSize + "&" + pag
         "transferId": "TXN20260202001",
         "type": 0,
         "amount": 100.00,
+        "balanceBefore": 50.00,
         "balanceAfter": 150.00,
         "createdAt": "2026-02-02T10:30:00.000Z"
       }
@@ -492,41 +469,40 @@ hash = SHA256(merchantId + "&" + formattedStartTime + "&" + pageSize + "&" + pag
 }
 ```
 
-#### 轉款紀錄欄位說明
-
-| 欄位 | 類型 | 說明 |
+#### 頧狡蝝??雿牧??
+| 甈? | 憿? | 隤芣? |
 |------|------|------|
-| `id` | string | 唯一的轉款識別碼 |
-| `account` | string | 玩家帳號 |
-| `transferId` | string | 您的轉款 ID |
-| `type` | integer | `0` = 充款，`1` = 提款 |
-| `amount` | number | 轉款金額 |
-| `balanceAfter` | number | 轉款後餘額 |
-| `createdAt` | string | 轉款時間（ISO 8601） |
+| `id` | string | ?臭???甈曇??亦Ⅳ |
+| `account` | string | ?拙振撣唾? |
+| `transferId` | string | ?函?頧狡 ID |
+| `type` | integer | `0` = ?狡嚗1` = ?狡 |
+| `amount` | number | 頧狡?? |
+| `balanceBefore` | number | Balance before transfer |
+| `balanceAfter` | number | 頧狡敺?憿?|
+| `createdAt` | string | 頧狡??嚗SO 8601嚗?|
 
 ---
 
-### 5. 啟動遊戲
+### 5. ???
 
-為玩家生成一個經身分驗證的遊戲 URL。
+?箇摰嗥?????頨怠?撽?????URL??
+**蝡舫?嚗?* `POST /integration/launch`
 
-**端點：** `POST /integration/launch`
+#### 隢?
 
-#### 請求
-
-| 參數 | 類型 | 必填 | 說明 |
+| ? | 憿? | 敹‵ | 隤芣? |
 |------|------|------|------|
-| `merchantId` | string | 是 | 您的商家 ID |
-| `account` | string | 是 | 玩家帳號識別碼 |
-| `timestamp` | integer | 是 | Unix 時戳，單位為秒 |
-| `hash` | string | 是 | 請求簽章 |
+| `merchantId` | string | ??| ?函??振 ID |
+| `account` | string | ??| ?拙振撣唾?霅蝣?|
+| `timestamp` | integer | ??| Unix ?嚗雿蝘?|
+| `hash` | string | ??| 隢?蝪賜? |
 
-**簽章參數（依序）：**
+**蝪賜??嚗?摨?嚗?*
 ```
 hash = SHA256(merchantId + "&" + account + "&" + timestamp + "&" + hashKey)
 ```
 
-#### 請求範例
+#### 隢?蝭?
 
 ```json
 {
@@ -537,7 +513,7 @@ hash = SHA256(merchantId + "&" + account + "&" + timestamp + "&" + hashKey)
 }
 ```
 
-#### 回應
+#### ??
 
 ```json
 {
@@ -550,36 +526,34 @@ hash = SHA256(merchantId + "&" + account + "&" + timestamp + "&" + hashKey)
 }
 ```
 
-| 欄位 | 類型 | 說明 |
+| 甈? | 憿? | 隤芣? |
 |------|------|------|
-| `url` | string | 附帶 JWT 存取令牌的遊戲 URL |
+| `url` | string | ?葆 JWT 摮?隞斤?????URL |
 
-#### 使用方式
+#### 雿輻?孵?
 
-將傳回的 URL 於瀏览器或 iframe 中開啟，即可為該玩家啟動遊戲。存取令牌預設有效時限為 1 小時。
-
+撠?? URL ?潛??冽? iframe 銝剝????喳?箄府?拙振??????誘??閮剜???? 1 撠???
 ---
 
-### 6. 取得下注限額
+### 6. ??銝釣??
 
-取得該商家目前設定的下注限額。
+??閰脣?摰嗥?身摰?銝釣????
+**蝡舫?嚗?* `POST /integration/config/bet-limit/get`
 
-**端點：** `POST /integration/config/bet-limit/get`
+#### 隢?
 
-#### 請求
-
-| 參數 | 類型 | 必填 | 說明 |
+| ? | 憿? | 敹‵ | 隤芣? |
 |------|------|------|------|
-| `merchantId` | string | 是 | 您的商家 ID |
-| `timestamp` | integer | 是 | Unix 時戳，單位為秒 |
-| `hash` | string | 是 | 請求簽章 |
+| `merchantId` | string | ??| ?函??振 ID |
+| `timestamp` | integer | ??| Unix ?嚗雿蝘?|
+| `hash` | string | ??| 隢?蝪賜? |
 
-**簽章參數（依序）：**
+**蝪賜??嚗?摨?嚗?*
 ```
 hash = SHA256(merchantId + "&" + timestamp + "&" + hashKey)
 ```
 
-#### 請求範例
+#### 隢?蝭?
 
 ```json
 {
@@ -589,7 +563,7 @@ hash = SHA256(merchantId + "&" + timestamp + "&" + hashKey)
 }
 ```
 
-#### 回應
+#### ??
 
 ```json
 {
@@ -605,31 +579,29 @@ hash = SHA256(merchantId + "&" + timestamp + "&" + hashKey)
 
 ---
 
-### 7. 設定下注限額
+### 7. 閮剖?銝釣??
 
-設定該商家每個回合允許的最低與最高下注金額。
+閮剖?閰脣?摰嗆?????閮梁??雿??擃?瘜券?憿?
+**蝡舫?嚗?* `POST /integration/config/bet-limit`
 
-**端點：** `POST /integration/config/bet-limit`
+#### 隢?
 
-#### 請求
-
-| 參數 | 類型 | 必填 | 說明 |
+| ? | 憿? | 敹‵ | 隤芣? |
 |------|------|------|------|
-| `merchantId` | string | 是 | 您的商家 ID |
-| `minBetAmount` | number | 是 | 玩家每回合的最低下注金額 |
-| `maxBetAmount` | number | 是 | 玩家每回合的最高下注金額 |
-| `timestamp` | integer | 是 | Unix 時戳，單位為秒 |
-| `hash` | string | 是 | 請求簽章 |
+| `merchantId` | string | ??| ?函??振 ID |
+| `minBetAmount` | number | ??| ?拙振瘥????雿?瘜券?憿?|
+| `maxBetAmount` | number | ??| ?拙振瘥????擃?瘜券?憿?|
+| `timestamp` | integer | ??| Unix ?嚗雿蝘?|
+| `hash` | string | ??| 隢?蝪賜? |
 
-**規則：**
-- `minBetAmount` 必須小於或等於目前最低的筹码面額。
-
-**簽章參數（依序）：**
+**閬?嚗?*
+- `minBetAmount` 敹?撠???潛??雿?蝑寧??ａ???
+**蝪賜??嚗?摨?嚗?*
 ```
 hash = SHA256(merchantId + "&" + minBetAmount + "&" + maxBetAmount + "&" + timestamp + "&" + hashKey)
 ```
 
-#### 請求範例
+#### 隢?蝭?
 
 ```json
 {
@@ -641,7 +613,7 @@ hash = SHA256(merchantId + "&" + minBetAmount + "&" + maxBetAmount + "&" + times
 }
 ```
 
-#### 回應
+#### ??
 
 ```json
 {
@@ -657,26 +629,25 @@ hash = SHA256(merchantId + "&" + minBetAmount + "&" + maxBetAmount + "&" + times
 
 ---
 
-### 8. 取得筹码面額
+### 8. ??蝑寧??ａ?
 
-取得目前投注介面上顯示的 7 種筹码面額。
+???桀??釣隞銝＊蝷箇? 7 蝔桃食?憿?
+**蝡舫?嚗?* `POST /integration/config/token-values/get`
 
-**端點：** `POST /integration/config/token-values/get`
+#### 隢?
 
-#### 請求
-
-| 參數 | 類型 | 必填 | 說明 |
+| ? | 憿? | 敹‵ | 隤芣? |
 |------|------|------|------|
-| `merchantId` | string | 是 | 您的商家 ID |
-| `timestamp` | integer | 是 | Unix 時戳，單位為秒 |
-| `hash` | string | 是 | 請求簽章 |
+| `merchantId` | string | ??| ?函??振 ID |
+| `timestamp` | integer | ??| Unix ?嚗雿蝘?|
+| `hash` | string | ??| 隢?蝪賜? |
 
-**簽章參數（依序）：**
+**蝪賜??嚗?摨?嚗?*
 ```
 hash = SHA256(merchantId + "&" + timestamp + "&" + hashKey)
 ```
 
-#### 請求範例
+#### 隢?蝭?
 
 ```json
 {
@@ -686,7 +657,7 @@ hash = SHA256(merchantId + "&" + timestamp + "&" + hashKey)
 }
 ```
 
-#### 回應
+#### ??
 
 ```json
 {
@@ -701,32 +672,29 @@ hash = SHA256(merchantId + "&" + timestamp + "&" + hashKey)
 
 ---
 
-### 9. 設定筹码面額
+### 9. 閮剖?蝑寧??ａ?
 
-自定義投注介面上顯示的 7 種筹码面額。
+?芸?蝢拇?瘜其??Ｖ?憿舐內??7 蝔桃食?憿?
+**蝡舫?嚗?* `POST /integration/config/token-values`
 
-**端點：** `POST /integration/config/token-values`
+#### 隢?
 
-#### 請求
-
-| 參數 | 類型 | 必填 | 說明 |
+| ? | 憿? | 敹‵ | 隤芣? |
 |------|------|------|------|
-| `merchantId` | string | 是 | 您的商家 ID |
-| `tokenValues` | number[] | 是 | 7 個筹码面額的陣列（順序為從左到右) |
-| `timestamp` | integer | 是 | Unix 時戳，單位為秒 |
-| `hash` | string | 是 | 請求簽章 |
+| `merchantId` | string | ??| ?函??振 ID |
+| `tokenValues` | number[] | ??| 7 ?食?憿????嚗?摨敺椰?啣) |
+| `timestamp` | integer | ??| Unix ?嚗雿蝘?|
+| `hash` | string | ??| 隢?蝪賜? |
 
-**規則：**
-- 最低的筹码面額必須大於或等於目前設定的 `minBetAmount`。
-
-**簽章參數（依序）：**
+**閬?嚗?*
+- ?雿?蝑寧??ａ?敹?憭扳???潛?身摰? `minBetAmount`??
+**蝪賜??嚗?摨?嚗?*
 ```
 hash = SHA256(merchantId + "&" + tokenValuesCSV + "&" + timestamp + "&" + hashKey)
 ```
 
-其中 `tokenValuesCSV` 為請求中 7 個面額值以逗號分隔拼接而成的字串。
-
-#### 請求範例
+?嗡葉 `tokenValuesCSV` ?箄?瘙葉 7 ?憿潔誑?????潭????銝脯?
+#### 隢?蝭?
 
 ```json
 {
@@ -737,7 +705,7 @@ hash = SHA256(merchantId + "&" + tokenValuesCSV + "&" + timestamp + "&" + hashKe
 }
 ```
 
-#### 回應
+#### ??
 
 ```json
 {
@@ -752,37 +720,36 @@ hash = SHA256(merchantId + "&" + tokenValuesCSV + "&" + timestamp + "&" + hashKe
 
 ---
 
-## 資料類型
+## 鞈?憿?
 
-### 數字投注類型
+### ?詨??釣憿?
 
-| 類型 | 說明 | 是否需要選項值 |
+| 憿? | 隤芣? | ?臬?閬??|
 |------|------|--------------|
-| `SMALL` | 各位數字之和為 0～13 | 否 |
-| `BIG` | 各位數字之和為 14～27 | 否 |
-| `ODD` | 各位數字之和為奇數 | 否 |
-| `EVEN` | 各位數字之和為偶數 | 否 |
-| `ANY_TRIPLE` | 3 位數字全部相同 | 否 |
-| `DOUBLE` | 指定的雙重組合（例如 "00"、"11"） | 是（`"00"` ～ `"99"`） |
-| `TRIPLE` | 指定的三重組合（例如 "000"、"111"） | 是（`"000"` ～ `"999"`） |
-| `SUM` | 指定的數字總和 | 是（`"3"` ～ `"27"`） |
-| `SINGLE` | 指定的單個數字至少出現一次 | 是（`"0"` ～ `"9"`） |
+| `SMALL` | ???詨?銋???0嚚?3 | ??|
+| `BIG` | ???詨?銋???14嚚?7 | ??|
+| `ODD` | ???詨?銋??箏???| ??|
+| `EVEN` | ???詨?銋??箏??| ??|
+| `ANY_TRIPLE` | 3 雿摮?函??| ??|
+| `DOUBLE` | ????????靘? "00"??11"嚗?| ?荔?`"00"` 嚚?`"99"`嚗?|
+| `TRIPLE` | ????????靘? "000"??111"嚗?| ?荔?`"000"` 嚚?`"999"`嚗?|
+| `SUM` | ???摮蜇??| ?荔?`"3"` 嚚?`"27"`嚗?|
+| `SINGLE` | ????摮撠?曆?甈?| ?荔?`"0"` 嚚?`"9"`嚗?|
 
-### 下注結果類型
+### 銝釣蝯?憿?
 
-| 結果 | 說明 |
+| 蝯? | 隤芣? |
 |------|------|
-| `PENDING` | 投注進行中，回合尚未結束 |
-| `WIN` | 玩家獲勝 |
-| `LOSE` | 玩家輸掉 |
-| `REFUND` | 投注已退款（回合取消） |
+| `PENDING` | ?釣?脰?銝哨???撠蝯? |
+| `WIN` | ?拙振?脣? |
+| `LOSE` | ?拙振頛豢? |
+| `REFUND` | ?釣撌脤甈橘?????嚗?|
 
 ---
 
-## 程碼範例
+## 蝔Ⅳ蝭?
 
-### 完整整合範例（Node.js）
-
+### 摰?游?蝭?嚗ode.js嚗?
 ```javascript
 const crypto = require('crypto');
 const axios = require('axios');
@@ -922,7 +889,7 @@ class GameIntegration {
   }
 }
 
-// 使用範例
+// 雿輻蝭?
 async function main() {
   const integration = new GameIntegration(
     'MERCHANT001',
@@ -930,40 +897,41 @@ async function main() {
     'https://api.your-game-domain.com'
   );
 
-  // 建立帳號
+  // 撱箇?撣唾?
   const createResult = await integration.createAccount('player123');
-  console.log('建立帳號:', createResult);
+  console.log('撱箇?撣唾?:', createResult);
 
-  // 充款 100 USDT
+  // ?狡 100 USDT
   const depositResult = await integration.transfer(
     'player123',
     'DEP-' + Date.now(),
     0,
     100
   );
-  console.log('充款:', depositResult);
+  console.log('?狡:', depositResult);
 
-  // 啟動遊戲
+  // ???
   const launchResult = await integration.launchGame('player123');
-  console.log('遊戲 URL:', launchResult.data?.url);
+  console.log('? URL:', launchResult.data?.url);
 
-  // 取得下注紀錄
-  const betsResult = await integration.getBetHistory(
+  // ??銝釣蝝??  const betsResult = await integration.getBetHistory(
     '2026-01-01T00:00:00.000Z',
     50,
     1
   );
-  console.log('下注紀錄:', betsResult);
+  console.log('銝釣蝝??', betsResult);
 
-  // 提款 50 USDT
+  // ?狡 50 USDT
   const withdrawResult = await integration.transfer(
     'player123',
     'WDR-' + Date.now(),
     1,
     50
   );
-  console.log('提款:', withdrawResult);
+  console.log('?狡:', withdrawResult);
 }
 
 main().catch(console.error);
 ```
+
+

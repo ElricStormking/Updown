@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { Merchant, Prisma, WalletTxType } from '@prisma/client';
+import { Merchant, Prisma, UserStatus, WalletTxType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { WalletService } from '../wallet/wallet.service';
 import { GameConfigService } from '../config/game-config.service';
@@ -185,6 +185,7 @@ export class IntegrationService {
             orderNo: transferId,
             type,
             amount: amountDecimal,
+            balanceBefore: wallet.balance.sub(adjustAmount),
             balanceAfter: wallet.balance,
           },
         });
@@ -382,6 +383,7 @@ export class IntegrationService {
         transferId: t.orderNo,
         type: t.type,
         amount: Number(t.amount),
+        balanceBefore: Number(t.balanceBefore),
         balanceAfter: Number(t.balanceAfter),
         createdAt: t.createdAt.toISOString(),
       }));
@@ -416,12 +418,11 @@ export class IntegrationService {
       );
     }
 
-    const user = await this.prisma.user.findUnique({
+    const user = await this.prisma.user.findFirst({
       where: {
-        merchantId_merchantAccount: {
-          merchantId: merchant.merchantId,
-          merchantAccount: account,
-        },
+        merchantId: merchant.merchantId,
+        merchantAccount: account,
+        status: UserStatus.ENABLED,
       },
     });
 
@@ -452,9 +453,11 @@ export class IntegrationService {
       const gameUrl =
         this.configService.get<string>('integration.gameUrl') ??
         'https://game.example.com';
+      const separator = gameUrl.includes('?') ? '&' : '?';
+      const query = `accessToken=${encodeURIComponent(accessToken)}&merchantId=${encodeURIComponent(merchant.merchantId)}`;
 
       return IntegrationResponseDto.success({
-        url: `${gameUrl}?accessToken=${accessToken}`,
+        url: `${gameUrl}${separator}${query}`,
       });
     } catch (error) {
       this.logger.error('Failed to launch game', error);

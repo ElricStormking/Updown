@@ -184,12 +184,116 @@ async function seedTestPlayerTopUp() {
   return user;
 }
 
+async function seedQaMerchantPlayers() {
+  const merchantId = 'qamerchant1';
+  const accounts = [
+    'testplayer1',
+    'testplayer2',
+    'testplayer3',
+    'testplayer4',
+    'testplayer5',
+  ];
+  const password = 'test1234';
+  const saltRounds = Number(process.env.PASSWORD_SALT_ROUNDS ?? 12);
+  const passwordHash = await bcrypt.hash(password, saltRounds);
+
+  for (const account of accounts) {
+    const email = account;
+    const user = await prisma.user.upsert({
+      where: {
+        merchantId_merchantAccount: {
+          merchantId,
+          merchantAccount: account,
+        },
+      },
+      update: {
+        email,
+        password: passwordHash,
+        status: 'ENABLED',
+        wallet: {
+          upsert: {
+            create: {
+              balance: new Prisma.Decimal(0),
+              currency: 'USDT',
+            },
+            update: {},
+          },
+        },
+      },
+      create: {
+        email,
+        password: passwordHash,
+        merchantId,
+        merchantAccount: account,
+        status: 'ENABLED',
+        wallet: {
+          create: {
+            balance: new Prisma.Decimal(0),
+            currency: 'USDT',
+          },
+        },
+      },
+    });
+    console.log(`??Seeded qa player ${user.merchantAccount} (${merchantId})`);
+  }
+}
+
+async function seedQaBannedPlayer() {
+  const merchantId = 'qamerchant1';
+  const account = 'bannedplayer1';
+  const email = account;
+  const password = 'ban1234';
+  const saltRounds = Number(process.env.PASSWORD_SALT_ROUNDS ?? 12);
+  const passwordHash = await bcrypt.hash(password, saltRounds);
+
+  const user = await prisma.user.upsert({
+    where: {
+      merchantId_merchantAccount: {
+        merchantId,
+        merchantAccount: account,
+      },
+    },
+    update: {
+      email,
+      password: passwordHash,
+      status: 'DISABLED',
+      wallet: {
+        upsert: {
+          create: {
+            balance: new Prisma.Decimal(0),
+            currency: 'USDT',
+          },
+          update: {},
+        },
+      },
+    },
+    create: {
+      email,
+      password: passwordHash,
+      merchantId,
+      merchantAccount: account,
+      status: 'DISABLED',
+      wallet: {
+        create: {
+          balance: new Prisma.Decimal(0),
+          currency: 'USDT',
+        },
+      },
+    },
+  });
+
+  console.log(`??Seeded banned qa player ${user.merchantAccount} (${merchantId})`);
+  return user;
+}
+
 async function main() {
   await seedTestMerchant();
   await seedDemoUser();
   await seedAdminUser();
   await seedQaAdminAccount();
   await seedTestPlayerTopUp();
+  await seedQaMerchantPlayers();
+  await seedQaBannedPlayer();
 }
 
 main()

@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  ForbiddenException,
+  Get,
+  Post,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import type { AppConfig } from '../config/configuration';
@@ -26,7 +34,19 @@ export class AdminAuthController {
   }
 
   @Post('register')
-  async register(@Body() dto: AdminRegisterDto) {
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  async register(
+    @Body() dto: AdminRegisterDto,
+    @Req()
+    request?: {
+      adminContext?: { account: string; merchantId: string; isSuperAdmin: boolean };
+    },
+  ) {
+    if (!request?.adminContext?.isSuperAdmin) {
+      throw new ForbiddenException(
+        'Only superadmin can create admin accounts',
+      );
+    }
     const admin = await this.accountsService.createAccount({
       account: dto.account,
       password: dto.password,

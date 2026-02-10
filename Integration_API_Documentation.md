@@ -480,6 +480,7 @@ hash = SHA256(merchantId + "&" + formattedStartTime + "&" + pageSize + "&" + pag
         "transferId": "TXN20260202001",
         "type": 0,
         "amount": 100.00,
+        "balanceBefore": 50.00,
         "balanceAfter": 150.00,
         "createdAt": "2026-02-02T10:30:00.000Z"
       }
@@ -501,6 +502,7 @@ hash = SHA256(merchantId + "&" + formattedStartTime + "&" + pageSize + "&" + pag
 | `transferId` | string | Your transfer ID |
 | `type` | integer | `0` = Deposit, `1` = Withdrawal |
 | `amount` | number | Transfer amount |
+| `balanceBefore` | number | Balance before transfer |
 | `balanceAfter` | number | Balance after transfer |
 | `createdAt` | string | Transfer time (ISO 8601) |
 
