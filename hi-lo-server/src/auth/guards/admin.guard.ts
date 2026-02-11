@@ -11,6 +11,7 @@ import type { AppConfig } from '../../config/configuration';
 import { PrismaService } from '../../prisma/prisma.service';
 
 export type AdminContext = {
+  adminId: string;
   account: string;
   merchantId: string;
   isSuperAdmin: boolean;
@@ -41,6 +42,7 @@ export class AdminGuard implements CanActivate {
         throw new ForbiddenException('Admin access required');
       }
       request.adminContext = {
+        adminId: admin.id,
         account: admin.account,
         merchantId: admin.merchantId,
         isSuperAdmin: admin.merchantId === 'hotcoregm',
@@ -52,6 +54,7 @@ export class AdminGuard implements CanActivate {
       throw new ForbiddenException('Admin access required');
     }
     request.adminContext = {
+      adminId: user.userId,
       account: user.account,
       merchantId: 'hotcoregm',
       isSuperAdmin: true,

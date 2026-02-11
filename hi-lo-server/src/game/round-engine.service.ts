@@ -35,6 +35,10 @@ import { GameConfigSnapshot } from '../config/game-config.defaults';
 
 const COMPLETE_PHASE_DURATION_MS = 10_000;
 
+type RoundConfigSnapshot = GameConfigSnapshot & {
+  merchantSnapshots?: Record<string, GameConfigSnapshot>;
+};
+
 @Injectable()
 export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(RoundEngineService.name);
@@ -102,12 +106,21 @@ export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
     }
     const now = Date.now();
     const config = await this.gameConfigService.getActiveConfig();
-    this.currentConfig = config;
+    const merchantSnapshots =
+      await this.gameConfigService.getMerchantConfigSnapshots();
+    const runtimeVersion =
+      await this.gameConfigService.getRuntimeConfigVersionTag();
+    const roundConfig: RoundConfigSnapshot = {
+      ...config,
+      configVersion: runtimeVersion,
+      merchantSnapshots,
+    };
+    this.currentConfig = roundConfig;
     const start = new Date(now);
-    const lock = new Date(now + config.bettingDurationMs);
-    const end = new Date(lock.getTime() + config.resultDurationMs);
-    const oddsUp = config.payoutMultiplierUp;
-    const oddsDown = config.payoutMultiplierDown;
+    const lock = new Date(now + roundConfig.bettingDurationMs);
+    const end = new Date(lock.getTime() + roundConfig.resultDurationMs);
+    const oddsUp = roundConfig.payoutMultiplierUp;
+    const oddsDown = roundConfig.payoutMultiplierDown;
 
     const round = await this.prisma.round.create({
       data: {
@@ -116,7 +129,7 @@ export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
         endTime: end,
         oddsUp: new Prisma.Decimal(oddsUp),
         oddsDown: new Prisma.Decimal(oddsDown),
-        gameConfigSnapshot: config as unknown as Prisma.InputJsonValue,
+        gameConfigSnapshot: roundConfig as unknown as Prisma.InputJsonValue,
         // Keep bonus slots hidden during BETTING; generate and reveal at lock.
         digitBonusSlots: [] as unknown as Prisma.InputJsonValue,
         digitBonusFactor: null,

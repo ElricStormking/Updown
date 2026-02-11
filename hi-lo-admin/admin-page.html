@@ -133,6 +133,64 @@
       .status.error {
         color: #f87171;
       }
+      .toast-stack {
+        position: fixed;
+        right: 20px;
+        bottom: 20px;
+        z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        pointer-events: none;
+      }
+      .toast {
+        min-width: 240px;
+        max-width: 420px;
+        padding: 0.65rem 0.9rem;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        background: rgba(11, 19, 32, 0.95);
+        color: var(--text);
+        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+        font-size: 0.88rem;
+        line-height: 1.35;
+        transform: translateY(8px);
+        opacity: 0;
+        animation: toast-in 140ms ease forwards;
+      }
+      .toast.success {
+        border-color: rgba(52, 211, 153, 0.45);
+        background: rgba(6, 30, 24, 0.95);
+        color: #86efac;
+      }
+      .toast.error {
+        border-color: rgba(248, 113, 113, 0.5);
+        background: rgba(44, 14, 14, 0.95);
+        color: #fecaca;
+      }
+      .toast.hide {
+        animation: toast-out 170ms ease forwards;
+      }
+      @keyframes toast-in {
+        from {
+          transform: translateY(8px);
+          opacity: 0;
+        }
+        to {
+          transform: translateY(0);
+          opacity: 1;
+        }
+      }
+      @keyframes toast-out {
+        from {
+          transform: translateY(0);
+          opacity: 1;
+        }
+        to {
+          transform: translateY(8px);
+          opacity: 0;
+        }
+      }
       .divider {
         display: flex;
         align-items: center;
@@ -627,19 +685,10 @@
         <div class="tab-content active" id="tab-config">
       <section class="section" id="config-section">
         <h2>Game Configuration</h2>
-        <div class="grid" style="margin-bottom: 1rem;">
-          <label>
-            Select Merchant
-            <select id="cfg-merchant-select">
-              <option value="">Global (Default)</option>
-            </select>
-          </label>
-          <div style="display: flex; gap: 0.5rem; align-items: flex-end;">
-            <button type="button" id="cfg-copy-global" class="secondary small">Copy from Global</button>
-            <button type="button" id="cfg-delete-merchant" class="secondary small" style="display:none;">Delete Merchant Config</button>
-          </div>
+        <div class="status" id="cfg-scope-note" style="margin-bottom: 1rem;">
+          Global config only. Changes apply next round.
         </div>
-        <form id="config-form">
+        <form id="config-form" novalidate>
           <div class="grid">
             <label class="bonus-mode-toggle">
               Bonus Mode
@@ -667,7 +716,7 @@
             </label>
             <label class="limited-hide">
               Price snapshot interval (ms)
-              <input id="cfg-snapshot-interval" type="number" min="0" step="100" />
+              <input id="cfg-snapshot-interval" type="number" min="1" step="1" />
             </label>
             <label>
               Bonus slot chance total
@@ -1068,6 +1117,30 @@
         } else {
           el.classList.remove('error');
         }
+      };
+
+      let toastStack = null;
+      const getToastStack = () => {
+        if (toastStack) return toastStack;
+        toastStack = document.createElement('div');
+        toastStack.className = 'toast-stack';
+        document.body.appendChild(toastStack);
+        return toastStack;
+      };
+
+      const showToast = (message, isError) => {
+        if (!message) return;
+        const stack = getToastStack();
+        const toast = document.createElement('div');
+        toast.className = 'toast ' + (isError ? 'error' : 'success');
+        toast.textContent = message;
+        stack.appendChild(toast);
+        setTimeout(() => {
+          toast.classList.add('hide');
+          setTimeout(() => {
+            toast.remove();
+          }, 180);
+        }, 2400);
       };
 
       const closeMerchantAdminModal = () => {
@@ -1937,11 +2010,12 @@
         scheduleBonusRatioScrollbarUpdate();
       };
 
-      // Merchant selector elements
-      const cfgMerchantSelect = document.getElementById('cfg-merchant-select');
-      const cfgCopyGlobal = document.getElementById('cfg-copy-global');
-      const cfgDeleteMerchant = document.getElementById('cfg-delete-merchant');
-      let selectedMerchantId = '';
+      const setConfigEditable = (editable) => {
+        if (!configForm) return;
+        configForm.querySelectorAll('input, select, button').forEach((node) => {
+          node.disabled = !editable;
+        });
+      };
 
       const loadStoredAdmin = () => {
         const raw = localStorage.getItem(adminInfoKey);
@@ -1968,63 +2042,43 @@
       const applyAdminPermissions = () => {
         const limited = Boolean(currentAdmin && !currentAdmin.isSuperAdmin);
         document.body.classList.toggle('admin-limited', limited);
-        if (limited && currentAdmin?.merchantId) {
-          selectedMerchantId = currentAdmin.merchantId;
+        setConfigEditable(true);
+        const scopeNote = document.getElementById('cfg-scope-note');
+        if (scopeNote) {
+          scopeNote.textContent = limited
+            ? 'Merchant config only. You can tune your own merchant settings. Changes apply next round.'
+            : 'Global config only. Changes apply next round.';
+        }
+        if (limited) {
           closeMerchantAdminModal();
         }
-        if (cfgMerchantSelect) {
-          cfgMerchantSelect.disabled = limited;
-        }
       };
 
-      const loadMerchantList = async () => {
-        if (!cfgMerchantSelect || !token) return;
-        if (currentAdmin && !currentAdmin.isSuperAdmin) {
-          cfgMerchantSelect.innerHTML = '';
-          const opt = document.createElement('option');
-          opt.value = currentAdmin.merchantId || '';
-          opt.textContent = currentAdmin.merchantId
-            ? currentAdmin.merchantId + ' (Limited)'
-            : 'Assigned merchant';
-          cfgMerchantSelect.appendChild(opt);
-          cfgMerchantSelect.value = currentAdmin.merchantId || '';
-          return;
-        }
-        try {
-          const merchants = await apiFetch('/admin/merchants?limit=100');
-          if (!merchants || !merchants.items) return;
-          cfgMerchantSelect.innerHTML = '<option value="">Global (Default)</option>';
-          merchants.items.forEach(m => {
-            const opt = document.createElement('option');
-            opt.value = m.merchantId;
-            opt.textContent = m.merchantId + ' - ' + m.name;
-            cfgMerchantSelect.appendChild(opt);
-          });
-        } catch (err) {
-          console.error('Failed to load merchants:', err);
-        }
+      const buildGameConfigPath = () => '/config/game?_t=' + String(Date.now());
+
+      const readSumPayout = (config, sumKey) => {
+        const sumTable = config?.digitPayouts?.sum;
+        if (!sumTable) return null;
+        const value = sumTable[String(sumKey)] ?? sumTable[sumKey];
+        const num = Number(value);
+        return Number.isFinite(num) ? num : null;
       };
 
-      const loadConfig = async (merchantId) => {
-        const isLimited = Boolean(currentAdmin && !currentAdmin.isSuperAdmin);
-        const mid = isLimited
-          ? currentAdmin.merchantId || ''
-          : merchantId !== undefined
-            ? merchantId
-            : selectedMerchantId;
+      const loadConfig = async () => {
         setStatus(configStatus, 'Loading...');
-        const url = mid ? '/config/game?merchantId=' + encodeURIComponent(mid) : '/config/game';
-        const config = await apiFetch(url);
+        const config = await apiFetch(buildGameConfigPath());
         setConfigForm(config);
-        if (cfgDeleteMerchant) cfgDeleteMerchant.style.display = mid ? 'inline-block' : 'none';
-        setStatus(configStatus, mid ? 'Loaded config for ' + mid + '.' : 'Loaded global config.');
-      };
-
-      if (cfgMerchantSelect) {
-        cfgMerchantSelect.addEventListener('change', (e) => {
-          selectedMerchantId = e.target.value;
-          loadConfig(selectedMerchantId).catch(err => setStatus(configStatus, err.message, true));
-        });
+        const limited = Boolean(currentAdmin && !currentAdmin.isSuperAdmin);
+        if (limited) {
+          setStatus(
+            configStatus,
+            'Loaded merchant config for ' +
+              (currentAdmin?.merchantId || config?.merchantId || 'assigned merchant') +
+              '.',
+          );
+        } else {
+          setStatus(configStatus, 'Loaded global config.');
+        }
       }
 
       if (bonusModeSelect) {
@@ -2032,61 +2086,6 @@
           syncBonusModeChip(e.target.value);
         });
       }
-
-      if (cfgCopyGlobal) {
-        cfgCopyGlobal.addEventListener('click', async () => {
-          if (!selectedMerchantId) {
-            alert('Please select a merchant first.');
-            return;
-          }
-          if (!confirm('Copy global config to merchant ' + selectedMerchantId + '?')) return;
-          setStatus(configStatus, 'Copying...');
-          try {
-            const globalCfg = await apiFetch('/config/game');
-            const payload = buildConfigPayloadFromConfig(globalCfg);
-            await apiFetch('/config/game?merchantId=' + encodeURIComponent(selectedMerchantId), {
-              method: 'PUT',
-              body: JSON.stringify(payload),
-            });
-            await loadConfig(selectedMerchantId);
-            setStatus(configStatus, 'Copied global config to ' + selectedMerchantId + '.');
-          } catch (err) {
-            setStatus(configStatus, err.message || 'Copy failed', true);
-          }
-        });
-      }
-
-      if (cfgDeleteMerchant) {
-        cfgDeleteMerchant.addEventListener('click', async () => {
-          if (!selectedMerchantId) return;
-          if (!confirm('Delete config for merchant ' + selectedMerchantId + '? It will fall back to global config.')) return;
-          setStatus(configStatus, 'Deleting...');
-          try {
-            await apiFetch('/config/game/merchant/' + encodeURIComponent(selectedMerchantId), { method: 'DELETE' });
-            setStatus(configStatus, 'Deleted config for ' + selectedMerchantId + '. Now showing global config.');
-            await loadConfig(selectedMerchantId);
-          } catch (err) {
-            setStatus(configStatus, err.message || 'Delete failed', true);
-          }
-        });
-      }
-
-      const buildConfigPayloadFromConfig = (config) => {
-        return {
-          bettingDurationMs: config.bettingDurationMs,
-          resultDurationMs: config.resultDurationMs,
-          resultDisplayDurationMs: config.resultDisplayDurationMs,
-          priceSnapshotInterval: config.priceSnapshotInterval,
-          bonusModeEnabled: config.bonusModeEnabled !== false,
-          bonusSlotChanceTotal: config.bonusSlotChanceTotal,
-          minBetAmount: config.minBetAmount,
-          maxBetAmount: config.maxBetAmount,
-          payoutMultiplierUp: config.payoutMultiplierUp,
-          payoutMultiplierDown: config.payoutMultiplierDown,
-          digitPayouts: config.digitPayouts,
-          digitBonusRatios: config.digitBonusRatios,
-        };
-      };
 
       const buildConfigPayload = () => {
         const sum = {};
@@ -2273,7 +2272,6 @@
         saveAdminInfo(data.user || null);
         setStatus(loginStatus, 'Login successful.');
         setAuthState(true);
-        loadMerchantList().catch(err => console.error('Failed to load merchants:', err));
         loadConfig().catch((error) =>
           setStatus(configStatus, error.message || 'Failed to load config', true),
         );
@@ -2312,7 +2310,6 @@
             localStorage.setItem(tokenKey, token);
             saveAdminInfo(data.user || null);
             setAuthState(true);
-            loadMerchantList().catch(err => console.error('Failed to load merchants:', err));
             loadConfig().catch((error) =>
               setStatus(configStatus, error.message || 'Failed to load config', true),
             );
@@ -2330,7 +2327,7 @@
 
       configReload.addEventListener('click', async () => {
         try {
-          await loadConfig(selectedMerchantId);
+          await loadConfig();
         } catch (error) {
           setStatus(configStatus, error.message || 'Failed to load config', true);
         }
@@ -2341,15 +2338,57 @@
         try {
           setStatus(configStatus, 'Saving...');
           const payload = buildConfigPayload();
-          const url = selectedMerchantId ? '/config/game?merchantId=' + encodeURIComponent(selectedMerchantId) : '/config/game';
-          const res = await apiFetch(url, {
+          const expectedSum27 = Number(payload?.digitPayouts?.sum?.[27]);
+          await apiFetch('/config/game', {
             method: 'PUT',
             body: JSON.stringify(payload),
           });
-          setConfigForm(res);
-          setStatus(configStatus, selectedMerchantId ? 'Saved config for ' + selectedMerchantId + '. Changes apply next round.' : 'Saved global config. Changes apply next round.');
+          const latest = await apiFetch(buildGameConfigPath());
+          setConfigForm(latest);
+
+          const persistedSum27 = readSumPayout(latest, 27);
+          if (
+            Number.isFinite(expectedSum27) &&
+            persistedSum27 !== null &&
+            Math.abs(expectedSum27 - persistedSum27) > 0.000001
+          ) {
+            throw new Error(
+              'Save response mismatch detected. Expected SUM 27 ' +
+                String(expectedSum27) +
+                ' but server has ' +
+                String(persistedSum27) +
+                '.',
+            );
+          }
+
+          const limited = Boolean(currentAdmin && !currentAdmin.isSuperAdmin);
+          if (limited) {
+            const successMessage =
+              'Successfully saved merchant config for ' +
+              (currentAdmin?.merchantId || latest?.merchantId || 'assigned merchant') +
+              '. SUM 27=' +
+              String(persistedSum27 ?? '--') +
+              '. Changes apply from the next newly started round.';
+            setStatus(
+              configStatus,
+              successMessage,
+            );
+            showToast('Successfully saved.', false);
+          } else {
+            const successMessage =
+              'Successfully saved global config. SUM 27=' +
+              String(persistedSum27 ?? '--') +
+              '. Changes apply from the next newly started round.';
+            setStatus(
+              configStatus,
+              successMessage,
+            );
+            showToast('Successfully saved.', false);
+          }
         } catch (error) {
-          setStatus(configStatus, error.message || 'Failed to save config', true);
+          const failMessage = error.message || 'Failed to save config';
+          setStatus(configStatus, failMessage, true);
+          showToast(failMessage, true);
         }
       });
 
@@ -2388,7 +2427,6 @@
           }
         };
         hydrateAdminProfile().finally(() => {
-          loadMerchantList().catch(err => console.error('Failed to load merchants:', err));
           loadConfig().catch((error) => setStatus(configStatus, error.message || 'Failed to load config', true));
           loadRtp().catch((error) => setStatus(rtpStatus, error.message || 'Failed to load RTP', true));
         });

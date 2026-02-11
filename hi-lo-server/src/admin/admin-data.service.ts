@@ -492,7 +492,7 @@ export class AdminDataService {
   }
 
   // Player Logins
-  async queryPlayerLogins(dto: QueryPlayerLoginsDto) {
+  async queryPlayerLogins(dto: QueryPlayerLoginsDto, merchantScope?: string) {
     const { page = 0, limit = 20, start, end, merchantId, account } = dto;
     const startDate = parseDateOnly(start);
     const endDate = parseDateOnly(end);
@@ -501,7 +501,8 @@ export class AdminDataService {
       : null;
 
     const where: Prisma.PlayerLoginWhereInput = {};
-    if (merchantId) where.merchantId = merchantId;
+    if (merchantScope) where.merchantId = merchantScope;
+    else if (merchantId) where.merchantId = merchantId;
     if (startDate || endExclusive) {
       where.loginTime = {};
       if (startDate) where.loginTime.gte = startDate;

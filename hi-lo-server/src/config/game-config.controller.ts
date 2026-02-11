@@ -4,6 +4,7 @@ import {
   Delete,
   ForbiddenException,
   Get,
+  Header,
   Param,
   Put,
   Query,
@@ -17,6 +18,8 @@ import { GameConfigService } from './game-config.service';
 import { UpdateGameConfigDto } from './dto/update-game-config.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AdminGuard } from '../auth/guards/admin.guard';
+import type { AdminContext } from '../auth/guards/admin.guard';
+import type { AuthUser } from '../common/interfaces/auth-user.interface';
 
 @Controller('config')
 export class GameConfigController {
@@ -25,10 +28,45 @@ export class GameConfigController {
     private readonly gameConfigService: GameConfigService,
   ) {}
 
+  @UseGuards(JwtAuthGuard)
+  @Header(
+    'Cache-Control',
+    'no-store, no-cache, must-revalidate, proxy-revalidate',
+  )
+  @Header('Pragma', 'no-cache')
   @Get('game')
-  async getGameConfig(@Query('merchantId') merchantId?: string) {
-    const config = await this.gameConfigService.getActiveConfig(merchantId || null);
-    return this.buildResponse(config, merchantId || null);
+  async getGameConfig(
+    @Query('merchantId') merchantId?: string,
+    @Req() request?: { user?: AuthUser },
+  ) {
+    const user = request?.user;
+    const requestedMerchantId = merchantId?.trim() || null;
+    const requesterMerchantId = user?.merchantId?.trim() || '';
+    const isAdmin = user?.type === 'admin';
+    const isSuperAdmin = isAdmin && requesterMerchantId === 'hotcoregm';
+
+    let targetMerchantId: string | null = null;
+    if (isSuperAdmin) {
+      targetMerchantId = requestedMerchantId;
+    } else {
+      if (!requesterMerchantId) {
+        throw new ForbiddenException('Account is not assigned to a merchant');
+      }
+      if (requestedMerchantId && requestedMerchantId !== requesterMerchantId) {
+        throw new ForbiddenException('Cannot access other merchant configs');
+      }
+      targetMerchantId = requesterMerchantId;
+    }
+
+    const config = await this.gameConfigService.getActiveConfig(targetMerchantId);
+    const runtimeVersion = await this.gameConfigService.getRuntimeConfigVersionTag();
+    return this.buildResponse(
+      {
+        ...config,
+        configVersion: runtimeVersion,
+      },
+      targetMerchantId,
+    );
   }
 
   @UseGuards(JwtAuthGuard, AdminGuard)
@@ -37,18 +75,20 @@ export class GameConfigController {
     @Body() dto: UpdateGameConfigDto,
     @Query('merchantId') merchantId?: string,
     @Req()
-    request?: { adminContext?: { merchantId: string; isSuperAdmin: boolean } },
+    request?: { adminContext?: AdminContext },
   ) {
     const adminContext = request?.adminContext;
-    let targetMerchantId = merchantId || null;
+    let targetMerchantId = merchantId?.trim() || null;
+
     if (adminContext && !adminContext.isSuperAdmin) {
-      if (merchantId && merchantId !== adminContext.merchantId) {
+      if (targetMerchantId && targetMerchantId !== adminContext.merchantId) {
         throw new ForbiddenException('Cannot update other merchant configs');
       }
       targetMerchantId = adminContext.merchantId;
       const current = await this.gameConfigService.getActiveConfig(
         targetMerchantId || null,
       );
+      // Limited merchant admins can tune payout/bonus settings only in this phase.
       dto = {
         ...dto,
         bettingDurationMs: current.bettingDurationMs,
@@ -57,15 +97,26 @@ export class GameConfigController {
         priceSnapshotInterval: current.priceSnapshotInterval,
       };
     }
-    const config = await this.gameConfigService.updateFromInput(dto, targetMerchantId);
-    return this.buildResponse(config, targetMerchantId);
+
+    const config = await this.gameConfigService.updateFromInput(
+      dto,
+      targetMerchantId,
+    );
+    const runtimeVersion = await this.gameConfigService.getRuntimeConfigVersionTag();
+    return this.buildResponse(
+      {
+        ...config,
+        configVersion: runtimeVersion,
+      },
+      targetMerchantId,
+    );
   }
 
   @UseGuards(JwtAuthGuard, AdminGuard)
   @Get('game/merchants')
   async listMerchantConfigs(
     @Req()
-    request?: { adminContext?: { merchantId: string; isSuperAdmin: boolean } },
+    request?: { adminContext?: AdminContext },
   ) {
     const adminContext = request?.adminContext;
     if (adminContext && !adminContext.isSuperAdmin) {
@@ -79,7 +130,7 @@ export class GameConfigController {
   async deleteConfigForMerchant(
     @Param('merchantId') merchantId: string,
     @Req()
-    request?: { adminContext?: { merchantId: string; isSuperAdmin: boolean } },
+    request?: { adminContext?: AdminContext },
   ) {
     const adminContext = request?.adminContext;
     if (adminContext && !adminContext.isSuperAdmin) {

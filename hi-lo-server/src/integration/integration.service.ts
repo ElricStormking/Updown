@@ -443,6 +443,7 @@ export class IntegrationService {
         sub: user.id,
         account: user.merchantAccount,
         merchantId: merchant.merchantId,
+        type: 'user' as const,
       };
 
       const expiresIn =

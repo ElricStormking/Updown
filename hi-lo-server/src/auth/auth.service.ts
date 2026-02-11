@@ -65,6 +65,7 @@ export class AuthService {
     if (user.status === UserStatus.DISABLED) {
       throw new UnauthorizedException('Account is disabled');
     }
+    this.requireMerchantId(user);
 
     return user;
   }
@@ -81,10 +82,12 @@ export class AuthService {
   private async buildAuthResponse(
     user: UserWithWallet,
   ): Promise<AuthResponseDto> {
+    const merchantId = this.requireMerchantId(user);
     const payload: JwtPayload = {
       sub: user.id,
       account: user.email,
       type: 'user',
+      merchantId,
     };
 
     const expiresInRaw =
@@ -103,8 +106,18 @@ export class AuthService {
       user: {
         id: user.id,
         account: user.email,
+        merchantId,
         isAdmin,
       },
     };
+  }
+
+  private requireMerchantId(user: Pick<UserWithWallet, 'merchantId'>): string {
+    const merchantId =
+      typeof user.merchantId === 'string' ? user.merchantId.trim() : '';
+    if (!merchantId) {
+      throw new UnauthorizedException('Account is not assigned to a merchant');
+    }
+    return merchantId;
   }
 }

@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
   UnauthorizedException,
@@ -18,6 +19,12 @@ import {
 } from './dto';
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+type AdminAccountScope = {
+  adminId: string;
+  merchantId: string;
+  isSuperAdmin: boolean;
+};
 
 const parseDateOnly = (value?: string) => {
   if (!value) return null;
@@ -44,10 +51,16 @@ export class AdminAccountsService {
     );
   }
 
-  async queryAccounts(dto: QueryAdminAccountsDto) {
+  async queryAccounts(
+    dto: QueryAdminAccountsDto,
+    scope?: AdminAccountScope,
+  ) {
     const { page = 0, limit = 20, account, status } = dto;
 
     const where: Prisma.AdminAccountWhereInput = {};
+    if (scope && !scope.isSuperAdmin) {
+      where.id = scope.adminId;
+    }
     if (account) where.account = { contains: account, mode: 'insensitive' };
     if (status) where.status = status;
 
@@ -110,19 +123,32 @@ export class AdminAccountsService {
     };
   }
 
-  async updateAccount(id: string, dto: UpdateAdminAccountDto) {
+  async updateAccount(
+    id: string,
+    dto: UpdateAdminAccountDto,
+    scope?: AdminAccountScope,
+  ) {
     const existing = await this.prisma.adminAccount.findUnique({
       where: { id },
     });
     if (!existing) {
       throw new NotFoundException('Admin account not found');
     }
+    if (scope && !scope.isSuperAdmin && id !== scope.adminId) {
+      throw new ForbiddenException('Cannot update other admin accounts');
+    }
     const data: Prisma.AdminAccountUpdateInput = {};
     if (dto.password !== undefined) {
       data.password = await bcrypt.hash(dto.password, this.saltRounds);
     }
     if (dto.status !== undefined) {
+      if (scope && !scope.isSuperAdmin) {
+        throw new ForbiddenException('Merchant admin cannot change status');
+      }
       data.status = dto.status;
+    }
+    if (!Object.keys(data).length) {
+      throw new BadRequestException('No fields to update');
     }
 
     const account = await this.prisma.adminAccount.update({
@@ -139,7 +165,10 @@ export class AdminAccountsService {
     };
   }
 
-  async getAccountById(id: string) {
+  async getAccountById(id: string, scope?: AdminAccountScope) {
+    if (scope && !scope.isSuperAdmin && id !== scope.adminId) {
+      throw new ForbiddenException('Cannot view other admin accounts');
+    }
     const account = await this.prisma.adminAccount.findUnique({
       where: { id },
     });
@@ -156,7 +185,7 @@ export class AdminAccountsService {
     };
   }
 
-  async queryLoginRecords(dto: QueryLoginRecordsDto) {
+  async queryLoginRecords(dto: QueryLoginRecordsDto, scope?: AdminAccountScope) {
     const { page = 0, limit = 20, start, end, account, result } = dto;
     const startDate = parseDateOnly(start);
     const endDate = parseDateOnly(end);
@@ -175,6 +204,9 @@ export class AdminAccountsService {
     }
     if (result !== undefined) {
       where.result = result === 'true' || result === '1';
+    }
+    if (scope && !scope.isSuperAdmin) {
+      where.adminId = scope.adminId;
     }
 
     const skip = page * limit;

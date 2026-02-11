@@ -143,8 +143,14 @@ export class AdminController {
 
   @UseGuards(JwtAuthGuard, AdminGuard)
   @Get('players/logins')
-  queryPlayerLogins(@Query() dto: QueryPlayerLoginsDto) {
-    return this.dataService.queryPlayerLogins(dto);
+  queryPlayerLogins(
+    @Query() dto: QueryPlayerLoginsDto,
+    @Req() request?: { adminContext?: AdminContext },
+  ) {
+    return this.dataService.queryPlayerLogins(
+      dto,
+      this.resolveMerchantScope(request),
+    );
   }
 
   // Merchant Management
@@ -226,8 +232,23 @@ export class AdminController {
   // Admin Account Management
   @UseGuards(JwtAuthGuard, AdminGuard)
   @Get('accounts')
-  queryAdminAccounts(@Query() dto: QueryAdminAccountsDto) {
-    return this.accountsService.queryAccounts(dto);
+  queryAdminAccounts(
+    @Query() dto: QueryAdminAccountsDto,
+    @Req() request?: { adminContext?: AdminContext },
+  ) {
+    return this.accountsService.queryAccounts(dto, this.resolveAdminScope(request));
+  }
+
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  @Get('accounts/login-records')
+  queryAdminLoginRecords(
+    @Query() dto: QueryLoginRecordsDto,
+    @Req() request?: { adminContext?: AdminContext },
+  ) {
+    return this.accountsService.queryLoginRecords(
+      dto,
+      this.resolveAdminScope(request),
+    );
   }
 
   @UseGuards(JwtAuthGuard, AdminGuard)
@@ -249,8 +270,11 @@ export class AdminController {
 
   @UseGuards(JwtAuthGuard, AdminGuard)
   @Get('accounts/:id')
-  getAdminAccount(@Param('id') id: string) {
-    return this.accountsService.getAccountById(id);
+  getAdminAccount(
+    @Param('id') id: string,
+    @Req() request?: { adminContext?: AdminContext },
+  ) {
+    return this.accountsService.getAccountById(id, this.resolveAdminScope(request));
   }
 
   @UseGuards(JwtAuthGuard, AdminGuard)
@@ -258,14 +282,13 @@ export class AdminController {
   updateAdminAccount(
     @Param('id') id: string,
     @Body() dto: UpdateAdminAccountDto,
+    @Req() request?: { adminContext?: AdminContext },
   ) {
-    return this.accountsService.updateAccount(id, dto);
-  }
-
-  @UseGuards(JwtAuthGuard, AdminGuard)
-  @Get('accounts/login-records')
-  queryAdminLoginRecords(@Query() dto: QueryLoginRecordsDto) {
-    return this.accountsService.queryLoginRecords(dto);
+    return this.accountsService.updateAccount(
+      id,
+      dto,
+      this.resolveAdminScope(request),
+    );
   }
 
   private resolveMerchantScope(request?: { adminContext?: AdminContext }) {
@@ -274,5 +297,9 @@ export class AdminController {
       return undefined;
     }
     return adminContext.merchantId;
+  }
+
+  private resolveAdminScope(request?: { adminContext?: AdminContext }) {
+    return request?.adminContext;
   }
 }

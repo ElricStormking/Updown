@@ -21,21 +21,30 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: JwtPayload) {
+    let merchantId = payload.merchantId;
+
     if (payload.type !== 'admin') {
       const user = await this.prisma.user.findUnique({
         where: { id: payload.sub },
-        select: { status: true },
+        select: { status: true, merchantId: true },
       });
       if (!user || user.status === UserStatus.DISABLED) {
         throw new UnauthorizedException('Account is disabled');
       }
+      if (!user.merchantId) {
+        throw new UnauthorizedException('Account is not assigned to a merchant');
+      }
+      if (payload.merchantId && payload.merchantId !== user.merchantId) {
+        throw new UnauthorizedException('Invalid token merchant context');
+      }
+      merchantId = user.merchantId;
     }
 
     return {
       userId: payload.sub,
       account: payload.account,
       type: payload.type,
-      merchantId: payload.merchantId,
+      merchantId,
     };
   }
 }

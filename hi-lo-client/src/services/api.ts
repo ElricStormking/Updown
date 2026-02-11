@@ -29,9 +29,16 @@ export const api = {
   fetchWallet: (token: string) =>
     client.get<WalletResponse>('/wallet', authHeader(token)),
 
-  fetchGameConfig: (merchantId?: string) =>
+  fetchGameConfig: (token: string) =>
     client.get<GameConfig>('/config/game', {
-      params: merchantId ? { merchantId } : undefined,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Cache-Control': 'no-cache',
+        Pragma: 'no-cache',
+      },
+      params: {
+        _t: Date.now(),
+      },
     }),
 
   fetchPlayerHistory: (token: string, limit?: number) =>

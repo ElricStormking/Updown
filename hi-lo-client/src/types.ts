@@ -64,6 +64,7 @@ export interface AuthResponse {
   user: {
     id: string;
     account: string;
+    merchantId?: string;
   };
 }
 

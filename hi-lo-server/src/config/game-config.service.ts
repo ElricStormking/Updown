@@ -108,12 +108,37 @@ export class GameConfigService {
     return record ? this.fromRecord(record) : null;
   }
 
+  async getRuntimeConfigVersionTag(): Promise<string> {
+    const latest = await this.prisma.gameConfig.findFirst({
+      select: { updatedAt: true },
+      orderBy: { updatedAt: 'desc' },
+    });
+    if (latest?.updatedAt) {
+      return latest.updatedAt.toISOString();
+    }
+    return this.getDefaultConfig().configVersion ?? 'default';
+  }
+
   async listMerchantConfigs(): Promise<Array<{ merchantId: string | null; updatedAt: Date }>> {
     const records = await this.prisma.gameConfig.findMany({
       select: { merchantId: true, updatedAt: true },
       orderBy: { updatedAt: 'desc' },
     });
     return records;
+  }
+
+  async getMerchantConfigSnapshots(): Promise<Record<string, GameConfigSnapshot>> {
+    const records = await this.prisma.gameConfig.findMany({
+      where: { merchantId: { not: null } },
+      orderBy: { updatedAt: 'desc' },
+    });
+
+    const snapshots: Record<string, GameConfigSnapshot> = {};
+    for (const record of records) {
+      if (!record.merchantId) continue;
+      snapshots[record.merchantId] = this.fromRecord(record);
+    }
+    return snapshots;
   }
 
   normalizeSnapshot(raw: unknown): GameConfigSnapshot {
@@ -181,16 +206,16 @@ export class GameConfigService {
   }
 
   async updateFromInput(input: GameConfigInput, merchantId?: string | null): Promise<GameConfigSnapshot> {
-    const defaults = this.getDefaultConfig();
+    const current = await this.getActiveConfig(merchantId ?? null);
     const digitPayouts = this.parseDigitPayouts(input.digitPayouts);
     const digitBonusRatios = this.parseDigitBonusRatios(input.digitBonusRatios);
     const bonusModeEnabled = this.parseBonusModeEnabled(
       input.bonusModeEnabled,
-      true,
+      current.bonusModeEnabled,
     );
     const tokenValues = this.parseTokenValues(
       input.tokenValues,
-      defaults.tokenValues,
+      current.tokenValues,
     );
     const config: GameConfigSnapshot = {
       bettingDurationMs: requireNumber(
@@ -221,10 +246,10 @@ export class GameConfigService {
         'priceSnapshotInterval',
       ),
       bonusModeEnabled,
-      bonusSlotChanceTotal: requireNumber(
-        input.bonusSlotChanceTotal,
-        'bonusSlotChanceTotal',
-      ),
+      bonusSlotChanceTotal:
+        input.bonusSlotChanceTotal === undefined
+          ? current.bonusSlotChanceTotal
+          : requireNumber(input.bonusSlotChanceTotal, 'bonusSlotChanceTotal'),
       digitPayouts,
       digitBonusRatios,
     };

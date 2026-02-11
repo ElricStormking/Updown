@@ -118,6 +118,10 @@ const game = new Phaser.Game({
 
 const DEFAULT_TOKEN_VALUES = [10, 50, 100, 150, 200, 300, 500];
 const COMPLETE_PHASE_DURATION_MS = 10000;
+const CONFIG_REFRESH_RETRY_DELAYS_MS = [0, 900, 2200];
+let lastConfigRefreshRoundId: number | null = null;
+const delay = (ms: number) =>
+  new Promise<void>((resolve) => window.setTimeout(resolve, ms));
 const normalizeTokenValues = (values?: number[]) => {
   if (!Array.isArray(values) || values.length !== DEFAULT_TOKEN_VALUES.length) {
     return DEFAULT_TOKEN_VALUES.slice();
@@ -210,10 +214,10 @@ const socket = createGameSocket(
         digitSelections: [],
         tokenPlacements: {},
       });
-      const currentVersion = state.config?.configVersion ?? null;
-      const nextVersion = payload.configVersion ?? null;
-      if (!currentVersion || !nextVersion || currentVersion !== nextVersion) {
-        void refreshConfig();
+      // Merchant-tuned odds must be reflected every new round start.
+      if (lastConfigRefreshRoundId !== payload.id) {
+        lastConfigRefreshRoundId = payload.id;
+        void refreshConfigForRoundStart(payload.id);
       }
     },
     onRoundLocked: async (payload) => {
@@ -383,7 +387,7 @@ async function bootstrapLaunchAuthFromUrl() {
 
   try {
     const [{ data: config }, { data: wallet }] = await Promise.all([
-      api.fetchGameConfig(merchantId),
+      api.fetchGameConfig(launchToken),
       api.fetchWallet(launchToken),
     ]);
     const tokenValues = normalizeTokenValues(config?.tokenValues);
@@ -425,14 +429,17 @@ async function bootstrapLaunchAuthFromUrl() {
 }
 
 async function handleLogin(credentials: { account: string; password: string; merchantId: string }) {
-  const merchantId = credentials.merchantId.trim() || getMerchantId() || '';
+  lastConfigRefreshRoundId = null;
+  const { data: auth } = await api.login(credentials.account, credentials.password);
+  const { data: config } = await api.fetchGameConfig(auth.accessToken);
+  const merchantId =
+    auth.user?.merchantId?.trim() ||
+    credentials.merchantId.trim() ||
+    getMerchantId() ||
+    '';
   if (!merchantId) {
     throw new Error('Merchant ID is required.');
   }
-  const [{ data: auth }, { data: config }] = await Promise.all([
-    api.login(credentials.account, credentials.password),
-    api.fetchGameConfig(merchantId),
-  ]);
 
   const tokenValues = normalizeTokenValues(config?.tokenValues);
   const selectedTokenValue = resolveSelectedTokenValue(
@@ -455,9 +462,10 @@ async function handleLogin(credentials: { account: string; password: string; mer
   authenticateGameSocket(socket, auth.accessToken);
 }
 
-async function refreshConfig() {
+async function refreshConfig(): Promise<boolean> {
+  if (!state.token) return false;
   try {
-    const { data: config } = await api.fetchGameConfig(state.merchantId ?? getMerchantId());
+    const { data: config } = await api.fetchGameConfig(state.token);
     const tokenValues = normalizeTokenValues(config?.tokenValues);
     const selectedTokenValue = resolveSelectedTokenValue(
       state.selectedTokenValue,
@@ -465,9 +473,28 @@ async function refreshConfig() {
     );
     updateState({ config, selectedTokenValue });
     scene.setResultDisplayDuration(COMPLETE_PHASE_DURATION_MS);
-  } catch {
-    // Ignore config refresh failures; we keep the last known config.
+    return true;
+  } catch (error) {
+    console.warn('Config refresh failed', error);
+    return false;
   }
+}
+
+async function refreshConfigForRoundStart(roundId: number) {
+  for (let attempt = 0; attempt < CONFIG_REFRESH_RETRY_DELAYS_MS.length; attempt += 1) {
+    const waitMs = CONFIG_REFRESH_RETRY_DELAYS_MS[attempt] ?? 0;
+    if (waitMs > 0) {
+      await delay(waitMs);
+    }
+    const refreshed = await refreshConfig();
+    if (refreshed) {
+      return;
+    }
+  }
+  setStatus(
+    `Failed to sync config for round ${roundId}. Using previous payout values.`,
+    true,
+  );
 }
 
 async function handlePlaceHiLoBet(_side: BetSide) {

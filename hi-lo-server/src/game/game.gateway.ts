@@ -119,10 +119,13 @@ export class GameGateway
       const payload = await this.verifyToken(body.token);
       const user = await this.prisma.user.findUnique({
         where: { id: payload.sub },
-        select: { id: true, status: true },
+        select: { id: true, status: true, merchantId: true },
       });
       if (!user || user.status === UserStatus.DISABLED) {
         throw new UnauthorizedException('Account is disabled');
+      }
+      if (!user.merchantId) {
+        throw new UnauthorizedException('Account is not assigned to a merchant');
       }
 
       client.data.userId = user.id;

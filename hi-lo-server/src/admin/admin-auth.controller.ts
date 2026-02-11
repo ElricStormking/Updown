@@ -12,6 +12,7 @@ import { ConfigService } from '@nestjs/config';
 import type { AppConfig } from '../config/configuration';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AdminGuard } from '../auth/guards/admin.guard';
+import type { AdminContext } from '../auth/guards/admin.guard';
 import { AdminAccountsService } from './admin-accounts.service';
 import { AdminLoginDto, AdminRegisterDto } from './dto';
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
@@ -38,9 +39,7 @@ export class AdminAuthController {
   async register(
     @Body() dto: AdminRegisterDto,
     @Req()
-    request?: {
-      adminContext?: { account: string; merchantId: string; isSuperAdmin: boolean };
-    },
+    request?: { adminContext?: AdminContext },
   ) {
     if (!request?.adminContext?.isSuperAdmin) {
       throw new ForbiddenException(
@@ -57,7 +56,7 @@ export class AdminAuthController {
 
   @UseGuards(JwtAuthGuard, AdminGuard)
   @Get('me')
-  me(@Req() request: { adminContext?: { account: string; merchantId: string; isSuperAdmin: boolean } }) {
+  me(@Req() request: { adminContext?: AdminContext }) {
     const adminContext = request.adminContext;
     if (!adminContext) {
       return { user: null };

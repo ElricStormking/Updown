@@ -34,6 +34,14 @@ import type {
 
 type SumKey = keyof DigitPayouts['sum'];
 
+type RoundConfigLookup = {
+  global: GameConfigSnapshot;
+  merchantSnapshots: Record<string, GameConfigSnapshot>;
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
 interface SlipBet {
   id: string;
   roundId: number;
@@ -97,7 +105,16 @@ export class BetsService {
       throw new BadRequestException('Round already locked');
     }
 
-    const config = this.getConfigForRound(round);
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { merchantId: true },
+    });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const configLookup = this.getRoundConfigLookup(round);
+    const config = this.resolveConfigForMerchant(configLookup, user.merchantId);
     if (dto.amount < config.minBetAmount || dto.amount > config.maxBetAmount) {
       throw new BadRequestException(
         `Bet amount must be between ${config.minBetAmount} and ${config.maxBetAmount}`,
@@ -221,7 +238,7 @@ export class BetsService {
     if (!round) {
       return;
     }
-    const config = this.getConfigForRound(round);
+    const configLookup = this.getRoundConfigLookup(round);
 
     // Guard: only commit once per round (best-effort).
     const committedKey = this.getSlipCommittedKey(roundId);
@@ -262,6 +279,7 @@ export class BetsService {
         select: { merchantId: true },
       });
       const merchantId = user?.merchantId ?? null;
+      const config = this.resolveConfigForMerchant(configLookup, merchantId);
 
       try {
         await this.prisma.$transaction(async (tx) => {
@@ -359,10 +377,9 @@ export class BetsService {
       where: { id: roundId },
       select: { gameConfigSnapshot: true },
     });
-    const config = this.gameConfigService.normalizeSnapshot(
-      round?.gameConfigSnapshot,
-    );
-    const digitPayouts = config.digitPayouts;
+    const configLookup = this.getRoundConfigLookup({
+      gameConfigSnapshot: round?.gameConfigSnapshot,
+    });
 
     const bets = await this.prisma.bet.findMany({
       where: { roundId },
@@ -421,6 +438,10 @@ export class BetsService {
             await this.markLoss(tx, bet.id);
             continue;
           }
+          const digitPayouts = this.resolveConfigForMerchant(
+            configLookup,
+            bet.merchantId,
+          ).digitPayouts;
           const payoutMultiplier = this.resolveDigitPayout(
             bet,
             digitOutcome,
@@ -1000,10 +1021,48 @@ export class BetsService {
     return slip;
   }
 
-  private getConfigForRound(round: {
+  private getRoundConfigLookup(round: {
     gameConfigSnapshot?: unknown | null;
-  }): GameConfigSnapshot {
-    return this.gameConfigService.normalizeSnapshot(round.gameConfigSnapshot);
+  }): RoundConfigLookup {
+    const global = this.gameConfigService.normalizeSnapshot(
+      round.gameConfigSnapshot,
+    );
+    const merchantSnapshots = this.readMerchantSnapshots(
+      round.gameConfigSnapshot,
+    );
+    return { global, merchantSnapshots };
+  }
+
+  private resolveConfigForMerchant(
+    lookup: RoundConfigLookup,
+    merchantId?: string | null,
+  ): GameConfigSnapshot {
+    const key = typeof merchantId === 'string' ? merchantId.trim() : '';
+    if (key && lookup.merchantSnapshots[key]) {
+      return lookup.merchantSnapshots[key];
+    }
+    return lookup.global;
+  }
+
+  private readMerchantSnapshots(
+    snapshot: unknown,
+  ): Record<string, GameConfigSnapshot> {
+    if (!isRecord(snapshot)) {
+      return {};
+    }
+    const raw = snapshot.merchantSnapshots;
+    if (!isRecord(raw)) {
+      return {};
+    }
+
+    const merchantSnapshots: Record<string, GameConfigSnapshot> = {};
+    for (const [merchantId, merchantSnapshot] of Object.entries(raw)) {
+      const key = merchantId.trim();
+      if (!key) continue;
+      merchantSnapshots[key] =
+        this.gameConfigService.normalizeSnapshot(merchantSnapshot);
+    }
+    return merchantSnapshots;
   }
 
   private isSumKey(
