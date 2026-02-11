@@ -47,7 +47,6 @@ const formatMultiplierRatio = (value: number) => {
 };
 
 const DEFAULT_SUM_PAYOUTS: Record<number, number> = {
-  1: 130,
   2: 70,
   3: 40,
   4: 26,
@@ -73,7 +72,6 @@ const DEFAULT_SUM_PAYOUTS: Record<number, number> = {
   24: 40,
   25: 70,
   26: 130,
-  27: 130,
 };
 
 const RESULT_BOX_TOTAL_TEXTURE_KEY = '3N_box_total_sprite';
@@ -83,6 +81,11 @@ const RESULT_DIGIT_TEXT_DEPTH = 45;
 const COMPLETE_PHASE_DURATION_MS = 10000;
 const RESULT_OVERLAY_DELAY_MS = 5000;
 const RESULT_OVERLAY_FADE_OUT_MS = 300;
+const LIGHTNING_BEAM_TEXTURE_KEY = 'lightball';
+const LIGHTNING_HIT_TEXTURE_KEY = 'lightball_hit';
+const LIGHTNING_BEAM_ANIMATION_KEY = 'winner-lightball-beam';
+const LIGHTNING_HIT_ANIMATION_KEY = 'winner-lightball-hit';
+const LIGHTNING_BEAM_FRAME_HEIGHT = 269;
 
 export class HiLoScene extends Phaser.Scene {
   private language: LanguageCode = getInitialLanguage();
@@ -141,7 +144,8 @@ export class HiLoScene extends Phaser.Scene {
   private bonusLightTweens = new Map<string, Phaser.Tweens.Tween>();
   private bonusLightSprites = new Map<string, Phaser.GameObjects.Sprite>();
   private winnerHighlightTimer?: Phaser.Time.TimerEvent;
-  private lightningGraphics: Phaser.GameObjects.Graphics[] = [];
+  private lightningBeams: Phaser.GameObjects.Sprite[] = [];
+  private lightningHitSprites: Phaser.GameObjects.Sprite[] = [];
   private lightningBoltTweens: Phaser.Tweens.Tween[] = [];
   private lightningTimers: Phaser.Time.TimerEvent[] = [];
   private coinSprites: Phaser.GameObjects.Sprite[] = [];
@@ -261,7 +265,7 @@ export class HiLoScene extends Phaser.Scene {
       loadImage(`number_${i}${i}${i}`);
     }
 
-    for (let sum = 3; sum <= 27; sum += 1) {
+    for (let sum = 2; sum <= 26; sum += 1) {
       loadImage(`number_sum_${String(sum).padStart(2, '0')}`);
     }
 
@@ -281,6 +285,16 @@ export class HiLoScene extends Phaser.Scene {
       '../UI_sprites/money_anim/money_anim.png',
       { frameWidth: 68, frameHeight: 68 },
     );
+
+    this.load.spritesheet(LIGHTNING_BEAM_TEXTURE_KEY, '../UI_sprites/lightball/lightball.png', {
+      frameWidth: 98,
+      frameHeight: 269,
+    });
+
+    this.load.spritesheet(LIGHTNING_HIT_TEXTURE_KEY, '../UI_sprites/lightball/lightball_hit.png', {
+      frameWidth: 205,
+      frameHeight: 107,
+    });
   }
 
   create() {
@@ -540,31 +554,31 @@ export class HiLoScene extends Phaser.Scene {
     });
 
     const sumDigits: Array<[string, number, number]> = [
-      ['03', 140, 1536],
-      ['04', 335, 1536],
-      ['05', 532, 1536],
-      ['06', 730, 1536],
-      ['07', 924, 1536],
-      ['08', 140, 1613],
-      ['09', 335, 1613],
-      ['10', 532, 1613],
-      ['11', 730, 1613],
-      ['12', 924, 1613],
-      ['13', 140, 1688],
-      ['14', 335, 1688],
-      ['15', 532, 1688],
-      ['16', 730, 1688],
-      ['17', 924, 1688],
-      ['18', 140, 1761],
-      ['19', 335, 1761],
-      ['20', 532, 1761],
-      ['21', 730, 1761],
-      ['22', 924, 1761],
-      ['23', 140, 1833],
-      ['24', 335, 1833],
-      ['25', 532, 1833],
-      ['26', 730, 1833],
-      ['27', 924, 1833],
+      ['02', 140, 1536],
+      ['03', 335, 1536],
+      ['04', 532, 1536],
+      ['05', 730, 1536],
+      ['06', 924, 1536],
+      ['07', 140, 1613],
+      ['08', 335, 1613],
+      ['09', 532, 1613],
+      ['10', 730, 1613],
+      ['11', 924, 1613],
+      ['12', 140, 1688],
+      ['13', 335, 1688],
+      ['14', 532, 1688],
+      ['15', 730, 1688],
+      ['16', 924, 1688],
+      ['17', 140, 1761],
+      ['18', 335, 1761],
+      ['19', 532, 1761],
+      ['20', 730, 1761],
+      ['21', 924, 1761],
+      ['22', 140, 1833],
+      ['23', 335, 1833],
+      ['24', 532, 1833],
+      ['25', 730, 1833],
+      ['26', 924, 1833],
     ];
     sumDigits.forEach(([value, x, y]) => {
       const selection = String(Number(value));
@@ -759,7 +773,7 @@ export class HiLoScene extends Phaser.Scene {
       .setOrigin(0, 0.5); // Left-aligned after highlight
 
     this.priceArrowText = this.add
-      .text(720, this.priceTextY, '▲', {
+      .text(720, this.priceTextY, '', {
         fontFamily: 'Rajdhani',
         fontSize: '30px',
         color: '#ffffff',
@@ -1772,7 +1786,7 @@ export class HiLoScene extends Phaser.Scene {
       );
     }
 
-    for (let sum = 3; sum <= 27; sum += 1) {
+    for (let sum = 2; sum <= 26; sum += 1) {
       const odds =
         (payouts?.sum as Record<string, number> | undefined)?.[String(sum)] ??
         DEFAULT_SUM_PAYOUTS[sum] ??
@@ -1960,12 +1974,20 @@ export class HiLoScene extends Phaser.Scene {
         chip.setScale(0.78); // 50% larger than previous 0.52
         const label = this.add
           .text(0, 0, String(total), {
-            fontFamily: 'Rajdhani',
+            fontFamily: 'Oxanium, Rajdhani, sans-serif',
             fontSize: '35px', // 50% larger than 23px
-            color: '#00ff88', // bright green
-            fontStyle: 'bold',
-            stroke: '#003311',
-            strokeThickness: 3,
+            color: '#111111',
+            fontStyle: '700',
+            stroke: '#f5d58c',
+            strokeThickness: 2,
+            shadow: {
+              offsetX: 0,
+              offsetY: 2,
+              color: 'rgba(0, 0, 0, 0.58)',
+              blur: 2,
+              fill: true,
+              stroke: false,
+            },
           })
           .setOrigin(0.5);
         container = this.add.container(target.x + 58, target.y, [chip, label]);
@@ -2096,12 +2118,12 @@ export class HiLoScene extends Phaser.Scene {
       this.timerText.setColor(isBetting ? '#00ffb2' : '#ff8f70');
     }
 
-    // ── Big countdown overlay ────────────────────────────────────
+    // Big countdown overlay
     if (showBigCountdown && this.bigCountdownText) {
       this.bigCountdownText.setVisible(true);
 
       if (this.lastBigCountdownSec !== seconds) {
-        // Color gradient: 5→yellow, 4→orange, 3→red-orange, 2→red, 1→bright red
+        // Color gradient: 5 yellow, 4 orange, 3 red-orange, 2 red, 1 bright red
         const urgencyColors: Record<number, string> = {
           5: '#ffd166',
           4: '#ff9f43',
@@ -2206,7 +2228,7 @@ export class HiLoScene extends Phaser.Scene {
     if (previous !== undefined && this.priceArrowText) {
       const isUp = update.price >= previous;
       const baseColor = isUp ? '#00ffb2' : '#ff7675';
-      const arrow = isUp ? '▲' : '▼';
+      const arrow = isUp ? '\u25B2' : '\u25BC';
       const offset = isUp ? -6 : 6;
 
       // Set colors - highlight last 3 digits during locked/result phase
@@ -2607,13 +2629,15 @@ export class HiLoScene extends Phaser.Scene {
     this.playWinnerLightningAndCoins(winKeys);
   }
 
-  // ── Winner lightning-bolt & coin-explosion effects ─────────────────
+  // Winner lightning-bolt & coin-explosion effects
 
   private clearWinnerEffects() {
     this.lightningBoltTweens.forEach((tw) => tw.stop());
     this.lightningBoltTweens = [];
-    this.lightningGraphics.forEach((g) => g.destroy());
-    this.lightningGraphics = [];
+    this.lightningBeams.forEach((beam) => beam.destroy());
+    this.lightningBeams = [];
+    this.lightningHitSprites.forEach((hit) => hit.destroy());
+    this.lightningHitSprites = [];
     this.lightningTimers.forEach((t) => t.remove(false));
     this.lightningTimers = [];
     this.coinSprites.forEach((s) => {
@@ -2636,16 +2660,83 @@ export class HiLoScene extends Phaser.Scene {
     });
   }
 
-  private ensureLightningDotTexture() {
-    if (this.textures.exists('_lightning_dot')) return;
-    const g = this.add.graphics();
-    g.setVisible(false);
-    g.fillStyle(0xffffff, 1);
-    g.fillCircle(8, 8, 4);
-    g.fillStyle(0x88ccff, 0.4);
-    g.fillCircle(8, 8, 8);
-    g.generateTexture('_lightning_dot', 16, 16);
-    g.destroy();
+  private ensureLightningAnimations() {
+    if (
+      this.textures.exists(LIGHTNING_BEAM_TEXTURE_KEY) &&
+      !this.anims.exists(LIGHTNING_BEAM_ANIMATION_KEY)
+    ) {
+      this.anims.create({
+        key: LIGHTNING_BEAM_ANIMATION_KEY,
+        frames: this.anims.generateFrameNumbers(LIGHTNING_BEAM_TEXTURE_KEY, {
+          start: 0,
+          end: 2,
+        }),
+        frameRate: 24,
+        repeat: -1,
+      });
+    }
+
+    if (
+      this.textures.exists(LIGHTNING_HIT_TEXTURE_KEY) &&
+      !this.anims.exists(LIGHTNING_HIT_ANIMATION_KEY)
+    ) {
+      this.anims.create({
+        key: LIGHTNING_HIT_ANIMATION_KEY,
+        frames: this.anims.generateFrameNumbers(LIGHTNING_HIT_TEXTURE_KEY, {
+          start: 0,
+          end: 5,
+        }),
+        frameRate: 24,
+        repeat: 0,
+      });
+    }
+  }
+
+  private spawnLightningImpact(x: number, y: number) {
+    if (this.textures.exists(LIGHTNING_HIT_TEXTURE_KEY)) {
+      const hit = this.add.sprite(x, y, LIGHTNING_HIT_TEXTURE_KEY, 0);
+      hit.setDepth(146);
+      hit.setBlendMode(Phaser.BlendModes.ADD);
+      hit.setScale(0.92);
+      hit.setAlpha(1);
+      this.lightningHitSprites.push(hit);
+
+      if (this.anims.exists(LIGHTNING_HIT_ANIMATION_KEY)) {
+        hit.play(LIGHTNING_HIT_ANIMATION_KEY);
+        hit.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
+          hit.destroy();
+          const index = this.lightningHitSprites.indexOf(hit);
+          if (index >= 0) this.lightningHitSprites.splice(index, 1);
+        });
+      } else {
+        this.tweens.add({
+          targets: hit,
+          alpha: 0,
+          duration: 220,
+          onComplete: () => {
+            hit.destroy();
+            const index = this.lightningHitSprites.indexOf(hit);
+            if (index >= 0) this.lightningHitSprites.splice(index, 1);
+          },
+        });
+      }
+      return;
+    }
+
+    // Fallback flash if impact sprite is unavailable.
+    const flash = this.add.graphics();
+    flash.setDepth(142);
+    flash.setBlendMode(Phaser.BlendModes.ADD);
+    flash.fillStyle(0xffffff, 0.85);
+    flash.fillCircle(x, y, 26);
+    flash.fillStyle(0x66aaff, 0.4);
+    flash.fillCircle(x, y, 52);
+    this.tweens.add({
+      targets: flash,
+      alpha: 0,
+      duration: 220,
+      onComplete: () => flash.destroy(),
+    });
   }
 
   /**
@@ -2656,25 +2747,27 @@ export class HiLoScene extends Phaser.Scene {
     this.clearWinnerEffects();
     if (!this.textures.exists('money_anim')) return;
     this.ensureMoneyAnimation();
-    this.ensureLightningDotTexture();
+    this.ensureLightningAnimations();
 
-    // Source positions – digit result boxes vs sum triangle
-    const digitSrcX = 538;
-    const digitSrcY = 181;
-    const sumSrcX = 535;
-    const sumSrcY = 290;
+    // Start from the top 3-digit positions, then chain to multiple winners.
+    const digitSources: Array<{ x: number; y: number }> = [
+      { x: 420, y: 220 },
+      { x: 538, y: 220 },
+      { x: 655, y: 220 },
+    ];
+    const sumSource = { x: 535, y: 290 };
 
     let idx = 0;
     winKeys.forEach((key) => {
       const img = this.betTargets.get(key);
       if (!img) return;
       const isSumBet = key.startsWith('DIGIT|SUM|');
-      const srcX = isSumBet ? sumSrcX : digitSrcX;
-      const srcY = isSumBet ? sumSrcY : digitSrcY;
-      const staggerDelay = idx * 130;
+      const source = isSumBet ? sumSource : digitSources[idx % digitSources.length];
+      const staggerDelay = idx * 95;
 
       const timer = this.time.delayedCall(staggerDelay, () => {
-        this.animateLightningBolt(srcX, srcY, img.x, img.y, 380, () => {
+        this.animateLightningBolt(source.x, source.y, img.x, img.y, 260, () => {
+          this.spawnLightningImpact(img.x, img.y);
           this.spawnCoinExplosion(img.x, img.y, 12);
         });
       });
@@ -2682,7 +2775,6 @@ export class HiLoScene extends Phaser.Scene {
       idx++;
     });
   }
-
   /**
    * Animate a single lightning bolt traveling from (sx,sy) to (ex,ey).
    * Calls `onStrike` when the bolt reaches the target.
@@ -2695,144 +2787,67 @@ export class HiLoScene extends Phaser.Scene {
     duration: number,
     onStrike: () => void,
   ) {
-    const gfx = this.add.graphics();
-    gfx.setDepth(140);
-    gfx.setBlendMode(Phaser.BlendModes.ADD);
-    this.lightningGraphics.push(gfx);
-
-    // Pre-compute full zigzag path from source to target
-    const segments = 10;
-    const displacement = 55;
-    const fullPath: { x: number; y: number }[] = [{ x: sx, y: sy }];
-    for (let i = 1; i < segments; i++) {
-      const t = i / segments;
-      fullPath.push({
-        x: Phaser.Math.Linear(sx, ex, t) + (Math.random() - 0.5) * displacement,
-        y: Phaser.Math.Linear(sy, ey, t) + (Math.random() - 0.5) * displacement * 0.35,
-      });
+    if (!this.textures.exists(LIGHTNING_BEAM_TEXTURE_KEY)) {
+      onStrike();
+      return;
     }
-    fullPath.push({ x: ex, y: ey });
+
+    const beam = this.add.sprite(sx, sy, LIGHTNING_BEAM_TEXTURE_KEY, 0);
+    beam.setOrigin(0.5, 0);
+    beam.setDepth(140);
+    beam.setBlendMode(Phaser.BlendModes.ADD);
+    beam.setAlpha(0.96);
+    beam.setRotation(Phaser.Math.Angle.Between(sx, sy, ex, ey) - Math.PI / 2);
+    const distance = Phaser.Math.Distance.Between(sx, sy, ex, ey);
+    const targetScaleY = Math.max(0.12, distance / LIGHTNING_BEAM_FRAME_HEIGHT);
+    beam.setScale(0.95, 0.04);
+    this.lightningBeams.push(beam);
+
+    if (this.anims.exists(LIGHTNING_BEAM_ANIMATION_KEY)) {
+      beam.play(LIGHTNING_BEAM_ANIMATION_KEY);
+    }
+
+    const flickerTween = this.tweens.add({
+      targets: beam,
+      alpha: { from: 0.76, to: 1 },
+      scaleX: { from: 0.84, to: 1.04 },
+      duration: 60,
+      yoyo: true,
+      repeat: Math.max(2, Math.floor(duration / 60)),
+      ease: 'Sine.easeInOut',
+    });
+    this.lightningBoltTweens.push(flickerTween);
 
     let struck = false;
-    const tracker = { progress: 0 };
-
-    const tween = this.tweens.add({
-      targets: tracker,
-      progress: 1,
+    const travelTween = this.tweens.add({
+      targets: beam,
+      scaleY: targetScaleY,
       duration,
-      ease: 'Quad.easeIn',
-      onUpdate: () => {
-        gfx.clear();
-        const p = tracker.progress;
-        const totalSegs = fullPath.length - 1;
-        const drawEnd = p * totalSegs;
-        const lastFull = Math.floor(drawEnd);
-        const frac = drawEnd - lastFull;
-
-        // Build the visible portion of the path
-        const pts = fullPath.slice(0, lastFull + 1);
-        if (lastFull < totalSegs && frac > 0) {
-          const a = fullPath[lastFull];
-          const b = fullPath[lastFull + 1];
-          pts.push({
-            x: a.x + (b.x - a.x) * frac,
-            y: a.y + (b.y - a.y) * frac,
-          });
-        }
-        if (pts.length < 2) return;
-
-        // Draw bolt in multiple layers (glow → core)
-        const strokePath = (w: number, c: number, al: number) => {
-          gfx.lineStyle(w, c, al);
-          gfx.beginPath();
-          gfx.moveTo(pts[0].x, pts[0].y);
-          for (let j = 1; j < pts.length; j++) gfx.lineTo(pts[j].x, pts[j].y);
-          gfx.strokePath();
-        };
-
-        strokePath(10, 0x1a3366, 0.3);
-        strokePath(5, 0x4488ff, 0.55);
-        strokePath(2, 0xaaddff, 0.85);
-        strokePath(1, 0xffffff, 1);
-
-        // Random branch bolt for extra detail
-        if (pts.length > 3 && Math.random() < 0.35) {
-          const bi = 1 + Math.floor(Math.random() * (pts.length - 2));
-          const ba = Math.random() * Math.PI * 2;
-          const bl = 12 + Math.random() * 28;
-          gfx.lineStyle(1.5, 0x66aaff, 0.4);
-          gfx.beginPath();
-          gfx.moveTo(pts[bi].x, pts[bi].y);
-          gfx.lineTo(
-            pts[bi].x + Math.cos(ba) * bl,
-            pts[bi].y + Math.sin(ba) * bl,
-          );
-          gfx.strokePath();
-        }
-
-        // Glowing tip at the front of the bolt
-        const tip = pts[pts.length - 1];
-        gfx.fillStyle(0xffffff, 0.7);
-        gfx.fillCircle(tip.x, tip.y, 5);
-
-        // Trailing particle at tip
-        if (this.textures.exists('_lightning_dot') && Math.random() < 0.5) {
-          const dot = this.add.image(
-            tip.x + (Math.random() - 0.5) * 10,
-            tip.y + (Math.random() - 0.5) * 10,
-            '_lightning_dot',
-          );
-          dot.setDepth(141).setBlendMode(Phaser.BlendModes.ADD);
-          dot.setScale(0.3 + Math.random() * 0.4);
-          this.tweens.add({
-            targets: dot,
-            alpha: 0,
-            scale: 0.05,
-            duration: 180,
-            onComplete: () => dot.destroy(),
-          });
-        }
-      },
+      ease: 'Cubic.Out',
       onComplete: () => {
         if (struck) return;
         struck = true;
         onStrike();
 
-        // Bright impact flash at target
-        const flash = this.add.graphics();
-        flash.setDepth(142);
-        flash.setBlendMode(Phaser.BlendModes.ADD);
-        flash.fillStyle(0xffffff, 0.85);
-        flash.fillCircle(ex, ey, 30);
-        flash.fillStyle(0x66aaff, 0.4);
-        flash.fillCircle(ex, ey, 55);
-        this.tweens.add({
-          targets: flash,
-          alpha: 0,
-          duration: 250,
-          onComplete: () => flash.destroy(),
-        });
-
-        // Hold bolt briefly then fade out
-        const fadeTimer = this.time.delayedCall(100, () => {
-          this.tweens.add({
-            targets: gfx,
+        const fadeTimer = this.time.delayedCall(90, () => {
+          const fadeTween = this.tweens.add({
+            targets: beam,
             alpha: 0,
-            duration: 200,
+            duration: 160,
             onComplete: () => {
-              gfx.destroy();
-              const gi = this.lightningGraphics.indexOf(gfx);
-              if (gi >= 0) this.lightningGraphics.splice(gi, 1);
+              beam.destroy();
+              const index = this.lightningBeams.indexOf(beam);
+              if (index >= 0) this.lightningBeams.splice(index, 1);
             },
           });
+          this.lightningBoltTweens.push(fadeTween);
         });
         this.lightningTimers.push(fadeTimer);
       },
     });
 
-    this.lightningBoltTweens.push(tween);
+    this.lightningBoltTweens.push(travelTween);
   }
-
   /**
    * Spawn spinning coin sprites at (cx,cy). Phase 1 bursts them TOWARD
    * THE CAMERA (dramatic scale-up). Phase 2 sends them all flying to the
@@ -2857,7 +2872,7 @@ export class HiLoScene extends Phaser.Scene {
       coin.play('money-spin');
       this.coinSprites.push(coin);
 
-      // Phase 1 – burst TOWARD CAMERA (scale up dramatically + slight drift)
+      // Phase 1: burst toward camera (scale up dramatically + slight drift)
       const burstScale = 1.2 + Math.random() * 0.6;
       const driftX = cx + (Math.random() - 0.5) * 90;
       const driftY = cy + (Math.random() - 0.5) * 70;
@@ -2873,7 +2888,7 @@ export class HiLoScene extends Phaser.Scene {
         delay: stagger,
         ease: 'Back.Out',
         onComplete: () => {
-          // Phase 2 – shrink & fly to balance display
+          // Phase 2: shrink and fly to balance display
           this.tweens.add({
             targets: coin,
             x: balX + (Math.random() - 0.5) * 22,
@@ -2893,7 +2908,7 @@ export class HiLoScene extends Phaser.Scene {
       });
     }
 
-    // ── Arrival effects (once per round, not per slot) ──────────
+    // Arrival effects (once per round, not per slot)
     const arrivalDelay = 650;
 
     // Pulse balance text when coins land

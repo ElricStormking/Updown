@@ -166,7 +166,6 @@ let lastTokenValuesSignature: string | null = null;
 let lastWinCelebrateSignature: string | null = null;
 
 const sumPayouts: Record<number, number> = {
-  1: 130,
   2: 70,
   3: 40,
   4: 26,
@@ -192,7 +191,6 @@ const sumPayouts: Record<number, number> = {
   24: 40,
   25: 70,
   26: 130,
-  27: 130,
 };
 
 const formatPayoutRatio = (value: number) => {
@@ -1641,7 +1639,7 @@ const refreshDigitHighlights = (nextState: typeof state) => {
     }
 
     // SUM always highlights if within table range.
-    if (Number.isFinite(sum) && sum >= 1 && sum <= 27) {
+    if (Number.isFinite(sum) && sum >= 2 && sum <= 26) {
       keys.add(`SUM|${sum}`);
     }
 
@@ -1897,7 +1895,7 @@ const buildDigitBetTable = () => {
     selection: value,
   })));
 
-  const sumValues = Array.from({ length: 27 }, (_, index) => index + 1);
+  const sumValues = Array.from({ length: 25 }, (_, index) => index + 2);
   const sumRows = Math.ceil(sumValues.length / 5);
   for (let row = 0; row < sumRows; row += 1) {
     const rowValues = sumValues.slice(row * 5, row * 5 + 5);

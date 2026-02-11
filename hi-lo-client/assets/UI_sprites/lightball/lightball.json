@@ -1,0 +1,40 @@
+{
+    "section1": {
+        "files": [
+            {
+                "url": "assets/anim/lightball/lightball.png",
+                "frameConfig": {
+                    "frameWidth": 98,
+                    "frameHeight": 269,
+                    "startFrame": 0,
+                    "endFrame": -1,
+                    "spacing": 0,
+                    "margin": 0
+                },
+                "type": "spritesheet",
+                "key": "lightball"
+            },
+            {
+                "url": "assets/anim/lightball/lightball_hit.png",
+                "frameConfig": {
+                    "frameWidth": 205,
+                    "frameHeight": 107,
+                    "startFrame": 0,
+                    "endFrame": -1,
+                    "spacing": 0,
+                    "margin": 0
+                },
+                "type": "spritesheet",
+                "key": "lightball_hit"
+            }
+        ]
+    },
+    "meta": {
+        "app": "Phaser Editor 2D - Asset Pack Editor",
+        "contentType": "phasereditor2d.pack.core.AssetContentType",
+        "url": "https://phasereditor2d.com",
+        "version": 2,
+        "showAllFilesInBlocks": false,
+        "visible": true
+    }
+}
