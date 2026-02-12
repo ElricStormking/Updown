@@ -1,6 +1,6 @@
 export const gameConfig = {
-  bettingDurationMs: 30000,
-  resultDurationMs: 30000,
+  bettingDurationMs: 20000,
+  resultDurationMs: 35000,
   resultDisplayDurationMs: 10000,
   minBetAmount: 1,
   maxBetAmount: 5000,
