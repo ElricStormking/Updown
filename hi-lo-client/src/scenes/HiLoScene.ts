@@ -74,9 +74,13 @@ const DEFAULT_SUM_PAYOUTS: Record<number, number> = {
   26: 130,
 };
 
-const RESULT_BOX_TOTAL_TEXTURE_KEY = '3N_box_total_sprite';
-const RESULT_BOX_TOTAL_ANIMATION_KEY = '3N-box-total-anim';
+const RESULT_BOX_TOTAL_TEXTURE_KEY = '3N_box_light';
+const RESULT_BOX_TOTAL_ANIMATION_KEY = '3N-box-light-anim';
+const RESULT_BOX_ARROW_TEXTURE_KEY = '3N_box_arrow';
+const RESULT_BOX_ARROW_ANIMATION_KEY = '3N-box-arrow-anim';
 const RESULT_BOX_TOTAL_SPRITE_DEPTH = 30;
+const RESULT_BOX_TOTAL_DISPLAY_MS = 4500;
+const POST_PENDING_LIGHTNING_DELAY_MS = 3500;
 const RESULT_DIGIT_TEXT_DEPTH = 45;
 const COMPLETE_PHASE_DURATION_MS = 10000;
 const RESULT_OVERLAY_DELAY_MS = 5000;
@@ -112,6 +116,7 @@ export class HiLoScene extends Phaser.Scene {
   private sumTriangleText?: Phaser.GameObjects.Text;
   private lastSumTriangleValue: string | null = null;
   private sumTriangleTimer?: Phaser.Time.TimerEvent;
+  private boxTotalDisplayTimer?: Phaser.Time.TimerEvent;
   private timerUrgencyTween?: Phaser.Tweens.Tween;
   private lastTimerSeconds = -1;
   private bigCountdownText?: Phaser.GameObjects.Text;
@@ -133,6 +138,7 @@ export class HiLoScene extends Phaser.Scene {
   private roundDigitsLeftText?: Phaser.GameObjects.Text;
   private roundDigitsCenterText?: Phaser.GameObjects.Text;
   private roundDigitsRightText?: Phaser.GameObjects.Text;
+  private topDigitBoxes: Phaser.GameObjects.Image[] = [];
   private bgm?: Phaser.Sound.BaseSound;
   private lockedBackground?: Phaser.GameObjects.Image;
 
@@ -180,7 +186,10 @@ export class HiLoScene extends Phaser.Scene {
   private pendingPlayerPayout?: { roundId: number; totalStake: number; totalPayout: number };
   private pendingResultOutcome?: { roundId: number; outcome: ResultOverlayOutcome };
   private pendingWinningBets?: { roundId: number; bets: SettledRoundBet[] };
-  private boxTotalSprite?: Phaser.GameObjects.Sprite;
+  private boxTotalSprite?: Phaser.GameObjects.Container;
+  private pendingPhaseEndedAt = 0;
+  private winnerEffectsRoundId?: number;
+  private winnerEffectsScheduledRoundId?: number;
 
   private roundStartText?: Phaser.GameObjects.Text;
   private roundStartTween?: Phaser.Tweens.Tween;
@@ -278,9 +287,13 @@ export class HiLoScene extends Phaser.Scene {
       loadImage(`number_sum_${String(sum).padStart(2, '0')}`);
     }
 
-    this.load.spritesheet(RESULT_BOX_TOTAL_TEXTURE_KEY, '../UI_sprites/3N_box_total/3N_box_total_sprite.png', {
-      frameWidth: 500,
-      frameHeight: 300,
+    this.load.spritesheet(RESULT_BOX_TOTAL_TEXTURE_KEY, '../UI_sprites/3N_box_light/3N_box_light.png', {
+      frameWidth: 135,
+      frameHeight: 135,
+    });
+    this.load.spritesheet(RESULT_BOX_ARROW_TEXTURE_KEY, '../UI_sprites/3N_box_light/3N_box_arrow.png', {
+      frameWidth: 338,
+      frameHeight: 64,
     });
 
     this.load.spritesheet(
@@ -644,9 +657,11 @@ export class HiLoScene extends Phaser.Scene {
     addImage(539, 66, 'logo_combi3', 0.7);
     addImage(141, 115, 'bg_line_left', 0.7);
 
-    addImage(420, 181, '3N_box', 0.7);
-    addImage(538, 181, '3N_box', 0.7);
-    addImage(655, 181, '3N_box', 0.7);
+    this.topDigitBoxes = [
+      addImage(420, 181, '3N_box', 0.7),
+      addImage(538, 181, '3N_box', 0.7),
+      addImage(655, 181, '3N_box', 0.7),
+    ];
 
     addImage(274, 209, 'time', 0.7);
     addImage(130, 199, 'box_round', 0.7);
@@ -2356,11 +2371,17 @@ export class HiLoScene extends Phaser.Scene {
 
   private applyRoundState(state: RoundStatePayload) {
     const enteringLocked = state.status === 'RESULT_PENDING' && !this.isLockedLayoutMode;
+    const previousStatus = this.round?.status;
     this.clearPendingRoundState();
     if (state.status !== 'COMPLETED' && this.resultOverlayDelayTimer) {
       this.clearPendingResultOverlaySchedule();
     }
     this.round = state;
+    if (state.status === 'COMPLETED' && previousStatus !== 'COMPLETED') {
+      this.pendingPhaseEndedAt = this.time.now;
+    } else if (state.status !== 'COMPLETED') {
+      this.pendingPhaseEndedAt = 0;
+    }
     this.roundText?.setText(`${state.id}`);
     this.setPendingLayoutVisible(state.status === 'PENDING');
     const isNewRound = this.lastSeenRoundId !== state.id;
@@ -2371,6 +2392,12 @@ export class HiLoScene extends Phaser.Scene {
     if (state.status !== 'RESULT_PENDING') {
       this.clearLockedBanners();
     }
+    if (state.status !== 'COMPLETED') {
+      this.clearResultBoxTotalEffect(true);
+      this.winnerEffectsRoundId = undefined;
+      this.winnerEffectsScheduledRoundId = undefined;
+    }
+    this.setPriceDisplayVisible(state.status !== 'COMPLETED');
 
     if (state.status === 'COMPLETED') {
       this.setResultLayoutVisible(true);
@@ -2431,6 +2458,13 @@ export class HiLoScene extends Phaser.Scene {
     
     // Update bonus odds after layout mode is set
     this.updateBonusOddsFromRound(state);
+
+    if (state.status === 'COMPLETED' && previousStatus !== 'COMPLETED') {
+      const pendingWins = this.pendingWinningBets;
+      if (pendingWins && pendingWins.roundId === state.id) {
+        this.setWinningBets(state.id, pendingWins.bets);
+      }
+    }
   }
 
   handleRoundLock(payload: RoundLockPayload) {
@@ -2549,7 +2583,6 @@ export class HiLoScene extends Phaser.Scene {
 
   setWinningBets(roundId: number, bets: SettledRoundBet[]) {
     this.pendingWinningBets = { roundId, bets: [...bets] };
-    if (!this.resultOverlay || this.resultRoundId !== roundId) return;
 
     const wins = bets.filter((b) => b.result === 'WIN');
     const labels = wins.map((b) => {
@@ -2581,23 +2614,38 @@ export class HiLoScene extends Phaser.Scene {
         .filter((b) => b.digitType)
         .map((b) => this.buildDigitKey(b.digitType as DigitBetType, b.selection ?? '')),
     );
-    const triggerHighlights = () => {
-      this.applyWinnerHighlights(winKeys);
-    };
-    const delay = Math.max(0, this.layoutRestoreEndsAt - this.time.now);
-    if (delay > 0) {
-      this.winnerHighlightTimer?.remove(false);
-      this.winnerHighlightTimer = this.time.delayedCall(
-        delay,
-        triggerHighlights,
-        undefined,
-        this,
-      );
-    } else {
-      triggerHighlights();
+    const canTriggerWinnerEffectsNow =
+      this.round?.id === roundId &&
+      this.round.status === 'COMPLETED' &&
+      this.winnerEffectsRoundId !== roundId &&
+      this.winnerEffectsScheduledRoundId !== roundId;
+    if (canTriggerWinnerEffectsNow) {
+      this.winnerEffectsScheduledRoundId = roundId;
+      const triggerHighlights = () => {
+        this.winnerEffectsScheduledRoundId = undefined;
+        if (!this.round || this.round.id !== roundId || this.round.status !== 'COMPLETED') {
+          return;
+        }
+        this.winnerEffectsRoundId = roundId;
+        this.applyWinnerHighlights(winKeys);
+      };
+      const delay = Math.max(0, this.layoutRestoreEndsAt - this.time.now);
+      if (delay > 0) {
+        this.winnerHighlightTimer?.remove(false);
+        this.winnerHighlightTimer = this.time.delayedCall(
+          delay,
+          triggerHighlights,
+          undefined,
+          this,
+        );
+      } else {
+        triggerHighlights();
+      }
     }
 
     const text = labels.length ? `YOUR WINNING BETS: ${labels.join(' • ')}` : '';
+
+    if (!this.resultOverlay || this.resultRoundId !== roundId) return;
 
     if (!this.resultPlayerWinsText) {
       this.resultPlayerWinsText = this.add
@@ -2812,8 +2860,29 @@ export class HiLoScene extends Phaser.Scene {
     });
   }
 
+  private getWinnerLightningSources() {
+    if (this.boxTotalSprite && this.boxTotalSprite.scene) {
+      const originX = this.boxTotalSprite.x;
+      const originY = this.boxTotalSprite.y;
+      return {
+        digitSources: [
+          { x: originX - 96, y: originY - 40 },
+          { x: originX, y: originY - 40 },
+          { x: originX + 96, y: originY - 40 },
+        ],
+        sumSource: { x: originX, y: originY + 80 },
+      };
+    }
+
+    // Fallback for cases where the COMPLETE effect already ended.
+    return {
+      digitSources: [...TOP_DIGIT_LIGHTNING_SOURCES],
+      sumSource: { x: 535, y: 290 },
+    };
+  }
+
   /**
-   * Launch lightning bolts from the 3-digit / sum display area to each
+   * Launch lightning bolts from the COMPLETE 3N_box_light effect to each
    * winning bet slot, then spawn a coin explosion on impact.
    */
   private playWinnerLightningAndCoins(winKeys: Set<string>) {
@@ -2821,32 +2890,42 @@ export class HiLoScene extends Phaser.Scene {
     if (!this.textures.exists('money_anim')) return;
     this.ensureMoneyAnimation();
     this.ensureLightningAnimations();
+    if (winKeys.size === 0) return;
 
-    // Start from the top 3-digit positions, then chain to multiple winners.
-    const digitSources: Array<{ x: number; y: number }> = [
-      { x: 420, y: 220 },
-      { x: 538, y: 220 },
-      { x: 655, y: 220 },
-    ];
-    const sumSource = { x: 535, y: 290 };
+    const runLightningSequence = () => {
+      const { digitSources, sumSource } = this.getWinnerLightningSources();
+      let idx = 0;
+      winKeys.forEach((key) => {
+        const img = this.betTargets.get(key);
+        if (!img) return;
+        const isSumBet = key.startsWith('DIGIT|SUM|');
+        const source = isSumBet ? sumSource : digitSources[idx % digitSources.length];
+        const staggerDelay = idx * 95;
 
-    let idx = 0;
-    winKeys.forEach((key) => {
-      const img = this.betTargets.get(key);
-      if (!img) return;
-      const isSumBet = key.startsWith('DIGIT|SUM|');
-      const source = isSumBet ? sumSource : digitSources[idx % digitSources.length];
-      const staggerDelay = idx * 95;
-
-      const timer = this.time.delayedCall(staggerDelay, () => {
-        this.animateLightningBolt(source.x, source.y, img.x, img.y, 260, () => {
-          this.spawnLightningImpact(img.x, img.y);
-          this.spawnCoinExplosion(img.x, img.y, 12);
+        const timer = this.time.delayedCall(staggerDelay, () => {
+          this.animateLightningBolt(source.x, source.y, img.x, img.y, 260, () => {
+            this.spawnLightningImpact(img.x, img.y);
+            this.spawnCoinExplosion(img.x, img.y, 12);
+          });
         });
+        this.lightningTimers.push(timer);
+        idx++;
       });
-      this.lightningTimers.push(timer);
-      idx++;
+    };
+
+    const elapsedSincePendingEnd =
+      this.pendingPhaseEndedAt > 0 ? this.time.now - this.pendingPhaseEndedAt : 0;
+    const waitMs = Math.max(0, POST_PENDING_LIGHTNING_DELAY_MS - elapsedSincePendingEnd);
+    if (waitMs === 0 || this.round?.status !== 'COMPLETED') {
+      runLightningSequence();
+      return;
+    }
+
+    const delayTimer = this.time.delayedCall(waitMs, () => {
+      if (this.round?.status !== 'COMPLETED') return;
+      runLightningSequence();
     });
+    this.lightningTimers.push(delayTimer);
   }
   /**
    * Animate a single lightning bolt traveling from (sx,sy) to (ex,ey).
@@ -3374,19 +3453,64 @@ export class HiLoScene extends Phaser.Scene {
     });
   }
 
-  private ensureBoxTotalAnimation() {
-    if (this.anims.exists(RESULT_BOX_TOTAL_ANIMATION_KEY)) {
-      return;
+  private setTopDigitDisplayVisible(visible: boolean) {
+    this.topDigitBoxes.forEach((box) => box.setVisible(visible));
+    this.roundDigitsLeftText?.setVisible(visible);
+    this.roundDigitsCenterText?.setVisible(visible);
+    this.roundDigitsRightText?.setVisible(visible);
+  }
+
+  private clearResultBoxTotalEffect(restoreTopDisplay = true) {
+    this.boxTotalDisplayTimer?.remove(false);
+    this.boxTotalDisplayTimer = undefined;
+    if (this.boxTotalSprite) {
+      this.boxTotalSprite.destroy();
+      this.boxTotalSprite = undefined;
     }
-    this.anims.create({
-      key: RESULT_BOX_TOTAL_ANIMATION_KEY,
-      frames: this.anims.generateFrameNumbers(RESULT_BOX_TOTAL_TEXTURE_KEY, {
-        start: 0,
-        end: 8,
-      }),
-      frameRate: 24,
-      repeat: 3,
-    });
+    if (restoreTopDisplay) {
+      this.setTopDigitDisplayVisible(true);
+    }
+  }
+
+  private setPriceDisplayVisible(visible: boolean) {
+    this.priceText?.setVisible(visible);
+    this.priceTextHighlight?.setVisible(visible);
+    this.priceTextDecimal?.setVisible(visible);
+    this.priceArrowText?.setVisible(visible);
+    this.priceLabelText?.setVisible(visible);
+    if (!visible && this.priceArrowText) {
+      this.tweens.killTweensOf(this.priceArrowText);
+      this.priceArrowText.setAlpha(0);
+    }
+  }
+
+  private ensureBoxTotalAnimation() {
+    if (!this.anims.exists(RESULT_BOX_TOTAL_ANIMATION_KEY)) {
+      this.anims.create({
+        key: RESULT_BOX_TOTAL_ANIMATION_KEY,
+        frames: this.anims.generateFrameNumbers(RESULT_BOX_TOTAL_TEXTURE_KEY, {
+          start: 0,
+          end: 14,
+        }),
+        frameRate: 24,
+        repeat: -1,
+      });
+    }
+
+    if (
+      this.textures.exists(RESULT_BOX_ARROW_TEXTURE_KEY) &&
+      !this.anims.exists(RESULT_BOX_ARROW_ANIMATION_KEY)
+    ) {
+      this.anims.create({
+        key: RESULT_BOX_ARROW_ANIMATION_KEY,
+        frames: this.anims.generateFrameNumbers(RESULT_BOX_ARROW_TEXTURE_KEY, {
+          start: 0,
+          end: 7,
+        }),
+        frameRate: 24,
+        repeat: -1,
+      });
+    }
   }
 
   private ensureNumberLightAnimation() {
@@ -3407,22 +3531,168 @@ export class HiLoScene extends Phaser.Scene {
   private playResultBoxTotalAnimation() {
     if (!this.textures.exists(RESULT_BOX_TOTAL_TEXTURE_KEY)) return;
     this.ensureBoxTotalAnimation();
-
-    if (this.boxTotalSprite) {
-      this.boxTotalSprite.destroy();
-      this.boxTotalSprite = undefined;
-    }
+    this.clearResultBoxTotalEffect(false);
+    this.setTopDigitDisplayVisible(false);
+    this.sumTriangleTimer?.remove(false);
+    this.sumTriangleTimer = undefined;
+    this.sumTriangleText?.setVisible(false);
 
     const x = 540;
     const y = 385;
-    const sprite = this.add.sprite(x, y, RESULT_BOX_TOTAL_TEXTURE_KEY, 0);
-    sprite.setScale(0.6);
-    sprite.setDepth(RESULT_BOX_TOTAL_SPRITE_DEPTH);
-    sprite.play(RESULT_BOX_TOTAL_ANIMATION_KEY);
-    this.sumTriangleTimer?.remove(false);
-    this.sumTriangleTimer = this.time.delayedCall(
-      700,
+    const container = this.add.container(x, y);
+    container.setDepth(RESULT_BOX_TOTAL_SPRITE_DEPTH);
+
+    const boxPositions = [
+      { x: -96, y: -40 },
+      { x: 0, y: -40 },
+      { x: 96, y: -40 },
+      { x: 0, y: 80 },
+    ];
+    const boxScale = 0.6;
+    boxPositions.forEach(({ x: boxX, y: boxY }) => {
+      const box = this.add.sprite(boxX, boxY, RESULT_BOX_TOTAL_TEXTURE_KEY, 0);
+      box.setScale(boxScale);
+      box.play(RESULT_BOX_TOTAL_ANIMATION_KEY);
+      container.add(box);
+    });
+
+    if (this.textures.exists(RESULT_BOX_ARROW_TEXTURE_KEY)) {
+      const arrow = this.add.sprite(0, 18, RESULT_BOX_ARROW_TEXTURE_KEY, 0);
+      arrow.setScale(0.6);
+      if (this.anims.exists(RESULT_BOX_ARROW_ANIMATION_KEY)) {
+        arrow.play(RESULT_BOX_ARROW_ANIMATION_KEY);
+      }
+      container.add(arrow);
+    }
+
+    const digitValues = [
+      this.roundDigitsLeftText?.text ?? '-',
+      this.roundDigitsCenterText?.text ?? '-',
+      this.roundDigitsRightText?.text ?? '-',
+    ];
+    const sumValue = this.lastSumTriangleValue ?? this.sumTriangleText?.text ?? '--';
+
+    const topGlowStyle: Phaser.Types.GameObjects.Text.TextStyle = {
+      fontFamily: "'Orbitron', 'Rajdhani', sans-serif",
+      fontSize: '42px',
+      color: '#ffe8a6',
+      fontStyle: '900',
+      stroke: '#ff9f1a',
+      strokeThickness: 12,
+      shadow: {
+        offsetX: 0,
+        offsetY: 0,
+        color: 'rgba(255, 200, 84, 0.95)',
+        blur: 18,
+        fill: true,
+        stroke: true,
+      },
+    };
+    const topCoreStyle: Phaser.Types.GameObjects.Text.TextStyle = {
+      fontFamily: "'Orbitron', 'Rajdhani', sans-serif",
+      fontSize: '42px',
+      color: '#fff7d1',
+      fontStyle: '900',
+      stroke: '#3a1500',
+      strokeThickness: 5,
+      shadow: {
+        offsetX: 0,
+        offsetY: 2,
+        color: 'rgba(0,0,0,0.75)',
+        blur: 4,
+        fill: true,
+      },
+    };
+    const sumGlowStyle: Phaser.Types.GameObjects.Text.TextStyle = {
+      fontFamily: "'Orbitron', 'Rajdhani', sans-serif",
+      fontSize: '50px',
+      color: '#fff2a8',
+      fontStyle: '900',
+      stroke: '#ff8f00',
+      strokeThickness: 14,
+      shadow: {
+        offsetX: 0,
+        offsetY: 0,
+        color: 'rgba(255, 170, 34, 1)',
+        blur: 22,
+        fill: true,
+        stroke: true,
+      },
+    };
+    const sumCoreStyle: Phaser.Types.GameObjects.Text.TextStyle = {
+      fontFamily: "'Orbitron', 'Rajdhani', sans-serif",
+      fontSize: '50px',
+      color: '#ffe27a',
+      fontStyle: '900',
+      stroke: '#381200',
+      strokeThickness: 6,
+      shadow: {
+        offsetX: 0,
+        offsetY: 2,
+        color: 'rgba(0,0,0,0.7)',
+        blur: 5,
+        fill: true,
+      },
+    };
+
+    const createFancyResultLabel = (
+      x: number,
+      y: number,
+      value: string,
+      glowStyle: Phaser.Types.GameObjects.Text.TextStyle,
+      coreStyle: Phaser.Types.GameObjects.Text.TextStyle,
+      pulseScale: number,
+      pulseDuration: number,
+    ) => {
+      const glow = this.add.text(x, y, value, glowStyle).setOrigin(0.5).setAlpha(0.75);
+      const core = this.add.text(x, y, value, coreStyle).setOrigin(0.5);
+      container.add(glow);
+      container.add(core);
+      this.tweens.add({
+        targets: [glow, core],
+        scaleX: pulseScale,
+        scaleY: pulseScale,
+        alpha: { from: 0.88, to: 1 },
+        duration: pulseDuration,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+    };
+
+    boxPositions.slice(0, 3).forEach(({ x: boxX, y: boxY }, idx) => {
+      createFancyResultLabel(
+        boxX,
+        boxY,
+        digitValues[idx],
+        topGlowStyle,
+        topCoreStyle,
+        1.08,
+        280,
+      );
+    });
+
+    const sumBox = boxPositions[3];
+    createFancyResultLabel(
+      sumBox.x,
+      sumBox.y,
+      sumValue,
+      sumGlowStyle,
+      sumCoreStyle,
+      1.1,
+      320,
+    );
+
+    this.boxTotalSprite = container;
+    this.boxTotalDisplayTimer = this.time.delayedCall(
+      RESULT_BOX_TOTAL_DISPLAY_MS,
       () => {
+        this.boxTotalDisplayTimer = undefined;
+        if (this.boxTotalSprite === container) {
+          container.destroy();
+          this.boxTotalSprite = undefined;
+        }
+        this.setTopDigitDisplayVisible(true);
         if (this.sumTriangleText && this.lastSumTriangleValue !== null) {
           this.sumTriangleText.setText(this.lastSumTriangleValue);
           this.sumTriangleText.setVisible(true);
@@ -3431,13 +3701,6 @@ export class HiLoScene extends Phaser.Scene {
       undefined,
       this,
     );
-    sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
-      sprite.destroy();
-      if (this.boxTotalSprite === sprite) {
-        this.boxTotalSprite = undefined;
-      }
-    });
-    this.boxTotalSprite = sprite;
   }
 
   private clearResultOverlay() {
@@ -3455,9 +3718,6 @@ export class HiLoScene extends Phaser.Scene {
       this.payoutFloatText.destroy();
       this.payoutFloatText = undefined;
     }
-    if (this.boxTotalSprite) {
-      this.boxTotalSprite.destroy();
-      this.boxTotalSprite = undefined;
-    }
+    this.clearResultBoxTotalEffect(true);
   }
 }

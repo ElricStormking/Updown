@@ -1,0 +1,53 @@
+{
+    "section1": {
+        "files": [
+            {
+                "url": "assets/anim/3N_box_light/3N_box_arrow.png",
+                "frameConfig": {
+                    "frameWidth": 338,
+                    "frameHeight": 64,
+                    "startFrame": 0,
+                    "endFrame": -1,
+                    "spacing": 0,
+                    "margin": 0
+                },
+                "type": "spritesheet",
+                "key": "3N_box_arrow"
+            },
+            {
+                "url": "assets/anim/3N_box_light/3N_box_light.png",
+                "frameConfig": {
+                    "frameWidth": 135,
+                    "frameHeight": 135,
+                    "startFrame": 0,
+                    "endFrame": -1,
+                    "spacing": 0,
+                    "margin": 0
+                },
+                "type": "spritesheet",
+                "key": "3N_box_light"
+            },
+            {
+                "url": "assets/anim/3N_box_light/3N_box_light2.png",
+                "frameConfig": {
+                    "frameWidth": 563,
+                    "frameHeight": 310,
+                    "startFrame": 0,
+                    "endFrame": -1,
+                    "spacing": 0,
+                    "margin": 0
+                },
+                "type": "spritesheet",
+                "key": "3N_box_light2"
+            }
+        ]
+    },
+    "meta": {
+        "app": "Phaser Editor 2D - Asset Pack Editor",
+        "contentType": "phasereditor2d.pack.core.AssetContentType",
+        "url": "https://phasereditor2d.com",
+        "version": 2,
+        "showAllFilesInBlocks": false,
+        "visible": true
+    }
+}
