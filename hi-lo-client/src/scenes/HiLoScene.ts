@@ -86,6 +86,13 @@ const LIGHTNING_HIT_TEXTURE_KEY = 'lightball_hit';
 const LIGHTNING_BEAM_ANIMATION_KEY = 'winner-lightball-beam';
 const LIGHTNING_HIT_ANIMATION_KEY = 'winner-lightball-hit';
 const LIGHTNING_BEAM_FRAME_HEIGHT = 269;
+const BONUS_LIGHTNING_STAGGER_MS = 85;
+const BONUS_LIGHTNING_DURATION_MS = 240;
+const TOP_DIGIT_LIGHTNING_SOURCES: ReadonlyArray<{ x: number; y: number }> = [
+  { x: 420, y: 220 },
+  { x: 538, y: 220 },
+  { x: 655, y: 220 },
+];
 
 export class HiLoScene extends Phaser.Scene {
   private language: LanguageCode = getInitialLanguage();
@@ -143,6 +150,8 @@ export class HiLoScene extends Phaser.Scene {
   private winnerLightSprites = new Map<string, Phaser.GameObjects.Sprite>();
   private bonusLightTweens = new Map<string, Phaser.Tweens.Tween>();
   private bonusLightSprites = new Map<string, Phaser.GameObjects.Sprite>();
+  private bonusLightningRoundId?: number;
+  private struckBonusKeys = new Set<string>();
   private winnerHighlightTimer?: Phaser.Time.TimerEvent;
   private lightningBeams: Phaser.GameObjects.Sprite[] = [];
   private lightningHitSprites: Phaser.GameObjects.Sprite[] = [];
@@ -1799,6 +1808,8 @@ export class HiLoScene extends Phaser.Scene {
     this.bonusOddsByKey.clear();
     const bonusEnabled = state.config?.bonusModeEnabled !== false;
     if (!round || !bonusEnabled || round.status !== 'RESULT_PENDING') {
+      this.bonusLightningRoundId = undefined;
+      this.struckBonusKeys.clear();
       this.clearBonusHighlights();
       this.syncOddsText();
       return;
@@ -1815,7 +1826,69 @@ export class HiLoScene extends Phaser.Scene {
       this.bonusOddsByKey.set(key, slot.bonusRatio);
     });
     this.applyBonusHighlights();
+    this.triggerBonusSlotLightning(round);
     this.syncOddsText();
+  }
+
+  private triggerBonusSlotLightning(round: RoundStatePayload) {
+    if (this.bonusLightningRoundId !== round.id) {
+      this.bonusLightningRoundId = round.id;
+      this.struckBonusKeys.clear();
+    }
+
+    const slotKeys: string[] = [];
+    this.bonusOddsByKey.forEach((_ratio, key) => {
+      if (this.struckBonusKeys.has(key)) return;
+      if (!this.betTargets.has(key)) return;
+      slotKeys.push(key);
+      this.struckBonusKeys.add(key);
+    });
+
+    if (!slotKeys.length) return;
+    this.playBonusSlotChainLightning(slotKeys);
+  }
+
+  private getTopDigitLightningSources() {
+    if (
+      this.roundDigitsLeftText &&
+      this.roundDigitsCenterText &&
+      this.roundDigitsRightText
+    ) {
+      const yOffset = 38;
+      return [
+        { x: this.roundDigitsLeftText.x, y: this.roundDigitsLeftText.y + yOffset },
+        { x: this.roundDigitsCenterText.x, y: this.roundDigitsCenterText.y + yOffset },
+        { x: this.roundDigitsRightText.x, y: this.roundDigitsRightText.y + yOffset },
+      ];
+    }
+
+    return [...TOP_DIGIT_LIGHTNING_SOURCES];
+  }
+
+  private playBonusSlotChainLightning(slotKeys: string[]) {
+    if (!slotKeys.length) return;
+    this.ensureLightningAnimations();
+    const sources = this.getTopDigitLightningSources();
+
+    slotKeys.forEach((key, index) => {
+      const target = this.betTargets.get(key);
+      if (!target) return;
+      const source = sources[index % sources.length];
+
+      const timer = this.time.delayedCall(index * BONUS_LIGHTNING_STAGGER_MS, () => {
+        this.animateLightningBolt(
+          source.x,
+          source.y,
+          target.x,
+          target.y,
+          BONUS_LIGHTNING_DURATION_MS,
+          () => {
+            this.spawnLightningImpact(target.x, target.y);
+          },
+        );
+      });
+      this.lightningTimers.push(timer);
+    });
   }
 
   private getLockedLayoutScale() {
