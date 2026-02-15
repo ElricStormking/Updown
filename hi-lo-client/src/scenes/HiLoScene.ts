@@ -74,6 +74,9 @@ const DEFAULT_SUM_PAYOUTS: Record<number, number> = {
   26: 130,
 };
 
+const HIDDEN_DOUBLE_SELECTIONS = new Set(['00', '99']);
+const HIDDEN_TRIPLE_SELECTIONS = new Set(['000', '999']);
+
 const RESULT_BOX_TOTAL_TEXTURE_KEY = '3N_box_light';
 const RESULT_BOX_TOTAL_ANIMATION_KEY = '3N-box-light-anim';
 const RESULT_BOX_ARROW_TEXTURE_KEY = '3N_box_arrow';
@@ -554,6 +557,7 @@ export class HiLoScene extends Phaser.Scene {
       ['99', 920, 1154],
     ];
     doubleDigits.forEach(([value, x, y]) => {
+      if (HIDDEN_DOUBLE_SELECTIONS.has(value)) return;
       const image = addImage(Number(x), Number(y), `number_${value}`, 0.75);
       this.registerDigitCell(image, 'DOUBLE', value);
     });
@@ -571,6 +575,7 @@ export class HiLoScene extends Phaser.Scene {
       ['999', 921, 1382],
     ];
     tripleDigits.forEach(([value, x, y]) => {
+      if (HIDDEN_TRIPLE_SELECTIONS.has(value)) return;
       const image = addImage(Number(x), Number(y), `number_${value}`, 0.75);
       this.registerDigitCell(image, 'TRIPLE', value);
     });

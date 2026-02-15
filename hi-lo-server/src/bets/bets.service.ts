@@ -39,6 +39,9 @@ type RoundConfigLookup = {
   merchantSnapshots: Record<string, GameConfigSnapshot>;
 };
 
+const DISABLED_DOUBLE_SELECTIONS = new Set(['00', '99']);
+const DISABLED_TRIPLE_SELECTIONS = new Set(['000', '999']);
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
@@ -725,6 +728,9 @@ export class BetsService {
     if (selection[0] !== selection[1]) {
       throw new BadRequestException('Double selection must repeat the digit');
     }
+    if (DISABLED_DOUBLE_SELECTIONS.has(selection)) {
+      throw new BadRequestException('Double selection is currently unavailable');
+    }
     return selection;
   }
 
@@ -737,6 +743,9 @@ export class BetsService {
     }
     if (selection[0] !== selection[1] || selection[1] !== selection[2]) {
       throw new BadRequestException('Triple selection must repeat the digit');
+    }
+    if (DISABLED_TRIPLE_SELECTIONS.has(selection)) {
+      throw new BadRequestException('Triple selection is currently unavailable');
     }
     return selection;
   }
