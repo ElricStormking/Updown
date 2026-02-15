@@ -24,12 +24,10 @@ export default class main_screen extends Phaser.Scene {
 		bg.scaleX = 1.1;
 		bg.scaleY = 1.5;
 
-		// bg_light2_left_1
-		const bg_light2_left_1 = this.add.image(879, 1156, "bg_light2_left");
-		bg_light2_left_1.flipX = true;
-
-		// bg_light2_left
-		this.add.image(200, 1156, "bg_light2_left");
+		// bg_light2
+		const bg_light2 = this.add.image(558, 567, "bg_light2");
+		bg_light2.scaleX = 0.9;
+		bg_light2.scaleY = 1.5;
 
 		// button_any_triple
 		const button_any_triple = this.add.image(543, 754, "button_any triple");
@@ -66,55 +64,45 @@ export default class main_screen extends Phaser.Scene {
 		title_on_double.scaleX = 0.73;
 		title_on_double.scaleY = 0.73;
 
-		// number_00
-		const number_00 = this.add.image(149, 927, "number_00");
-		number_00.scaleX = 0.73;
-		number_00.scaleY = 0.73;
-
 		// number_11
-		const number_11 = this.add.image(343, 925, "number_11");
+		const number_11 = this.add.image(263, 925, "number_11");
 		number_11.scaleX = 0.73;
 		number_11.scaleY = 0.73;
 
 		// number_22
-		const number_22 = this.add.image(537, 925, "number_22");
+		const number_22 = this.add.image(457, 925, "number_22");
 		number_22.scaleX = 0.73;
 		number_22.scaleY = 0.73;
 
 		// number_33
-		const number_33 = this.add.image(733, 925, "number_33");
+		const number_33 = this.add.image(653, 925, "number_33");
 		number_33.scaleX = 0.73;
 		number_33.scaleY = 0.73;
 
 		// number_44
-		const number_44 = this.add.image(929, 925, "number_44");
+		const number_44 = this.add.image(849, 925, "number_44");
 		number_44.scaleX = 0.73;
 		number_44.scaleY = 0.73;
 
 		// number_55
-		const number_55 = this.add.image(147, 986, "number_55");
+		const number_55 = this.add.image(260, 986, "number_55");
 		number_55.scaleX = 0.73;
 		number_55.scaleY = 0.73;
 
 		// number_66
-		const number_66 = this.add.image(339, 986, "number_66");
+		const number_66 = this.add.image(452, 986, "number_66");
 		number_66.scaleX = 0.73;
 		number_66.scaleY = 0.73;
 
 		// number_77
-		const number_77 = this.add.image(535, 986, "number_77");
+		const number_77 = this.add.image(648, 986, "number_77");
 		number_77.scaleX = 0.73;
 		number_77.scaleY = 0.73;
 
 		// number_88
-		const number_88 = this.add.image(732, 986, "number_88");
+		const number_88 = this.add.image(845, 986, "number_88");
 		number_88.scaleX = 0.73;
 		number_88.scaleY = 0.73;
-
-		// number_99
-		const number_99 = this.add.image(928, 986, "number_99");
-		number_99.scaleX = 0.73;
-		number_99.scaleY = 0.73;
 
 		// title_bigbox_yellow_1
 		const title_bigbox_yellow_1 = this.add.image(538, 1186, "title_bigbox_yellow");
@@ -126,55 +114,45 @@ export default class main_screen extends Phaser.Scene {
 		title_on_triple.scaleX = 0.73;
 		title_on_triple.scaleY = 0.73;
 
-		// number_000
-		const number_000 = this.add.image(146, 1104, "number_000");
-		number_000.scaleX = 0.73;
-		number_000.scaleY = 0.73;
-
 		// number_111
-		const number_111 = this.add.image(339, 1104, "number_111");
+		const number_111 = this.add.image(265, 1104, "number_111");
 		number_111.scaleX = 0.73;
 		number_111.scaleY = 0.73;
 
 		// number_222
-		const number_222 = this.add.image(534, 1104, "number_222");
+		const number_222 = this.add.image(460, 1104, "number_222");
 		number_222.scaleX = 0.73;
 		number_222.scaleY = 0.73;
 
 		// number_333
-		const number_333 = this.add.image(732, 1104, "number_333");
+		const number_333 = this.add.image(658, 1104, "number_333");
 		number_333.scaleX = 0.73;
 		number_333.scaleY = 0.73;
 
 		// number_444
-		const number_444 = this.add.image(930, 1104, "number_444");
+		const number_444 = this.add.image(856, 1104, "number_444");
 		number_444.scaleX = 0.73;
 		number_444.scaleY = 0.73;
 
 		// number_555
-		const number_555 = this.add.image(146, 1169, "number_555");
+		const number_555 = this.add.image(268, 1169, "number_555");
 		number_555.scaleX = 0.73;
 		number_555.scaleY = 0.73;
 
 		// number_666
-		const number_666 = this.add.image(339, 1169, "number_666");
+		const number_666 = this.add.image(461, 1169, "number_666");
 		number_666.scaleX = 0.73;
 		number_666.scaleY = 0.73;
 
 		// number_777
-		const number_777 = this.add.image(536, 1168, "number_777");
+		const number_777 = this.add.image(658, 1168, "number_777");
 		number_777.scaleX = 0.73;
 		number_777.scaleY = 0.73;
 
 		// number_888
-		const number_888 = this.add.image(733, 1169, "number_888");
+		const number_888 = this.add.image(855, 1169, "number_888");
 		number_888.scaleX = 0.73;
 		number_888.scaleY = 0.73;
-
-		// number_999
-		const number_999 = this.add.image(929, 1164, "number_999");
-		number_999.scaleX = 0.73;
-		number_999.scaleY = 0.73;
 
 		// title_bigbox_purple
 		const title_bigbox_purple = this.add.image(539, 1363, "title_bigbox_purple");
@@ -441,21 +419,6 @@ export default class main_screen extends Phaser.Scene {
 		logo_combi3.scaleX = 0.7;
 		logo_combi3.scaleY = 0.7;
 
-		// _3N_box
-		const _3N_box = this.add.image(425, 153, "3N_box");
-		_3N_box.scaleX = 0.7;
-		_3N_box.scaleY = 0.7;
-
-		// _3N_box_1
-		const _3N_box_1 = this.add.image(540, 153, "3N_box");
-		_3N_box_1.scaleX = 0.7;
-		_3N_box_1.scaleY = 0.7;
-
-		// _3N_box_2
-		const _3N_box_2 = this.add.image(653, 153, "3N_box");
-		_3N_box_2.scaleX = 0.7;
-		_3N_box_2.scaleY = 0.7;
-
 		// time
 		const time = this.add.image(276, 172, "time");
 		time.scaleX = 0.8;
@@ -485,6 +448,21 @@ export default class main_screen extends Phaser.Scene {
 		const odd_box_right = this.add.image(808, 644, "odd_box_right");
 		odd_box_right.scaleX = 0.7;
 		odd_box_right.scaleY = 0.7;
+
+		// _3N_box
+		this.add.image(374, 328, "3N_box");
+
+		// _3N_box_1
+		this.add.image(541, 328, "3N_box");
+
+		// _3N_box_2
+		this.add.image(706, 328, "3N_box");
+
+		// _3N_box_arrow
+		this.add.image(540, 422, "3N_box_arrow");
+
+		// _3N_box_3
+		this.add.image(541, 501, "3N_box");
 
 		this.events.emit("scene-awake");
 	}

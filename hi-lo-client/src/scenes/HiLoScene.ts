@@ -460,8 +460,26 @@ export class HiLoScene extends Phaser.Scene {
     const buttonOdd = addImage(347, 868, 'button_odd', 0.75);
     const buttonSmall = addImage(135, 868, 'button_small', 0.75);
 
-    addImage(529, 1155, 'title_bigbox_yellow', 0.75);
-    const titleOnDouble = addImage(535, 1014, 'title_on_double', 0.75);
+    const BET_SLOTS_OFFSET_Y = 18;
+    const ROW_GAP_Y = 82;
+    const DOUBLE_TITLE_Y = 1014 + BET_SLOTS_OFFSET_Y;
+    const DOUBLE_FRAME_Y = DOUBLE_TITLE_Y + 141;
+    const DOUBLE_ROW1_Y = DOUBLE_TITLE_Y + 74;
+    const DOUBLE_ROW2_Y = DOUBLE_ROW1_Y + ROW_GAP_Y;
+    const TRIPLE_TITLE_Y = DOUBLE_ROW2_Y + 86;
+    const TRIPLE_FRAME_Y = TRIPLE_TITLE_Y + 141;
+    const TRIPLE_ROW1_Y = TRIPLE_TITLE_Y + 84;
+    const TRIPLE_ROW2_Y = TRIPLE_ROW1_Y + ROW_GAP_Y;
+    const SUM_TITLE_Y = TRIPLE_ROW2_Y + 86;
+    const SUM_FRAME_Y = SUM_TITLE_Y + 141;
+    const SUM_ROW1_Y = SUM_TITLE_Y + 80;
+    const SUM_ROW_GAP_Y = ROW_GAP_Y;
+    const SINGLE_TITLE_Y = SUM_ROW1_Y + SUM_ROW_GAP_Y * 4 + 76;
+    const SINGLE_ROW1_Y = SINGLE_TITLE_Y + 78;
+    const SINGLE_ROW2_Y = SINGLE_ROW1_Y + ROW_GAP_Y;
+
+    addImage(529, DOUBLE_FRAME_Y, 'title_bigbox_yellow', 0.75);
+    const titleOnDouble = addImage(535, DOUBLE_TITLE_Y, 'title_on_double', 0.75);
     const titleDoubleInset = titleOnDouble.displayWidth * 0.37;
     this.doublePayoutText = this.add
       .text(
@@ -477,8 +495,8 @@ export class HiLoScene extends Phaser.Scene {
       )
       .setOrigin(1, 0.5)
       .setDepth(6);
-    addImage(530, 1372, 'title_bigbox_yellow', 0.75);
-    const titleOnTriple = addImage(532, 1231, 'title_on_triple', 0.75);
+    addImage(530, TRIPLE_FRAME_Y, 'title_bigbox_yellow', 0.75);
+    const titleOnTriple = addImage(532, TRIPLE_TITLE_Y, 'title_on_triple', 0.75);
     const titleTripleInset = titleOnTriple.displayWidth * 0.39;
     this.triplePayoutText = this.add
       .text(
@@ -494,9 +512,9 @@ export class HiLoScene extends Phaser.Scene {
       )
       .setOrigin(1, 0.5)
       .setDepth(6);
-    addImage(531, 1600, 'title_bigbox_purple', 0.75);
-    addImage(536, 1459, 'title_sum', 0.75);
-    const titleOnSingle = addImage(535, 1909, 'title_on_single', 0.75);
+    addImage(531, SUM_FRAME_Y, 'title_bigbox_purple', 0.75);
+    addImage(536, SUM_TITLE_Y, 'title_sum', 0.75);
+    const titleOnSingle = addImage(535, SINGLE_TITLE_Y, 'title_on_single', 0.75);
     const singleTitleSectionWidth = titleOnSingle.displayWidth / 3;
     const singleTitleLeft = titleOnSingle.x - titleOnSingle.displayWidth / 2;
     const singleTitleInset = singleTitleSectionWidth * 0.69;
@@ -545,16 +563,16 @@ export class HiLoScene extends Phaser.Scene {
       .setDepth(6);
 
     const doubleDigits: Array<[string, number, number]> = [
-      ['00', 141, 1084],
-      ['11', 335, 1082],
-      ['22', 529, 1082],
-      ['33', 725, 1082],
-      ['44', 921, 1082],
-      ['55', 139, 1154],
-      ['66', 331, 1154],
-      ['77', 527, 1154],
-      ['88', 724, 1154],
-      ['99', 920, 1154],
+      ['00', 141, DOUBLE_ROW1_Y],
+      ['11', 335, DOUBLE_ROW1_Y],
+      ['22', 529, DOUBLE_ROW1_Y],
+      ['33', 725, DOUBLE_ROW1_Y],
+      ['44', 921, DOUBLE_ROW1_Y],
+      ['55', 139, DOUBLE_ROW2_Y],
+      ['66', 331, DOUBLE_ROW2_Y],
+      ['77', 527, DOUBLE_ROW2_Y],
+      ['88', 724, DOUBLE_ROW2_Y],
+      ['99', 920, DOUBLE_ROW2_Y],
     ];
     doubleDigits.forEach(([value, x, y]) => {
       if (HIDDEN_DOUBLE_SELECTIONS.has(value)) return;
@@ -563,16 +581,16 @@ export class HiLoScene extends Phaser.Scene {
     });
 
     const tripleDigits: Array<[string, number, number]> = [
-      ['000', 138, 1311],
-      ['111', 331, 1311],
-      ['222', 526, 1311],
-      ['333', 724, 1311],
-      ['444', 922, 1311],
-      ['555', 138, 1383],
-      ['666', 331, 1383],
-      ['777', 528, 1382],
-      ['888', 725, 1383],
-      ['999', 921, 1382],
+      ['000', 138, TRIPLE_ROW1_Y],
+      ['111', 331, TRIPLE_ROW1_Y],
+      ['222', 526, TRIPLE_ROW1_Y],
+      ['333', 724, TRIPLE_ROW1_Y],
+      ['444', 922, TRIPLE_ROW1_Y],
+      ['555', 138, TRIPLE_ROW2_Y],
+      ['666', 331, TRIPLE_ROW2_Y],
+      ['777', 528, TRIPLE_ROW2_Y],
+      ['888', 725, TRIPLE_ROW2_Y],
+      ['999', 921, TRIPLE_ROW2_Y],
     ];
     tripleDigits.forEach(([value, x, y]) => {
       if (HIDDEN_TRIPLE_SELECTIONS.has(value)) return;
@@ -581,31 +599,31 @@ export class HiLoScene extends Phaser.Scene {
     });
 
     const sumDigits: Array<[string, number, number]> = [
-      ['02', 140, 1536],
-      ['03', 335, 1536],
-      ['04', 532, 1536],
-      ['05', 730, 1536],
-      ['06', 924, 1536],
-      ['07', 140, 1613],
-      ['08', 335, 1613],
-      ['09', 532, 1613],
-      ['10', 730, 1613],
-      ['11', 924, 1613],
-      ['12', 140, 1688],
-      ['13', 335, 1688],
-      ['14', 532, 1688],
-      ['15', 730, 1688],
-      ['16', 924, 1688],
-      ['17', 140, 1761],
-      ['18', 335, 1761],
-      ['19', 532, 1761],
-      ['20', 730, 1761],
-      ['21', 924, 1761],
-      ['22', 140, 1833],
-      ['23', 335, 1833],
-      ['24', 532, 1833],
-      ['25', 730, 1833],
-      ['26', 924, 1833],
+      ['02', 140, SUM_ROW1_Y],
+      ['03', 335, SUM_ROW1_Y],
+      ['04', 532, SUM_ROW1_Y],
+      ['05', 730, SUM_ROW1_Y],
+      ['06', 924, SUM_ROW1_Y],
+      ['07', 140, SUM_ROW1_Y + SUM_ROW_GAP_Y],
+      ['08', 335, SUM_ROW1_Y + SUM_ROW_GAP_Y],
+      ['09', 532, SUM_ROW1_Y + SUM_ROW_GAP_Y],
+      ['10', 730, SUM_ROW1_Y + SUM_ROW_GAP_Y],
+      ['11', 924, SUM_ROW1_Y + SUM_ROW_GAP_Y],
+      ['12', 140, SUM_ROW1_Y + SUM_ROW_GAP_Y * 2],
+      ['13', 335, SUM_ROW1_Y + SUM_ROW_GAP_Y * 2],
+      ['14', 532, SUM_ROW1_Y + SUM_ROW_GAP_Y * 2],
+      ['15', 730, SUM_ROW1_Y + SUM_ROW_GAP_Y * 2],
+      ['16', 924, SUM_ROW1_Y + SUM_ROW_GAP_Y * 2],
+      ['17', 140, SUM_ROW1_Y + SUM_ROW_GAP_Y * 3],
+      ['18', 335, SUM_ROW1_Y + SUM_ROW_GAP_Y * 3],
+      ['19', 532, SUM_ROW1_Y + SUM_ROW_GAP_Y * 3],
+      ['20', 730, SUM_ROW1_Y + SUM_ROW_GAP_Y * 3],
+      ['21', 924, SUM_ROW1_Y + SUM_ROW_GAP_Y * 3],
+      ['22', 140, SUM_ROW1_Y + SUM_ROW_GAP_Y * 4],
+      ['23', 335, SUM_ROW1_Y + SUM_ROW_GAP_Y * 4],
+      ['24', 532, SUM_ROW1_Y + SUM_ROW_GAP_Y * 4],
+      ['25', 730, SUM_ROW1_Y + SUM_ROW_GAP_Y * 4],
+      ['26', 924, SUM_ROW1_Y + SUM_ROW_GAP_Y * 4],
     ];
     sumDigits.forEach(([value, x, y]) => {
       const selection = String(Number(value));
@@ -614,16 +632,16 @@ export class HiLoScene extends Phaser.Scene {
     });
 
     const singleDigits: Array<[string, number, number]> = [
-      ['0', 137, 1987],
-      ['1', 333, 1987],
-      ['2', 533, 1987],
-      ['3', 729, 1987],
-      ['4', 925, 1987],
-      ['5', 137, 2060],
-      ['6', 333, 2060],
-      ['7', 533, 2060],
-      ['8', 729, 2060],
-      ['9', 925, 2060],
+      ['0', 137, SINGLE_ROW1_Y],
+      ['1', 333, SINGLE_ROW1_Y],
+      ['2', 533, SINGLE_ROW1_Y],
+      ['3', 729, SINGLE_ROW1_Y],
+      ['4', 925, SINGLE_ROW1_Y],
+      ['5', 137, SINGLE_ROW2_Y],
+      ['6', 333, SINGLE_ROW2_Y],
+      ['7', 533, SINGLE_ROW2_Y],
+      ['8', 729, SINGLE_ROW2_Y],
+      ['9', 925, SINGLE_ROW2_Y],
     ];
     singleDigits.forEach(([value, x, y]) => {
       const image = addImage(Number(x), Number(y), `number_${value}`, 0.75);

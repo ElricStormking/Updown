@@ -7,6 +7,16 @@
                 "key": "3N_box"
             },
             {
+                "url": "assets/main_screen_UI/3N_box_arrow.png",
+                "type": "image",
+                "key": "3N_box_arrow"
+            },
+            {
+                "url": "assets/main_screen_UI/3N_box_total08.png",
+                "type": "image",
+                "key": "3N_box_total08"
+            },
+            {
                 "url": "assets/main_screen_UI/bg.png",
                 "type": "image",
                 "key": "bg"
@@ -15,6 +25,11 @@
                 "url": "assets/main_screen_UI/bg_light.png",
                 "type": "image",
                 "key": "bg_light"
+            },
+            {
+                "url": "assets/main_screen_UI/bg_light2.png",
+                "type": "image",
+                "key": "bg_light2"
             },
             {
                 "url": "assets/main_screen_UI/bg_light2_left.png",
@@ -400,6 +415,21 @@
                 "url": "assets/main_screen_UI/odd_box_right.png",
                 "type": "image",
                 "key": "odd_box_right"
+            },
+            {
+                "url": "assets/main_screen_UI/plus_light_box.png",
+                "type": "image",
+                "key": "plus_light_box"
+            },
+            {
+                "url": "assets/main_screen_UI/plus_line_left.png",
+                "type": "image",
+                "key": "plus_line_left"
+            },
+            {
+                "url": "assets/main_screen_UI/plus_line_right.png",
+                "type": "image",
+                "key": "plus_line_right"
             },
             {
                 "url": "assets/main_screen_UI/setting.png",
