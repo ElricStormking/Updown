@@ -1,4 +1,5 @@
 import { IsNotEmpty, IsNumber, IsString } from 'class-validator';
+import { DigitBetAmountLimitsResponseData } from './bet-limit-rules.dto';
 
 export class GetBetLimitDto {
   @IsString()
@@ -16,4 +17,5 @@ export class GetBetLimitDto {
 export class GetBetLimitResponseData {
   minBetAmount: number;
   maxBetAmount: number;
+  digitBetAmountLimits: DigitBetAmountLimitsResponseData;
 }

@@ -526,9 +526,11 @@ async function handlePlaceDigitBet(selection: {
   }
 
   const tokenValue = state.selectedTokenValue;
-  const amount = clampAmount(tokenValue);
+  const amount = clampAmount(tokenValue, selection.digitType);
   if (amount !== tokenValue) {
-    throw new Error('Token value outside betting limits');
+    throw new Error(
+      `Token value outside betting limits for ${getDigitBetLimitScopeLabel(selection.digitType)}`,
+    );
   }
   if (state.walletBalance < getTotalPlacedStake() + amount) {
     const message = 'Insufficient balance';
@@ -600,14 +602,71 @@ async function handleClearTokens() {
   await refreshPlayerData();
 }
 
-function clampAmount(amount: number) {
+function getDigitBetLimitScopeLabel(digitType: DigitBetType) {
+  switch (digitType) {
+    case 'SMALL':
+    case 'BIG':
+      return 'SMALL/BIG';
+    case 'ODD':
+    case 'EVEN':
+      return 'ODD/EVEN';
+    case 'DOUBLE':
+      return 'DOUBLE';
+    case 'TRIPLE':
+      return 'TRIPLE';
+    case 'SUM':
+      return 'SUM';
+    case 'SINGLE':
+      return 'SINGLE';
+    case 'ANY_TRIPLE':
+      return 'ANY_TRIPLE';
+    default:
+      return 'DIGIT';
+  }
+}
+
+function resolveBetAmountLimit(digitType?: DigitBetType) {
   if (!state.config) {
+    return null;
+  }
+
+  const fallback = {
+    minBetAmount: state.config.minBetAmount,
+    maxBetAmount: state.config.maxBetAmount,
+  };
+  if (!digitType || !state.config.digitBetAmountLimits) {
+    return fallback;
+  }
+
+  const limits = state.config.digitBetAmountLimits;
+  switch (digitType) {
+    case 'SMALL':
+    case 'BIG':
+      return limits.smallBig ?? fallback;
+    case 'ODD':
+    case 'EVEN':
+      return limits.oddEven ?? fallback;
+    case 'DOUBLE':
+      return limits.double ?? fallback;
+    case 'TRIPLE':
+      return limits.triple ?? fallback;
+    case 'SUM':
+      return limits.sum ?? fallback;
+    case 'SINGLE':
+      return limits.single ?? fallback;
+    case 'ANY_TRIPLE':
+      return limits.anyTriple ?? fallback;
+    default:
+      return fallback;
+  }
+}
+
+function clampAmount(amount: number, digitType?: DigitBetType) {
+  const limit = resolveBetAmountLimit(digitType);
+  if (!limit) {
     return amount;
   }
-  return Math.min(
-    state.config.maxBetAmount,
-    Math.max(state.config.minBetAmount, amount),
-  );
+  return Math.min(limit.maxBetAmount, Math.max(limit.minBetAmount, amount));
 }
 
 async function refreshPlayerData() {

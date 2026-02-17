@@ -80,6 +80,9 @@ export class IntegrationController {
     return this.integrationService.launchGame(
       merchant,
       dto.account,
+      dto.minBetAmount,
+      dto.maxBetAmount,
+      dto.digitBetAmountLimits,
       dto.timestamp,
       dto.hash,
     );
@@ -92,6 +95,7 @@ export class IntegrationController {
       merchant,
       dto.minBetAmount,
       dto.maxBetAmount,
+      dto.digitBetAmountLimits,
       dto.timestamp,
       dto.hash,
     );

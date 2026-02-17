@@ -1,7 +1,7 @@
 # Platform Integration API Documentation
 
 **Version:** 1.0  
-**Last Updated:** February 3, 2026  
+**Last Updated:** February 17, 2026  
 
 ---
 
@@ -37,7 +37,7 @@ This document describes the Integration API for platform partners to integrate t
 - Query bet history
 - Query transfer history
 - Launch the game with authenticated player sessions
-- Retrieve and configure bet limits and token values
+- Retrieve and configure global/per-rule bet limits and token values
 
 All API endpoints use **HTTP POST** method and accept/return **JSON** payloads.
 
@@ -520,13 +520,39 @@ Generate an authenticated game URL for a player.
 |-----------|------|----------|-------------|
 | `merchantId` | string | Yes | Your merchant ID |
 | `account` | string | Yes | Player account identifier |
+| `minBetAmount` | number | No | Global minimum bet amount. If provided, game config is updated before URL generation |
+| `maxBetAmount` | number | No | Global maximum bet amount. If provided, game config is updated before URL generation |
+| `digitBetAmountLimits` | object | No | Per-rule min/max bet limits (7 digit rule groups). See [Digit Bet Amount Limits](#digit-bet-amount-limits) |
 | `timestamp` | integer | Yes | Unix timestamp in seconds |
 | `hash` | string | Yes | Request signature |
 
-**Signature Parameters (in order):**
+**Signature Parameters (in order, legacy mode):**
 ```
 hash = SHA256(merchantId + "&" + account + "&" + timestamp + "&" + hashKey)
 ```
+
+Use this legacy signature when **none** of `minBetAmount`, `maxBetAmount`, `digitBetAmountLimits` are included.
+
+**Signature Parameters (in order, bet-limit override mode):**
+```
+hash = SHA256(
+  merchantId + "&" +
+  account + "&" +
+  minBetAmountOrEmpty + "&" +
+  maxBetAmountOrEmpty + "&" +
+  digitBetAmountLimitsToken + "&" +
+  timestamp + "&" +
+  hashKey
+)
+```
+
+Where:
+- `minBetAmountOrEmpty` = `minBetAmount` value as string, or empty string if omitted.
+- `maxBetAmountOrEmpty` = `maxBetAmount` value as string, or empty string if omitted.
+- `digitBetAmountLimitsToken` format is:
+  `smallBig:min,max|oddEven:min,max|double:min,max|triple:min,max|sum:min,max|single:min,max|anyTriple:min,max`
+  (empty string if `digitBetAmountLimits` is omitted).
+- If `minBetAmount`/`maxBetAmount` are provided but `digitBetAmountLimits` is omitted, all 7 digit-rule limits are aligned to the provided global min/max.
 
 #### Request Example
 
@@ -534,6 +560,17 @@ hash = SHA256(merchantId + "&" + account + "&" + timestamp + "&" + hashKey)
 {
   "merchantId": "MERCHANT001",
   "account": "player123",
+  "minBetAmount": 0,
+  "maxBetAmount": 1000,
+  "digitBetAmountLimits": {
+    "smallBig": { "minBetAmount": 0, "maxBetAmount": 2000 },
+    "oddEven": { "minBetAmount": 0, "maxBetAmount": 2000 },
+    "double": { "minBetAmount": 0, "maxBetAmount": 800 },
+    "triple": { "minBetAmount": 0, "maxBetAmount": 300 },
+    "sum": { "minBetAmount": 0, "maxBetAmount": 1200 },
+    "single": { "minBetAmount": 0, "maxBetAmount": 1000 },
+    "anyTriple": { "minBetAmount": 0, "maxBetAmount": 500 }
+  },
   "timestamp": 1706886400,
   "hash": "a1b2c3d4e5f6..."
 }
@@ -600,16 +637,31 @@ hash = SHA256(merchantId + "&" + timestamp + "&" + hashKey)
   "errorMessage": "",
   "data": {
     "minBetAmount": 0,
-    "maxBetAmount": 1000
+    "maxBetAmount": 1000,
+    "digitBetAmountLimits": {
+      "smallBig": { "minBetAmount": 0, "maxBetAmount": 2000 },
+      "oddEven": { "minBetAmount": 0, "maxBetAmount": 2000 },
+      "double": { "minBetAmount": 0, "maxBetAmount": 800 },
+      "triple": { "minBetAmount": 0, "maxBetAmount": 300 },
+      "sum": { "minBetAmount": 0, "maxBetAmount": 1200 },
+      "single": { "minBetAmount": 0, "maxBetAmount": 1000 },
+      "anyTriple": { "minBetAmount": 0, "maxBetAmount": 500 }
+    }
   }
 }
 ```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `minBetAmount` | number | Global minimum bet amount |
+| `maxBetAmount` | number | Global maximum bet amount |
+| `digitBetAmountLimits` | object | Per-rule bet limits for SMALL/BIG, ODD/EVEN, DOUBLE, TRIPLE, SUM, SINGLE, ANY_TRIPLE |
 
 ---
 
 ### 7. Set Bet Limit
 
-Set the minimum and maximum bet amount allowed per round for this merchant.
+Set global and per-rule bet amount limits for this merchant.
 
 **Endpoint:** `POST /integration/config/bet-limit`
 
@@ -620,16 +672,35 @@ Set the minimum and maximum bet amount allowed per round for this merchant.
 | `merchantId` | string | Yes | Your merchant ID |
 | `minBetAmount` | number | Yes | Minimum amount a player can bet per round |
 | `maxBetAmount` | number | Yes | Maximum amount a player can bet per round |
+| `digitBetAmountLimits` | object | No | Per-rule min/max bet limits (7 digit rule groups). See [Digit Bet Amount Limits](#digit-bet-amount-limits) |
 | `timestamp` | integer | Yes | Unix timestamp in seconds |
 | `hash` | string | Yes | Request signature |
 
 **Rules:**
 - `minBetAmount` must be less than or equal to the lowest token value.
+- Each rule in `digitBetAmountLimits` must satisfy `minBetAmount >= 0`, `maxBetAmount >= 0`, and `maxBetAmount >= minBetAmount`.
+- Each rule `minBetAmount` must be less than or equal to the lowest token value.
+- If `digitBetAmountLimits` is omitted, all 7 digit-rule limits are set to the same `minBetAmount`/`maxBetAmount` values from the request.
 
-**Signature Parameters (in order):**
+**Signature Parameters (in order, without `digitBetAmountLimits`):**
 ```
 hash = SHA256(merchantId + "&" + minBetAmount + "&" + maxBetAmount + "&" + timestamp + "&" + hashKey)
 ```
+
+**Signature Parameters (in order, with `digitBetAmountLimits`):**
+```
+hash = SHA256(
+  merchantId + "&" +
+  minBetAmount + "&" +
+  maxBetAmount + "&" +
+  digitBetAmountLimitsToken + "&" +
+  timestamp + "&" +
+  hashKey
+)
+```
+
+Where `digitBetAmountLimitsToken` format is:
+`smallBig:min,max|oddEven:min,max|double:min,max|triple:min,max|sum:min,max|single:min,max|anyTriple:min,max`
 
 #### Request Example
 
@@ -638,6 +709,15 @@ hash = SHA256(merchantId + "&" + minBetAmount + "&" + maxBetAmount + "&" + times
   "merchantId": "MERCHANT001",
   "minBetAmount": 0,
   "maxBetAmount": 1000,
+  "digitBetAmountLimits": {
+    "smallBig": { "minBetAmount": 0, "maxBetAmount": 2000 },
+    "oddEven": { "minBetAmount": 0, "maxBetAmount": 2000 },
+    "double": { "minBetAmount": 0, "maxBetAmount": 800 },
+    "triple": { "minBetAmount": 0, "maxBetAmount": 300 },
+    "sum": { "minBetAmount": 0, "maxBetAmount": 1200 },
+    "single": { "minBetAmount": 0, "maxBetAmount": 1000 },
+    "anyTriple": { "minBetAmount": 0, "maxBetAmount": 500 }
+  },
   "timestamp": 1706886400,
   "hash": "a1b2c3d4e5f6..."
 }
@@ -652,7 +732,16 @@ hash = SHA256(merchantId + "&" + minBetAmount + "&" + maxBetAmount + "&" + times
   "errorMessage": "",
   "data": {
     "minBetAmount": 0,
-    "maxBetAmount": 1000
+    "maxBetAmount": 1000,
+    "digitBetAmountLimits": {
+      "smallBig": { "minBetAmount": 0, "maxBetAmount": 2000 },
+      "oddEven": { "minBetAmount": 0, "maxBetAmount": 2000 },
+      "double": { "minBetAmount": 0, "maxBetAmount": 800 },
+      "triple": { "minBetAmount": 0, "maxBetAmount": 300 },
+      "sum": { "minBetAmount": 0, "maxBetAmount": 1200 },
+      "single": { "minBetAmount": 0, "maxBetAmount": 1000 },
+      "anyTriple": { "minBetAmount": 0, "maxBetAmount": 500 }
+    }
   }
 }
 ```
@@ -756,6 +845,29 @@ Where `tokenValuesCSV` is the comma-joined string of the 7 values in the request
 
 ## Data Types
 
+### Digit Bet Amount Limits
+
+`digitBetAmountLimits` uses these 7 rule groups:
+
+| Key | Winning Bet Rule |
+|-----|------------------|
+| `smallBig` | SMALL / BIG |
+| `oddEven` | ODD / EVEN |
+| `double` | Each DOUBLE |
+| `triple` | Each TRIPLE |
+| `sum` | SUM |
+| `single` | SINGLE |
+| `anyTriple` | ANY_TRIPLE |
+
+Each key contains:
+
+```json
+{
+  "minBetAmount": 0,
+  "maxBetAmount": 1000
+}
+```
+
 ### Digit Bet Types
 
 | Type | Description | Selection Required |
@@ -816,6 +928,19 @@ class GameIntegration {
       pad(date.getUTCSeconds()) +
       pad(date.getUTCMilliseconds(), 3)
     );
+  }
+
+  serializeDigitBetAmountLimitsToken(digitBetAmountLimits) {
+    if (!digitBetAmountLimits) return '';
+    const keys = ['smallBig', 'oddEven', 'double', 'triple', 'sum', 'single', 'anyTriple'];
+    return keys
+      .map((key) => {
+        const entry = digitBetAmountLimits[key] || {};
+        const min = entry.minBetAmount ?? '';
+        const max = entry.maxBetAmount ?? '';
+        return `${key}:${min},${max}`;
+      })
+      .join('|');
   }
 
   async createAccount(account) {
@@ -905,17 +1030,39 @@ class GameIntegration {
     return response.data;
   }
 
-  async launchGame(account) {
+  async launchGame(account, options = {}) {
     const timestamp = this.getTimestamp();
-    const hash = this.generateSignature([
-      this.merchantId,
-      account,
-      timestamp.toString(),
-    ]);
+    const hasOverride =
+      options.minBetAmount !== undefined ||
+      options.maxBetAmount !== undefined ||
+      options.digitBetAmountLimits !== undefined;
+    const hash = hasOverride
+      ? this.generateSignature([
+          this.merchantId,
+          account,
+          options.minBetAmount !== undefined ? String(options.minBetAmount) : '',
+          options.maxBetAmount !== undefined ? String(options.maxBetAmount) : '',
+          this.serializeDigitBetAmountLimitsToken(options.digitBetAmountLimits),
+          timestamp.toString(),
+        ])
+      : this.generateSignature([
+          this.merchantId,
+          account,
+          timestamp.toString(),
+        ]);
 
     const response = await axios.post(`${this.baseUrl}/integration/launch`, {
       merchantId: this.merchantId,
       account,
+      ...(options.minBetAmount !== undefined
+        ? { minBetAmount: options.minBetAmount }
+        : {}),
+      ...(options.maxBetAmount !== undefined
+        ? { maxBetAmount: options.maxBetAmount }
+        : {}),
+      ...(options.digitBetAmountLimits !== undefined
+        ? { digitBetAmountLimits: options.digitBetAmountLimits }
+        : {}),
       timestamp,
       hash,
     });

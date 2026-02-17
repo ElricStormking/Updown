@@ -1,4 +1,6 @@
-import { IsNotEmpty, IsNumber, IsString, Min } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsNotEmpty, IsNumber, IsOptional, IsString, Min, ValidateNested } from 'class-validator';
+import { DigitBetAmountLimitsDto, DigitBetAmountLimitsResponseData } from './bet-limit-rules.dto';
 
 export class UpdateBetLimitDto {
   @IsString()
@@ -13,6 +15,11 @@ export class UpdateBetLimitDto {
   @Min(0)
   maxBetAmount: number;
 
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => DigitBetAmountLimitsDto)
+  digitBetAmountLimits?: DigitBetAmountLimitsDto;
+
   @IsNumber()
   timestamp: number;
 
@@ -24,4 +31,5 @@ export class UpdateBetLimitDto {
 export class UpdateBetLimitResponseData {
   minBetAmount: number;
   maxBetAmount: number;
+  digitBetAmountLimits: DigitBetAmountLimitsResponseData;
 }

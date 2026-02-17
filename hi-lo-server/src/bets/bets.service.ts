@@ -118,15 +118,27 @@ export class BetsService {
 
     const configLookup = this.getRoundConfigLookup(round);
     const config = this.resolveConfigForMerchant(configLookup, user.merchantId);
-    if (dto.amount < config.minBetAmount || dto.amount > config.maxBetAmount) {
+    const betType =
+      dto.betType ?? (dto.digitType ? BetType.DIGIT : BetType.HILO);
+    const amountLimit = this.resolveBetAmountLimitForRequest(
+      config,
+      betType,
+      dto.digitType,
+    );
+    if (
+      dto.amount < amountLimit.minBetAmount ||
+      dto.amount > amountLimit.maxBetAmount
+    ) {
+      const scopeLabel =
+        betType === BetType.DIGIT && dto.digitType
+          ? this.getDigitBetLimitScopeLabel(dto.digitType)
+          : 'Hi-Lo';
       throw new BadRequestException(
-        `Bet amount must be between ${config.minBetAmount} and ${config.maxBetAmount}`,
+        `Bet amount must be between ${amountLimit.minBetAmount} and ${amountLimit.maxBetAmount} for ${scopeLabel}`,
       );
     }
 
     const amountDecimal = new Prisma.Decimal(dto.amount);
-    const betType =
-      dto.betType ?? (dto.digitType ? BetType.DIGIT : BetType.HILO);
     let betSide: BetSide | null = null;
     let digitType: DigitBetType | null = null;
     let selection: string | null = null;
@@ -610,6 +622,67 @@ export class BetsService {
         payout: new Prisma.Decimal(0),
       },
     });
+  }
+
+  private resolveBetAmountLimitForRequest(
+    config: GameConfigSnapshot,
+    betType: BetType,
+    digitType?: DigitBetType,
+  ) {
+    if (betType !== BetType.DIGIT || !digitType) {
+      return {
+        minBetAmount: config.minBetAmount,
+        maxBetAmount: config.maxBetAmount,
+      };
+    }
+
+    const limits = config.digitBetAmountLimits;
+    switch (digitType) {
+      case DigitBetType.SMALL:
+      case DigitBetType.BIG:
+        return limits.smallBig;
+      case DigitBetType.ODD:
+      case DigitBetType.EVEN:
+        return limits.oddEven;
+      case DigitBetType.DOUBLE:
+        return limits.double;
+      case DigitBetType.TRIPLE:
+        return limits.triple;
+      case DigitBetType.SUM:
+        return limits.sum;
+      case DigitBetType.SINGLE:
+        return limits.single;
+      case DigitBetType.ANY_TRIPLE:
+        return limits.anyTriple;
+      default:
+        return {
+          minBetAmount: config.minBetAmount,
+          maxBetAmount: config.maxBetAmount,
+        };
+    }
+  }
+
+  private getDigitBetLimitScopeLabel(digitType: DigitBetType) {
+    switch (digitType) {
+      case DigitBetType.SMALL:
+      case DigitBetType.BIG:
+        return 'SMALL/BIG';
+      case DigitBetType.ODD:
+      case DigitBetType.EVEN:
+        return 'ODD/EVEN';
+      case DigitBetType.DOUBLE:
+        return 'DOUBLE';
+      case DigitBetType.TRIPLE:
+        return 'TRIPLE';
+      case DigitBetType.SUM:
+        return 'SUM';
+      case DigitBetType.SINGLE:
+        return 'SINGLE';
+      case DigitBetType.ANY_TRIPLE:
+        return 'ANY_TRIPLE';
+      default:
+        return 'DIGIT';
+    }
   }
 
   private normalizeDigitBet(

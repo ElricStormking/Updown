@@ -31,6 +31,21 @@ export interface DigitPayouts {
   >;
 }
 
+export type BetAmountLimit = {
+  minBetAmount: number;
+  maxBetAmount: number;
+};
+
+export type DigitBetAmountLimits = {
+  smallBig: BetAmountLimit;
+  oddEven: BetAmountLimit;
+  double: BetAmountLimit;
+  triple: BetAmountLimit;
+  sum: BetAmountLimit;
+  single: BetAmountLimit;
+  anyTriple: BetAmountLimit;
+};
+
 export type DigitBonusRatioEntry = {
   ratios: number[];
   weights: number[];
@@ -45,6 +60,7 @@ export interface GameConfigSnapshot {
   resultDisplayDurationMs: number;
   minBetAmount: number;
   maxBetAmount: number;
+  digitBetAmountLimits: DigitBetAmountLimits;
   tokenValues: number[];
   payoutMultiplierUp: number;
   payoutMultiplierDown: number;
@@ -54,6 +70,19 @@ export interface GameConfigSnapshot {
   digitPayouts: DigitPayouts;
   digitBonusRatios: DigitBonusRatios;
 }
+
+const buildDefaultDigitBetAmountLimits = (
+  minBetAmount: number,
+  maxBetAmount: number,
+): DigitBetAmountLimits => ({
+  smallBig: { minBetAmount, maxBetAmount },
+  oddEven: { minBetAmount, maxBetAmount },
+  double: { minBetAmount, maxBetAmount },
+  triple: { minBetAmount, maxBetAmount },
+  sum: { minBetAmount, maxBetAmount },
+  single: { minBetAmount, maxBetAmount },
+  anyTriple: { minBetAmount, maxBetAmount },
+});
 
 const buildSumPayouts = () => {
   const sum: Record<number, number> = {};
@@ -338,6 +367,10 @@ export const buildDefaultGameConfig = (): GameConfigSnapshot => ({
   resultDisplayDurationMs: Number(gameConfig.resultDisplayDurationMs),
   minBetAmount: Number(gameConfig.minBetAmount),
   maxBetAmount: Number(gameConfig.maxBetAmount),
+  digitBetAmountLimits: buildDefaultDigitBetAmountLimits(
+    Number(gameConfig.minBetAmount),
+    Number(gameConfig.maxBetAmount),
+  ),
   tokenValues: Array.isArray(gameConfig.tokenValues)
     ? gameConfig.tokenValues.slice()
     : [10, 50, 100, 150, 200, 300, 500],

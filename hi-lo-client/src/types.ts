@@ -81,6 +81,15 @@ export interface GameConfig {
   resultDisplayDurationMs: number;
   minBetAmount: number;
   maxBetAmount: number;
+  digitBetAmountLimits?: {
+    smallBig: { minBetAmount: number; maxBetAmount: number };
+    oddEven: { minBetAmount: number; maxBetAmount: number };
+    double: { minBetAmount: number; maxBetAmount: number };
+    triple: { minBetAmount: number; maxBetAmount: number };
+    sum: { minBetAmount: number; maxBetAmount: number };
+    single: { minBetAmount: number; maxBetAmount: number };
+    anyTriple: { minBetAmount: number; maxBetAmount: number };
+  };
   tokenValues?: number[];
   payoutMultiplierUp: number;
   payoutMultiplierDown: number;

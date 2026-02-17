@@ -2,6 +2,8 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
+  type BetAmountLimit,
+  type DigitBetAmountLimits,
   buildDefaultDigitBonusRatios,
   buildDefaultDigitPayouts,
   buildDefaultGameConfig,
@@ -16,6 +18,7 @@ export interface GameConfigInput {
   resultDisplayDurationMs: number;
   minBetAmount: number;
   maxBetAmount: number;
+  digitBetAmountLimits?: unknown;
   tokenValues?: unknown;
   payoutMultiplierUp: number;
   payoutMultiplierDown: number;
@@ -51,6 +54,16 @@ const requireNumber = (value: unknown, label: string) => {
   }
   return num;
 };
+
+const DIGIT_BET_LIMIT_RULE_KEYS = [
+  'smallBig',
+  'oddEven',
+  'double',
+  'triple',
+  'sum',
+  'single',
+  'anyTriple',
+] as const;
 
 type SlotPayoutMetaEntry = {
   suggestWinPct: number;
@@ -172,6 +185,14 @@ export class GameConfigService {
       this.extractTokenValuesSource(raw),
       defaults.tokenValues,
     );
+    const minBetAmount = toNumber(raw.minBetAmount, defaults.minBetAmount);
+    const maxBetAmount = toNumber(raw.maxBetAmount, defaults.maxBetAmount);
+    const digitBetAmountLimits = this.mergeDigitBetAmountLimits(
+      this.extractDigitBetAmountLimitsSource(raw),
+      defaults.digitBetAmountLimits,
+      minBetAmount,
+      maxBetAmount,
+    );
     const configVersion =
       typeof raw.configVersion === 'string'
         ? raw.configVersion
@@ -191,8 +212,9 @@ export class GameConfigService {
         raw.resultDisplayDurationMs,
         defaults.resultDisplayDurationMs,
       ),
-      minBetAmount: toNumber(raw.minBetAmount, defaults.minBetAmount),
-      maxBetAmount: toNumber(raw.maxBetAmount, defaults.maxBetAmount),
+      minBetAmount,
+      maxBetAmount,
+      digitBetAmountLimits,
       tokenValues,
       payoutMultiplierUp: toNumber(
         raw.payoutMultiplierUp,
@@ -217,6 +239,14 @@ export class GameConfigService {
     const current = await this.getActiveConfig(merchantId ?? null);
     const digitPayouts = this.parseDigitPayouts(input.digitPayouts);
     const digitBonusRatios = this.parseDigitBonusRatios(input.digitBonusRatios);
+    const minBetAmount = requireNumber(input.minBetAmount, 'minBetAmount');
+    const maxBetAmount = requireNumber(input.maxBetAmount, 'maxBetAmount');
+    const digitBetAmountLimits = this.parseDigitBetAmountLimits(
+      input.digitBetAmountLimits,
+      current.digitBetAmountLimits,
+      minBetAmount,
+      maxBetAmount,
+    );
     const bonusModeEnabled = this.parseBonusModeEnabled(
       input.bonusModeEnabled,
       current.bonusModeEnabled,
@@ -238,8 +268,9 @@ export class GameConfigService {
         input.resultDisplayDurationMs,
         'resultDisplayDurationMs',
       ),
-      minBetAmount: requireNumber(input.minBetAmount, 'minBetAmount'),
-      maxBetAmount: requireNumber(input.maxBetAmount, 'maxBetAmount'),
+      minBetAmount,
+      maxBetAmount,
+      digitBetAmountLimits,
       tokenValues,
       payoutMultiplierUp: requireNumber(
         input.payoutMultiplierUp,
@@ -336,6 +367,30 @@ export class GameConfigService {
     if (config.maxBetAmount < config.minBetAmount) {
       throw new BadRequestException('maxBetAmount must be >= minBetAmount');
     }
+    for (const key of DIGIT_BET_LIMIT_RULE_KEYS) {
+      const ruleLimit = config.digitBetAmountLimits[key];
+      if (!ruleLimit) {
+        throw new BadRequestException(`digitBetAmountLimits.${key} is required`);
+      }
+      if (
+        !Number.isFinite(ruleLimit.minBetAmount) ||
+        !Number.isFinite(ruleLimit.maxBetAmount)
+      ) {
+        throw new BadRequestException(
+          `digitBetAmountLimits.${key} min/max must be numbers`,
+        );
+      }
+      if (ruleLimit.minBetAmount < 0 || ruleLimit.maxBetAmount < 0) {
+        throw new BadRequestException(
+          `digitBetAmountLimits.${key} min/max must be >= 0`,
+        );
+      }
+      if (ruleLimit.maxBetAmount < ruleLimit.minBetAmount) {
+        throw new BadRequestException(
+          `digitBetAmountLimits.${key}.maxBetAmount must be >= minBetAmount`,
+        );
+      }
+    }
     if (!Array.isArray(config.tokenValues) || config.tokenValues.length !== 7) {
       throw new BadRequestException('tokenValues must contain 7 entries');
     }
@@ -351,6 +406,13 @@ export class GameConfigService {
       throw new BadRequestException(
         'minBetAmount cannot exceed lowest token value',
       );
+    }
+    for (const key of DIGIT_BET_LIMIT_RULE_KEYS) {
+      if (config.digitBetAmountLimits[key].minBetAmount > minTokenValue) {
+        throw new BadRequestException(
+          `digitBetAmountLimits.${key}.minBetAmount cannot exceed lowest token value`,
+        );
+      }
     }
     if (config.payoutMultiplierUp < 0 || config.payoutMultiplierDown < 0) {
       throw new BadRequestException('Payout multipliers must be >= 0');
@@ -371,6 +433,74 @@ export class GameConfigService {
       if (normalized === 'false') return false;
     }
     return fallback;
+  }
+
+  private buildBaseBetAmountLimit(
+    minBetAmount: number,
+    maxBetAmount: number,
+  ): BetAmountLimit {
+    return {
+      minBetAmount,
+      maxBetAmount,
+    };
+  }
+
+  private parseDigitBetAmountLimits(
+    raw: unknown,
+    fallback: DigitBetAmountLimits,
+    minBetAmount: number,
+    maxBetAmount: number,
+  ): DigitBetAmountLimits {
+    if (raw === undefined) {
+      return this.mergeDigitBetAmountLimits(
+        undefined,
+        fallback,
+        minBetAmount,
+        maxBetAmount,
+      );
+    }
+    if (!isRecord(raw)) {
+      throw new BadRequestException('digitBetAmountLimits must be an object');
+    }
+    return this.mergeDigitBetAmountLimits(
+      raw,
+      fallback,
+      minBetAmount,
+      maxBetAmount,
+    );
+  }
+
+  private mergeDigitBetAmountLimits(
+    raw: unknown,
+    fallback: DigitBetAmountLimits,
+    minBetAmount: number,
+    maxBetAmount: number,
+  ): DigitBetAmountLimits {
+    const rawRecord = isRecord(raw) ? raw : null;
+    const baseLimit = this.buildBaseBetAmountLimit(minBetAmount, maxBetAmount);
+    const result = {} as DigitBetAmountLimits;
+
+    for (const key of DIGIT_BET_LIMIT_RULE_KEYS) {
+      const fallbackEntry = fallback[key] ?? baseLimit;
+      result[key] = this.normalizeBetAmountLimitEntry(
+        rawRecord?.[key],
+        fallbackEntry,
+      );
+    }
+    return result;
+  }
+
+  private normalizeBetAmountLimitEntry(
+    raw: unknown,
+    fallback: BetAmountLimit,
+  ): BetAmountLimit {
+    if (!isRecord(raw)) {
+      return { ...fallback };
+    }
+    return {
+      minBetAmount: toNumber(raw.minBetAmount, fallback.minBetAmount),
+      maxBetAmount: toNumber(raw.maxBetAmount, fallback.maxBetAmount),
+    };
   }
 
   private parseDigitPayouts(raw: unknown): DigitPayouts {
@@ -712,6 +842,22 @@ export class GameConfigService {
     return undefined;
   }
 
+  private extractDigitBetAmountLimitsSource(raw: unknown): unknown {
+    if (!isRecord(raw)) {
+      return undefined;
+    }
+    if (raw.digitBetAmountLimits !== undefined) {
+      return raw.digitBetAmountLimits;
+    }
+    if (
+      isRecord(raw.digitPayouts) &&
+      raw.digitPayouts.digitBetAmountLimits !== undefined
+    ) {
+      return raw.digitPayouts.digitBetAmountLimits;
+    }
+    return undefined;
+  }
+
   private parseDigitBonusRatios(raw: unknown): DigitBonusRatios {
     const defaults = buildDefaultDigitBonusRatios();
     return this.mergeDigitBonusRatios(raw, defaults);
@@ -809,9 +955,17 @@ export class GameConfigService {
     updatedAt: Date;
   }): GameConfigSnapshot {
     const defaults = this.getDefaultConfig();
+    const minBetAmount = Number(record.minBetAmount);
+    const maxBetAmount = Number(record.maxBetAmount);
     const digitPayouts = this.mergeDigitPayouts(
       record.digitPayouts,
       defaults.digitPayouts,
+    );
+    const digitBetAmountLimits = this.mergeDigitBetAmountLimits(
+      this.extractDigitBetAmountLimitsSource(record.digitPayouts),
+      defaults.digitBetAmountLimits,
+      minBetAmount,
+      maxBetAmount,
     );
     const digitBonusRatios = this.mergeDigitBonusRatios(
       this.extractDigitBonusRatiosSource(record.digitPayouts),
@@ -834,8 +988,9 @@ export class GameConfigService {
       bettingDurationMs: record.bettingDurationMs,
       resultDurationMs: record.resultDurationMs,
       resultDisplayDurationMs: record.resultDisplayDurationMs,
-      minBetAmount: Number(record.minBetAmount),
-      maxBetAmount: Number(record.maxBetAmount),
+      minBetAmount,
+      maxBetAmount,
+      digitBetAmountLimits,
       tokenValues,
       payoutMultiplierUp: Number(record.payoutMultiplierUp),
       payoutMultiplierDown: Number(record.payoutMultiplierDown),
@@ -849,6 +1004,7 @@ export class GameConfigService {
 
   private toJsonDigitPayouts(
     payouts: DigitPayouts,
+    digitBetAmountLimits: DigitBetAmountLimits,
     digitBonusRatios: DigitBonusRatios,
     bonusModeEnabled: boolean,
     bonusSlotChanceTotal?: number,
@@ -882,12 +1038,20 @@ export class GameConfigService {
         totalCounts: value.totalCounts,
       };
     }
+    const betAmountLimits: Record<string, BetAmountLimit> = {};
+    for (const key of DIGIT_BET_LIMIT_RULE_KEYS) {
+      betAmountLimits[key] = {
+        minBetAmount: digitBetAmountLimits[key].minBetAmount,
+        maxBetAmount: digitBetAmountLimits[key].maxBetAmount,
+      };
+    }
 
     return {
       smallBigOddEven: payouts.smallBigOddEven,
       anyTriple: payouts.anyTriple,
       double: payouts.double,
       triple: payouts.triple,
+      digitBetAmountLimits: betAmountLimits,
       bonusModeEnabled,
       bonusSlotChanceTotal,
       tokenValues,
@@ -915,6 +1079,7 @@ export class GameConfigService {
       priceSnapshotInterval: config.priceSnapshotInterval,
       digitPayouts: this.toJsonDigitPayouts(
         config.digitPayouts,
+        config.digitBetAmountLimits,
         config.digitBonusRatios,
         config.bonusModeEnabled,
         config.bonusSlotChanceTotal,

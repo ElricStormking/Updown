@@ -22,6 +22,10 @@ export class UpdateGameConfigDto {
   maxBetAmount: number;
 
   @IsOptional()
+  @IsObject()
+  digitBetAmountLimits?: Record<string, unknown>;
+
+  @IsOptional()
   @IsArray()
   @ArrayMinSize(7)
   @ArrayMaxSize(7)
