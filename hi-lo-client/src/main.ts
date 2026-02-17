@@ -387,7 +387,7 @@ async function bootstrapLaunchAuthFromUrl() {
 
   try {
     const [{ data: config }, { data: wallet }] = await Promise.all([
-      api.fetchGameConfig(launchToken),
+      api.fetchGameConfig(launchToken, merchantId),
       api.fetchWallet(launchToken),
     ]);
     const tokenValues = normalizeTokenValues(config?.tokenValues);
@@ -431,7 +431,10 @@ async function bootstrapLaunchAuthFromUrl() {
 async function handleLogin(credentials: { account: string; password: string; merchantId: string }) {
   lastConfigRefreshRoundId = null;
   const { data: auth } = await api.login(credentials.account, credentials.password);
-  const { data: config } = await api.fetchGameConfig(auth.accessToken);
+  const { data: config } = await api.fetchGameConfig(
+    auth.accessToken,
+    credentials.merchantId.trim(),
+  );
   const merchantId =
     auth.user?.merchantId?.trim() ||
     credentials.merchantId.trim() ||
@@ -465,7 +468,10 @@ async function handleLogin(credentials: { account: string; password: string; mer
 async function refreshConfig(): Promise<boolean> {
   if (!state.token) return false;
   try {
-    const { data: config } = await api.fetchGameConfig(state.token);
+    const { data: config } = await api.fetchGameConfig(
+      state.token,
+      state.merchantId,
+    );
     const tokenValues = normalizeTokenValues(config?.tokenValues);
     const selectedTokenValue = resolveSelectedTokenValue(
       state.selectedTokenValue,
@@ -481,20 +487,21 @@ async function refreshConfig(): Promise<boolean> {
 }
 
 async function refreshConfigForRoundStart(roundId: number) {
+  let refreshedAtLeastOnce = false;
   for (let attempt = 0; attempt < CONFIG_REFRESH_RETRY_DELAYS_MS.length; attempt += 1) {
     const waitMs = CONFIG_REFRESH_RETRY_DELAYS_MS[attempt] ?? 0;
     if (waitMs > 0) {
       await delay(waitMs);
     }
     const refreshed = await refreshConfig();
-    if (refreshed) {
-      return;
-    }
+    if (refreshed) refreshedAtLeastOnce = true;
   }
-  setStatus(
-    `Failed to sync config for round ${roundId}. Using previous payout values.`,
-    true,
-  );
+  if (!refreshedAtLeastOnce) {
+    setStatus(
+      `Failed to sync config for round ${roundId}. Using previous payout values.`,
+      true,
+    );
+  }
 }
 
 async function handlePlaceHiLoBet(_side: BetSide) {

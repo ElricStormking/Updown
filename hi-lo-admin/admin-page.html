@@ -754,10 +754,47 @@
             <div class="bonus-ratio-wrapper" id="bonus-ratio-scroll">
               <table class="bonus-ratio-table">
                 <thead>
+                  <tr>
+                    <th rowspan="2">Bet Slot</th>
+                    <th rowspan="2" class="metric-col">Bonus %</th>
+                    <th rowspan="2" class="metric-col">Suggest Win %</th>
+                    <th rowspan="2" class="metric-col">RTP %</th>
+                    <th rowspan="2" class="metric-col">RTP FP %</th>
+                    <th rowspan="2" class="payout-col">Payout Ratio</th>
+                    <th colspan="5">Bonus Ratios</th>
+                    <th colspan="6" class="weights-group">Bonus Weights</th>
+                    <th rowspan="2" class="total-counts-col">Total Counts</th>
+                  </tr>
+                  <tr>
+                    <th>1</th>
+                    <th>2</th>
+                    <th>3</th>
+                    <th>4</th>
+                    <th>5</th>
+                    <th class="base-weight-col">Base</th>
+                    <th>1</th>
+                    <th>2</th>
+                    <th>3</th>
+                    <th>4</th>
+                    <th>5</th>
+                  </tr>
+                </thead>
+                <tbody id="bonus-ratio-body"></tbody>
+              </table>
+            </div>
+          </div>
+          <div style="margin-top: 1.25rem;">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.5rem;">
+              <h3 style="margin: 0;">Single Digit Payout &amp; Bonus</h3>
+              <button class="primary small" type="submit">Save</button>
+            </div>
+            <div class="bonus-ratio-wrapper" id="single-bonus-ratio-scroll">
+              <table class="bonus-ratio-table">
+                <thead>
                   <tr class="table-controls-row">
                     <th colspan="18">
                       <div class="chip-group">
-                        <span class="chip-title">Single multipliers</span>
+                        <span class="chip-title">Single Multipliers</span>
                         <label class="chip">
                           <span>2x</span>
                           <input id="cfg-digit-single-double" type="number" min="0" step="0.01" />
@@ -794,7 +831,7 @@
                     <th>5</th>
                   </tr>
                 </thead>
-                <tbody id="bonus-ratio-body"></tbody>
+                <tbody id="bonus-ratio-single-body"></tbody>
               </table>
             </div>
           </div>
@@ -1043,6 +1080,7 @@
       const rtpBody = document.querySelector('#rtp-table-body');
       const sumGrid = document.querySelector('#sum-grid');
       const bonusRatioBody = document.querySelector('#bonus-ratio-body');
+      const bonusRatioSingleBody = document.querySelector('#bonus-ratio-single-body');
       const bonusRatioSumBody = document.querySelector('#bonus-ratio-sum-body');
       const bonusModeSelect = document.querySelector('#cfg-bonus-mode');
       const bonusModeChip = document.querySelector('#bonus-mode-chip');
@@ -1076,6 +1114,7 @@
             digitType: 'SINGLE',
             selection: String(d),
             label: 'SINGLE ' + String(d),
+            group: 'single',
           });
         }
 
@@ -1732,8 +1771,9 @@
       };
 
       const buildBonusRatioTable = () => {
-        if (!bonusRatioBody && !bonusRatioSumBody) return;
+        if (!bonusRatioBody && !bonusRatioSingleBody && !bonusRatioSumBody) return;
         if (bonusRatioBody) bonusRatioBody.innerHTML = '';
+        if (bonusRatioSingleBody) bonusRatioSingleBody.innerHTML = '';
         if (bonusRatioSumBody) bonusRatioSumBody.innerHTML = '';
         bonusRatioInputs.clear();
         sumInputs.clear();
@@ -1940,7 +1980,11 @@
             totalCountsCell.appendChild(meta.totalCountsEl);
             row.appendChild(totalCountsCell);
           }
-          const targetBody = slot.group === 'sum' ? bonusRatioSumBody : bonusRatioBody;
+          const targetBody = slot.group === 'sum'
+            ? bonusRatioSumBody
+            : slot.group === 'single'
+              ? bonusRatioSingleBody
+              : bonusRatioBody;
           if (targetBody) {
             targetBody.appendChild(row);
           }

@@ -29,7 +29,7 @@ export const api = {
   fetchWallet: (token: string) =>
     client.get<WalletResponse>('/wallet', authHeader(token)),
 
-  fetchGameConfig: (token: string) =>
+  fetchGameConfig: (token: string, merchantId?: string) =>
     client.get<GameConfig>('/config/game', {
       headers: {
         Authorization: `Bearer ${token}`,
@@ -38,6 +38,7 @@ export const api = {
       },
       params: {
         _t: Date.now(),
+        ...(merchantId ? { merchantId } : {}),
       },
     }),
 
