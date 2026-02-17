@@ -167,7 +167,13 @@ export class GameConfigController {
       bySlot: Record<string, number>;
       bySlotMeta: Record<
         string,
-        { suggestWinPct: number; rtpFoolProofPct: number; totalCounts: number }
+        {
+          suggestWinPct: number;
+          suggestWinPctDouble: number;
+          suggestWinPctTriple: number;
+          rtpFoolProofPct: number;
+          totalCounts: number;
+        }
       >;
     };
     digitBonusRatios: Record<string, { ratios: number[]; weights: number[] }>;

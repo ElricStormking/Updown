@@ -788,11 +788,18 @@
               <h3 style="margin: 0;">Single Digit Payout &amp; Bonus</h3>
               <button class="primary small" type="submit">Save</button>
             </div>
+            <p class="formula-note">
+              Single RTP uses all three suggest-win channels:
+              <code>
+                SuggestWin%x1*(1+baseRatio_x1) + SuggestWin%x2*(1+baseRatio_x2) + SuggestWin%x3*(1+baseRatio_x3)
+              </code>,
+              where <code>baseRatio_x1</code> is row payout ratio, and <code>baseRatio_x2/x3</code> are the single multipliers.
+            </p>
             <div class="bonus-ratio-wrapper" id="single-bonus-ratio-scroll">
               <table class="bonus-ratio-table">
                 <thead>
                   <tr class="table-controls-row">
-                    <th colspan="18">
+                    <th colspan="20">
                       <div class="chip-group">
                         <span class="chip-title">Single Multipliers</span>
                         <label class="chip">
@@ -809,7 +816,7 @@
                   <tr>
                     <th rowspan="2">Bet Slot</th>
                     <th rowspan="2" class="metric-col">Bonus %</th>
-                    <th rowspan="2" class="metric-col">Suggest Win %</th>
+                    <th colspan="3" class="metric-col">Suggest Win %</th>
                     <th rowspan="2" class="metric-col">RTP %</th>
                     <th rowspan="2" class="metric-col">RTP FP %</th>
                     <th rowspan="2" class="payout-col">Payout Ratio</th>
@@ -818,6 +825,9 @@
                     <th rowspan="2" class="total-counts-col">Total Counts</th>
                   </tr>
                   <tr>
+                    <th>x1</th>
+                    <th>2x</th>
+                    <th>3x</th>
                     <th>1</th>
                     <th>2</th>
                     <th>3</th>
@@ -1085,6 +1095,12 @@
       const bonusModeSelect = document.querySelector('#cfg-bonus-mode');
       const bonusModeChip = document.querySelector('#bonus-mode-chip');
       const bonusSlotTotalInput = document.querySelector('#cfg-bonus-slot-total');
+      const singleDoubleMultiplierInput = document.querySelector(
+        '#cfg-digit-single-double',
+      );
+      const singleTripleMultiplierInput = document.querySelector(
+        '#cfg-digit-single-triple',
+      );
       const bonusRatioScroll = document.querySelector('#bonus-ratio-scroll');
       const bonusRatioScrollbarTop = document.querySelector('#bonus-ratio-scrollbar-top');
       const bonusRatioScrollbarInner = document.querySelector(
@@ -1585,11 +1601,38 @@
         const bonusPct = computeBonusPercent(entries, totalRoll);
         const suggestWinPct = Number(meta.suggestInput.value);
         const [digitType, selectionRaw] = key.split('|');
-        const baseRatio =
-          digitType === 'SUM'
-            ? Number(sumInputs.get(Number(selectionRaw))?.value)
-            : Number(slotPayoutInputs.get(key)?.value);
-        const rtpPct = computeRtpPercent(entries, suggestWinPct, baseRatio, totalRoll);
+        let rtpPct = NaN;
+
+        if (digitType === 'SINGLE') {
+          const suggestWinPctDouble = Number(meta.suggestDoubleInput?.value);
+          const suggestWinPctTriple = Number(meta.suggestTripleInput?.value);
+          const baseRatioSingle = Number(slotPayoutInputs.get(key)?.value);
+          const baseRatioDouble = Number(singleDoubleMultiplierInput?.value);
+          const baseRatioTriple = Number(singleTripleMultiplierInput?.value);
+          const sw1 = Number.isFinite(suggestWinPct) ? suggestWinPct : 0;
+          const sw2 = Number.isFinite(suggestWinPctDouble)
+            ? suggestWinPctDouble
+            : 0;
+          const sw3 = Number.isFinite(suggestWinPctTriple)
+            ? suggestWinPctTriple
+            : 0;
+          const ratio1 = Number.isFinite(baseRatioSingle) ? baseRatioSingle : 0;
+          const ratio2 = Number.isFinite(baseRatioDouble) ? baseRatioDouble : 0;
+          const ratio3 = Number.isFinite(baseRatioTriple) ? baseRatioTriple : 0;
+
+          const rtpSingle = sw1 * (1 + ratio1);
+          const rtpDouble = sw2 * (1 + ratio2);
+          const rtpTriple = sw3 * (1 + ratio3);
+
+          rtpPct = rtpSingle + rtpDouble + rtpTriple;
+        } else {
+          const baseRatio =
+            digitType === 'SUM'
+              ? Number(sumInputs.get(Number(selectionRaw))?.value)
+              : Number(slotPayoutInputs.get(key)?.value);
+          rtpPct = computeRtpPercent(entries, suggestWinPct, baseRatio, totalRoll);
+        }
+
         const rtpCap = Number(meta.rtpFoolProofInput.value);
         const cappedRtpPct =
           Number.isFinite(rtpCap) && rtpCap > 0 ? Math.min(rtpPct, rtpCap) : rtpPct;
@@ -1674,6 +1717,16 @@
       if (bonusSlotTotalInput) {
         bonusSlotTotalInput.addEventListener('input', updateAllSlotMetrics);
       }
+      if (singleDoubleMultiplierInput) {
+        singleDoubleMultiplierInput.addEventListener('input', () => {
+          singleSlotKeys.forEach((key) => updateSlotMetrics(key));
+        });
+      }
+      if (singleTripleMultiplierInput) {
+        singleTripleMultiplierInput.addEventListener('input', () => {
+          singleSlotKeys.forEach((key) => updateSlotMetrics(key));
+        });
+      }
 
       const resolveSlotPayoutValue = (digitPayouts, slotKey) => {
         if (!digitPayouts) return null;
@@ -1728,12 +1781,35 @@
             Number.isFinite(configEntry.suggestWinPct)
               ? configEntry.suggestWinPct
               : null;
+          const suggestDoubleValue =
+            typeof configEntry?.suggestWinPctDouble === 'number' &&
+            Number.isFinite(configEntry.suggestWinPctDouble)
+              ? configEntry.suggestWinPctDouble
+              : null;
+          const suggestTripleValue =
+            typeof configEntry?.suggestWinPctTriple === 'number' &&
+            Number.isFinite(configEntry.suggestWinPctTriple)
+              ? configEntry.suggestWinPctTriple
+              : null;
           const defaultSuggest = getDefaultSuggestWinPct(key);
           const isSumKey = key.startsWith('SUM|');
-          entry.suggestInput.value =
+          const resolvedSuggest =
             suggestValue !== null && hasAnyMeta && (!isSumKey || suggestValue > 0)
               ? String(suggestValue)
               : String(defaultSuggest);
+          entry.suggestInput.value = resolvedSuggest;
+          if (entry.suggestDoubleInput) {
+            entry.suggestDoubleInput.value =
+              suggestDoubleValue !== null && hasAnyMeta
+                ? String(suggestDoubleValue)
+                : '0';
+          }
+          if (entry.suggestTripleInput) {
+            entry.suggestTripleInput.value =
+              suggestTripleValue !== null && hasAnyMeta
+                ? String(suggestTripleValue)
+                : '0';
+          }
           entry.rtpFoolProofInput.value =
             typeof configEntry?.rtpFoolProofPct === 'number' &&
             Number.isFinite(configEntry.rtpFoolProofPct)
@@ -1884,6 +1960,28 @@
             suggestCell.appendChild(suggestInput);
             row.appendChild(suggestCell);
 
+            let suggestDoubleInput = null;
+            let suggestTripleInput = null;
+            if (slot.group === 'single') {
+              const suggestDoubleCell = document.createElement('td');
+              suggestDoubleCell.className = 'metric-input';
+              suggestDoubleInput = document.createElement('input');
+              suggestDoubleInput.type = 'number';
+              suggestDoubleInput.min = '0';
+              suggestDoubleInput.step = '0.01';
+              suggestDoubleCell.appendChild(suggestDoubleInput);
+              row.appendChild(suggestDoubleCell);
+
+              const suggestTripleCell = document.createElement('td');
+              suggestTripleCell.className = 'metric-input';
+              suggestTripleInput = document.createElement('input');
+              suggestTripleInput.type = 'number';
+              suggestTripleInput.min = '0';
+              suggestTripleInput.step = '0.01';
+              suggestTripleCell.appendChild(suggestTripleInput);
+              row.appendChild(suggestTripleCell);
+            }
+
             const rtpCell = document.createElement('td');
             rtpCell.className = 'metric-cell';
             const rtpValue = document.createElement('span');
@@ -1934,12 +2032,23 @@
             slotMetaInputs.set(key, {
               bonusEl: bonusValue,
               suggestInput,
+              suggestDoubleInput,
+              suggestTripleInput,
               rtpEl: rtpValue,
               rtpFoolProofInput,
               baseWeightInput,
               totalCountsEl: totalCountsValueEl,
               label: slot.label,
             });
+            suggestInput.addEventListener('input', () => updateSlotMetrics(key));
+            suggestDoubleInput?.addEventListener('input', () =>
+              updateSlotMetrics(key),
+            );
+            suggestTripleInput?.addEventListener('input', () =>
+              updateSlotMetrics(key),
+            );
+            rtpFoolProofInput.addEventListener('input', () => updateSlotMetrics(key));
+            baseWeightInput.addEventListener('input', () => updateSlotMetrics(key));
           }
 
           const ratios = [];
@@ -2158,6 +2267,14 @@
             entry.suggestInput.value,
             entry.label + ' suggest win %',
           );
+          const suggestWinPctDouble = readOptionalNumber(
+            entry.suggestDoubleInput?.value ?? entry.suggestInput.value,
+            entry.label + ' suggest win 2x %',
+          );
+          const suggestWinPctTriple = readOptionalNumber(
+            entry.suggestTripleInput?.value ?? entry.suggestInput.value,
+            entry.label + ' suggest win 3x %',
+          );
           const rtpFoolProofPct = readOptionalNumber(
             entry.rtpFoolProofInput.value,
             entry.label + ' RTP fool proof %',
@@ -2167,7 +2284,13 @@
             entry.label + ' base weight',
           );
           const baseWeight = baseWeightRaw > 0 ? baseWeightRaw : 100000;
-          slotMeta[key] = { suggestWinPct, rtpFoolProofPct, totalCounts: baseWeight };
+          slotMeta[key] = {
+            suggestWinPct,
+            suggestWinPctDouble,
+            suggestWinPctTriple,
+            rtpFoolProofPct,
+            totalCounts: baseWeight,
+          };
         });
 
         const digitBonusRatios = {};

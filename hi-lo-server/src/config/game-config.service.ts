@@ -52,6 +52,14 @@ const requireNumber = (value: unknown, label: string) => {
   return num;
 };
 
+type SlotPayoutMetaEntry = {
+  suggestWinPct: number;
+  suggestWinPctDouble: number;
+  suggestWinPctTriple: number;
+  rtpFoolProofPct: number;
+  totalCounts: number;
+};
+
 @Injectable()
 export class GameConfigService {
   private cache: CacheEntry | null = null;
@@ -548,21 +556,12 @@ export class GameConfigService {
 
   private parseSlotPayoutMeta(
     raw: unknown,
-    fallback: Record<
-      string,
-      { suggestWinPct: number; rtpFoolProofPct: number; totalCounts: number }
-    >,
-  ): Record<
-    string,
-    { suggestWinPct: number; rtpFoolProofPct: number; totalCounts: number }
-  > {
+    fallback: Record<string, SlotPayoutMetaEntry>,
+  ): Record<string, SlotPayoutMetaEntry> {
     if (!isRecord(raw)) {
       return this.cloneSlotPayoutMeta(fallback);
     }
-    const result: Record<
-      string,
-      { suggestWinPct: number; rtpFoolProofPct: number; totalCounts: number }
-    > = {};
+    const result: Record<string, SlotPayoutMetaEntry> = {};
     for (const [key, entry] of Object.entries(fallback)) {
       const rawEntry = raw[key];
       result[key] = this.normalizeSlotMetaEntry(rawEntry, entry, true);
@@ -572,21 +571,12 @@ export class GameConfigService {
 
   private mergeSlotPayoutMeta(
     raw: unknown,
-    fallback: Record<
-      string,
-      { suggestWinPct: number; rtpFoolProofPct: number; totalCounts: number }
-    >,
-  ): Record<
-    string,
-    { suggestWinPct: number; rtpFoolProofPct: number; totalCounts: number }
-  > {
+    fallback: Record<string, SlotPayoutMetaEntry>,
+  ): Record<string, SlotPayoutMetaEntry> {
     if (!isRecord(raw)) {
       return this.cloneSlotPayoutMeta(fallback);
     }
-    const result: Record<
-      string,
-      { suggestWinPct: number; rtpFoolProofPct: number; totalCounts: number }
-    > = {};
+    const result: Record<string, SlotPayoutMetaEntry> = {};
     for (const [key, entry] of Object.entries(fallback)) {
       const rawEntry = raw[key];
       result[key] = this.normalizeSlotMetaEntry(rawEntry, entry, false);
@@ -596,20 +586,25 @@ export class GameConfigService {
 
   private normalizeSlotMetaEntry(
     raw: unknown,
-    fallback: {
-      suggestWinPct: number;
-      rtpFoolProofPct: number;
-      totalCounts: number;
-    },
+    fallback: SlotPayoutMetaEntry,
     strict: boolean,
   ) {
     if (!isRecord(raw)) {
       return { ...fallback };
     }
+    const suggestWinPct = strict
+      ? requireNumber(raw.suggestWinPct, 'suggestWinPct')
+      : toNumber(raw.suggestWinPct, fallback.suggestWinPct);
     return {
-      suggestWinPct: strict
-        ? requireNumber(raw.suggestWinPct, 'suggestWinPct')
-        : toNumber(raw.suggestWinPct, fallback.suggestWinPct),
+      suggestWinPct,
+      suggestWinPctDouble: toNumber(
+        raw.suggestWinPctDouble,
+        fallback.suggestWinPctDouble,
+      ),
+      suggestWinPctTriple: toNumber(
+        raw.suggestWinPctTriple,
+        fallback.suggestWinPctTriple,
+      ),
       rtpFoolProofPct: strict
         ? requireNumber(raw.rtpFoolProofPct, 'rtpFoolProofPct')
         : toNumber(raw.rtpFoolProofPct, fallback.rtpFoolProofPct),
@@ -620,15 +615,9 @@ export class GameConfigService {
   }
 
   private cloneSlotPayoutMeta(
-    source: Record<
-      string,
-      { suggestWinPct: number; rtpFoolProofPct: number; totalCounts: number }
-    >,
+    source: Record<string, SlotPayoutMetaEntry>,
   ) {
-    const result: Record<
-      string,
-      { suggestWinPct: number; rtpFoolProofPct: number; totalCounts: number }
-    > = {};
+    const result: Record<string, SlotPayoutMetaEntry> = {};
     for (const [key, entry] of Object.entries(source)) {
       result[key] = { ...entry };
     }
@@ -883,13 +872,12 @@ export class GameConfigService {
     for (const [key, value] of Object.entries(payouts.bySlot)) {
       bySlot[key] = value;
     }
-    const bySlotMeta: Record<
-      string,
-      { suggestWinPct: number; rtpFoolProofPct: number; totalCounts: number }
-    > = {};
+    const bySlotMeta: Record<string, SlotPayoutMetaEntry> = {};
     for (const [key, value] of Object.entries(payouts.bySlotMeta)) {
       bySlotMeta[key] = {
         suggestWinPct: value.suggestWinPct,
+        suggestWinPctDouble: value.suggestWinPctDouble,
+        suggestWinPctTriple: value.suggestWinPctTriple,
         rtpFoolProofPct: value.rtpFoolProofPct,
         totalCounts: value.totalCounts,
       };

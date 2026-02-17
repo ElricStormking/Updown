@@ -21,7 +21,13 @@ export interface DigitPayouts {
   bySlot: Record<string, number>;
   bySlotMeta: Record<
     string,
-    { suggestWinPct: number; rtpFoolProofPct: number; totalCounts: number }
+    {
+      suggestWinPct: number;
+      suggestWinPctDouble: number;
+      suggestWinPctTriple: number;
+      rtpFoolProofPct: number;
+      totalCounts: number;
+    }
   >;
 }
 
@@ -130,11 +136,20 @@ const getDefaultSuggestWinPct = (
 const buildDefaultSlotPayoutMeta = () => {
   const meta: Record<
     string,
-    { suggestWinPct: number; rtpFoolProofPct: number; totalCounts: number }
+    {
+      suggestWinPct: number;
+      suggestWinPctDouble: number;
+      suggestWinPctTriple: number;
+      rtpFoolProofPct: number;
+      totalCounts: number;
+    }
   > = {};
   getAllDigitBetSlots().forEach((slot) => {
+    const suggestWinPct = getDefaultSuggestWinPct(slot.digitType, slot.selection);
     meta[buildDigitBonusKey(slot)] = {
-      suggestWinPct: getDefaultSuggestWinPct(slot.digitType, slot.selection),
+      suggestWinPct,
+      suggestWinPctDouble: 0,
+      suggestWinPctTriple: 0,
       rtpFoolProofPct: 0,
       totalCounts: 100000,
     };
