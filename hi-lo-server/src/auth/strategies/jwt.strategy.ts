@@ -32,7 +32,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         throw new UnauthorizedException('Account is disabled');
       }
       if (!user.merchantId) {
-        throw new UnauthorizedException('Account is not assigned to a merchant');
+        throw new UnauthorizedException(
+          'Account is not assigned to a merchant',
+        );
       }
       if (payload.merchantId && payload.merchantId !== user.merchantId) {
         throw new UnauthorizedException('Invalid token merchant context');
@@ -45,6 +47,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       account: payload.account,
       type: payload.type,
       merchantId,
+      launchSessionId: payload.launchSessionId,
+      launchMode: payload.launchMode,
     };
   }
 }

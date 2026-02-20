@@ -13,11 +13,19 @@ async function seedTestMerchant() {
     update: {
       name: merchantName,
       hashKey,
+      currency: 'USDT',
+      callbackEnabled: false,
+      loginPlayerCallbackUrl: null,
+      updateBalanceCallbackUrl: null,
     },
     create: {
       merchantId,
       name: merchantName,
       hashKey,
+      currency: 'USDT',
+      callbackEnabled: false,
+      loginPlayerCallbackUrl: null,
+      updateBalanceCallbackUrl: null,
       isActive: true,
     },
   });
@@ -104,11 +112,21 @@ async function seedQaAdminAccount() {
 
   await prisma.merchant.upsert({
     where: { merchantId },
-    update: { isActive: true },
+    update: {
+      isActive: true,
+      currency: 'USDT',
+      callbackEnabled: false,
+      loginPlayerCallbackUrl: null,
+      updateBalanceCallbackUrl: null,
+    },
     create: {
       merchantId,
       name: 'QA Merchant',
       hashKey: 'cWFtZXJjaGFudDE=',
+      currency: 'USDT',
+      callbackEnabled: false,
+      loginPlayerCallbackUrl: null,
+      updateBalanceCallbackUrl: null,
       isActive: true,
     },
   });

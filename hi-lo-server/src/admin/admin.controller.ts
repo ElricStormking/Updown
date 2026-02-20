@@ -57,7 +57,7 @@ const resolveAdminPagePath = () => {
       return candidate;
     }
   }
-            return null;
+  return null;
 };
 
 const loadAdminPageHtml = async () => {
@@ -106,7 +106,10 @@ export class AdminController {
   // Game Management - Bets
   @UseGuards(JwtAuthGuard, AdminGuard)
   @Get('bets')
-  queryBets(@Query() dto: QueryBetsDto, @Req() request?: { adminContext?: AdminContext }) {
+  queryBets(
+    @Query() dto: QueryBetsDto,
+    @Req() request?: { adminContext?: AdminContext },
+  ) {
     return this.dataService.queryBets(dto, this.resolveMerchantScope(request));
   }
 
@@ -124,7 +127,10 @@ export class AdminController {
     @Query() dto: QueryPlayersDto,
     @Req() request?: { adminContext?: AdminContext },
   ) {
-    return this.dataService.queryPlayers(dto, this.resolveMerchantScope(request));
+    return this.dataService.queryPlayers(
+      dto,
+      this.resolveMerchantScope(request),
+    );
   }
 
   @UseGuards(JwtAuthGuard, AdminGuard)
@@ -160,7 +166,10 @@ export class AdminController {
     @Query() dto: QueryMerchantsDto,
     @Req() request?: { adminContext?: AdminContext },
   ) {
-    return this.dataService.queryMerchants(dto, this.resolveMerchantScope(request));
+    return this.dataService.queryMerchants(
+      dto,
+      this.resolveMerchantScope(request),
+    );
   }
 
   @UseGuards(JwtAuthGuard, AdminGuard)
@@ -186,7 +195,10 @@ export class AdminController {
     @Param('id') id: string,
     @Req() request?: { adminContext?: AdminContext },
   ) {
-    return this.dataService.getMerchantById(id, this.resolveMerchantScope(request));
+    return this.dataService.getMerchantById(
+      id,
+      this.resolveMerchantScope(request),
+    );
   }
 
   @UseGuards(JwtAuthGuard, AdminGuard)
@@ -236,7 +248,10 @@ export class AdminController {
     @Query() dto: QueryAdminAccountsDto,
     @Req() request?: { adminContext?: AdminContext },
   ) {
-    return this.accountsService.queryAccounts(dto, this.resolveAdminScope(request));
+    return this.accountsService.queryAccounts(
+      dto,
+      this.resolveAdminScope(request),
+    );
   }
 
   @UseGuards(JwtAuthGuard, AdminGuard)
@@ -261,9 +276,7 @@ export class AdminController {
     },
   ) {
     if (!request?.adminContext?.isSuperAdmin) {
-      throw new ForbiddenException(
-        'Only superadmin can create admin accounts',
-      );
+      throw new ForbiddenException('Only superadmin can create admin accounts');
     }
     return this.accountsService.createAccount(dto);
   }
@@ -274,7 +287,10 @@ export class AdminController {
     @Param('id') id: string,
     @Req() request?: { adminContext?: AdminContext },
   ) {
-    return this.accountsService.getAccountById(id, this.resolveAdminScope(request));
+    return this.accountsService.getAccountById(
+      id,
+      this.resolveAdminScope(request),
+    );
   }
 
   @UseGuards(JwtAuthGuard, AdminGuard)

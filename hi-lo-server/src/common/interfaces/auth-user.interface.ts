@@ -3,4 +3,6 @@ export interface AuthUser {
   account: string;
   type?: 'user' | 'admin';
   merchantId?: string;
+  launchSessionId?: string;
+  launchMode?: 'legacy' | 'callback';
 }

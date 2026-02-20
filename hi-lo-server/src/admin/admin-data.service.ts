@@ -45,6 +45,12 @@ const maskHashKey = (hashKey: string) => {
   return hashKey.slice(0, 4) + '****' + hashKey.slice(-4);
 };
 
+const normalizeOptionalText = (value?: string) => {
+  if (value === undefined) return undefined;
+  const next = value.trim();
+  return next ? next : null;
+};
+
 @Injectable()
 export class AdminDataService {
   constructor(private readonly prisma: PrismaService) {}
@@ -374,6 +380,10 @@ export class AdminDataService {
         merchantId: m.merchantId,
         name: m.name,
         hashKeyMasked: maskHashKey(m.hashKey),
+        currency: m.currency,
+        callbackEnabled: m.callbackEnabled,
+        loginPlayerCallbackUrl: m.loginPlayerCallbackUrl,
+        updateBalanceCallbackUrl: m.updateBalanceCallbackUrl,
         isActive: m.isActive,
         createdAt: m.createdAt.toISOString(),
         updatedAt: m.updatedAt.toISOString(),
@@ -389,11 +399,26 @@ export class AdminDataService {
     if (existing) {
       throw new BadRequestException('Merchant ID already exists');
     }
+    const callbackEnabled = dto.callbackEnabled ?? false;
+    const loginPlayerCallbackUrl =
+      normalizeOptionalText(dto.loginPlayerCallbackUrl) ?? null;
+    const updateBalanceCallbackUrl =
+      normalizeOptionalText(dto.updateBalanceCallbackUrl) ?? null;
+    this.validateMerchantCallbackConfig({
+      callbackEnabled,
+      loginPlayerCallbackUrl,
+      updateBalanceCallbackUrl,
+    });
+
     const merchant = await this.prisma.merchant.create({
       data: {
         merchantId: dto.merchantId,
         name: dto.name,
         hashKey: dto.hashKey,
+        currency: dto.currency?.trim() || 'USDT',
+        callbackEnabled,
+        loginPlayerCallbackUrl,
+        updateBalanceCallbackUrl,
         isActive: dto.isActive ?? true,
       },
     });
@@ -402,21 +427,48 @@ export class AdminDataService {
       merchantId: merchant.merchantId,
       name: merchant.name,
       hashKeyMasked: maskHashKey(merchant.hashKey),
+      currency: merchant.currency,
+      callbackEnabled: merchant.callbackEnabled,
+      loginPlayerCallbackUrl: merchant.loginPlayerCallbackUrl,
+      updateBalanceCallbackUrl: merchant.updateBalanceCallbackUrl,
       isActive: merchant.isActive,
       createdAt: merchant.createdAt.toISOString(),
       updatedAt: merchant.updatedAt.toISOString(),
     };
   }
 
-  async updateMerchant(id: string, dto: UpdateMerchantDto, merchantScope?: string) {
+  async updateMerchant(
+    id: string,
+    dto: UpdateMerchantDto,
+    merchantScope?: string,
+  ) {
     const existing = await this.prisma.merchant.findUnique({ where: { id } });
     if (!existing || (merchantScope && existing.merchantId !== merchantScope)) {
       throw new NotFoundException('Merchant not found');
     }
+    const next = {
+      callbackEnabled: dto.callbackEnabled ?? existing.callbackEnabled,
+      loginPlayerCallbackUrl:
+        normalizeOptionalText(dto.loginPlayerCallbackUrl) ??
+        existing.loginPlayerCallbackUrl,
+      updateBalanceCallbackUrl:
+        normalizeOptionalText(dto.updateBalanceCallbackUrl) ??
+        existing.updateBalanceCallbackUrl,
+    };
+    this.validateMerchantCallbackConfig(next);
+
     const data: Prisma.MerchantUpdateInput = {};
     if (dto.name !== undefined) data.name = dto.name;
     if (dto.hashKey !== undefined) data.hashKey = dto.hashKey;
     if (dto.isActive !== undefined) data.isActive = dto.isActive;
+    if (dto.currency !== undefined)
+      data.currency = dto.currency.trim() || 'USDT';
+    if (dto.callbackEnabled !== undefined)
+      data.callbackEnabled = dto.callbackEnabled;
+    if (dto.loginPlayerCallbackUrl !== undefined)
+      data.loginPlayerCallbackUrl = next.loginPlayerCallbackUrl;
+    if (dto.updateBalanceCallbackUrl !== undefined)
+      data.updateBalanceCallbackUrl = next.updateBalanceCallbackUrl;
 
     const merchant = await this.prisma.merchant.update({
       where: { id },
@@ -427,6 +479,10 @@ export class AdminDataService {
       merchantId: merchant.merchantId,
       name: merchant.name,
       hashKeyMasked: maskHashKey(merchant.hashKey),
+      currency: merchant.currency,
+      callbackEnabled: merchant.callbackEnabled,
+      loginPlayerCallbackUrl: merchant.loginPlayerCallbackUrl,
+      updateBalanceCallbackUrl: merchant.updateBalanceCallbackUrl,
       isActive: merchant.isActive,
       createdAt: merchant.createdAt.toISOString(),
       updatedAt: merchant.updatedAt.toISOString(),
@@ -443,6 +499,10 @@ export class AdminDataService {
       merchantId: merchant.merchantId,
       name: merchant.name,
       hashKeyMasked: maskHashKey(merchant.hashKey),
+      currency: merchant.currency,
+      callbackEnabled: merchant.callbackEnabled,
+      loginPlayerCallbackUrl: merchant.loginPlayerCallbackUrl,
+      updateBalanceCallbackUrl: merchant.updateBalanceCallbackUrl,
       isActive: merchant.isActive,
       createdAt: merchant.createdAt.toISOString(),
       updatedAt: merchant.updatedAt.toISOString(),
@@ -540,5 +600,20 @@ export class AdminDataService {
       }));
 
     return { page, limit, hasNext, items };
+  }
+
+  private validateMerchantCallbackConfig(input: {
+    callbackEnabled: boolean;
+    loginPlayerCallbackUrl: string | null;
+    updateBalanceCallbackUrl: string | null;
+  }) {
+    if (!input.callbackEnabled) {
+      return;
+    }
+    if (!input.loginPlayerCallbackUrl || !input.updateBalanceCallbackUrl) {
+      throw new BadRequestException(
+        'Callback-enabled merchants must provide both callback URLs',
+      );
+    }
   }
 }

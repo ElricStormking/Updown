@@ -91,14 +91,46 @@ async function transfer(
   });
 }
 
-async function launchGame(account: string) {
+async function launchGame(
+  account: string,
+  options?: {
+    playerId?: string;
+    merchantAccessToken?: string;
+    betLimits?: Record<string, number>;
+  },
+) {
   const timestamp = getTimestamp();
   const params = [CONFIG.merchantId, account, timestamp.toString()];
   const hash = generateSignature(params, CONFIG.hashKey);
 
-  await makeRequest('/integration/launch', {
+  const requestBody: Record<string, unknown> = {
     merchantId: CONFIG.merchantId,
     account,
+    timestamp,
+    hash,
+  };
+  if (options?.playerId) {
+    requestBody.playerId = options.playerId;
+  }
+  if (options?.merchantAccessToken) {
+    requestBody.accessToken = options.merchantAccessToken;
+  }
+  if (options?.betLimits) {
+    requestBody.betLimits = options.betLimits;
+  }
+
+  await makeRequest('/integration/launch', requestBody);
+}
+
+async function allTransferOut(account: string, transferId: string) {
+  const timestamp = getTimestamp();
+  const params = [CONFIG.merchantId, account, timestamp.toString()];
+  const hash = generateSignature(params, CONFIG.hashKey);
+
+  await makeRequest('/integration/all-transfer-out', {
+    merchantId: CONFIG.merchantId,
+    account,
+    transferId,
     timestamp,
     hash,
   });
@@ -228,6 +260,9 @@ Commands:
   transfer-in <account> <amount> <transferId> Deposit funds to player
   transfer-out <account> <amount> <transferId> Withdraw funds from player
   launch <account>                            Get game launch URL
+  launch-callback <account> <playerId> <merchantAccessToken>
+                                              Get callback-mode launch URL
+  all-transfer-out <account> <transferId>     Transfer out all player balance
   bet-history [startDate]                     Get bet history
   transfer-history [startDate]                Get transfer history
   get-bet-limit                               Get bet limits
@@ -245,6 +280,8 @@ Examples:
   npx ts-node Test-scripts/test-integration-api.ts transfer-in player001 100 TXN001
   npx ts-node Test-scripts/test-integration-api.ts transfer-out player001 50 TXN002
   npx ts-node Test-scripts/test-integration-api.ts launch player001
+  npx ts-node Test-scripts/test-integration-api.ts launch-callback player001 pid-001 merchantToken001
+  npx ts-node Test-scripts/test-integration-api.ts all-transfer-out player001 TXN003
   npx ts-node Test-scripts/test-integration-api.ts bet-history 2026-01-01
   npx ts-node Test-scripts/test-integration-api.ts transfer-history
   npx ts-node Test-scripts/test-integration-api.ts get-bet-limit
@@ -300,6 +337,27 @@ async function main() {
         process.exit(1);
       }
       await launchGame(args[0]);
+      break;
+
+    case 'launch-callback':
+      if (!args[0] || !args[1] || !args[2]) {
+        console.error(
+          'Error: account, playerId, and merchantAccessToken required',
+        );
+        process.exit(1);
+      }
+      await launchGame(args[0], {
+        playerId: args[1],
+        merchantAccessToken: args[2],
+      });
+      break;
+
+    case 'all-transfer-out':
+      if (!args[0] || !args[1]) {
+        console.error('Error: account and transferId required');
+        process.exit(1);
+      }
+      await allTransferOut(args[0], args[1]);
       break;
 
     case 'bet-history':

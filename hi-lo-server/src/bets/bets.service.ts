@@ -802,7 +802,9 @@ export class BetsService {
       throw new BadRequestException('Double selection must repeat the digit');
     }
     if (DISABLED_DOUBLE_SELECTIONS.has(selection)) {
-      throw new BadRequestException('Double selection is currently unavailable');
+      throw new BadRequestException(
+        'Double selection is currently unavailable',
+      );
     }
     return selection;
   }
@@ -818,7 +820,9 @@ export class BetsService {
       throw new BadRequestException('Triple selection must repeat the digit');
     }
     if (DISABLED_TRIPLE_SELECTIONS.has(selection)) {
-      throw new BadRequestException('Triple selection is currently unavailable');
+      throw new BadRequestException(
+        'Triple selection is currently unavailable',
+      );
     }
     return selection;
   }

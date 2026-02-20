@@ -42,9 +42,7 @@ export class AdminAuthController {
     request?: { adminContext?: AdminContext },
   ) {
     if (!request?.adminContext?.isSuperAdmin) {
-      throw new ForbiddenException(
-        'Only superadmin can create admin accounts',
-      );
+      throw new ForbiddenException('Only superadmin can create admin accounts');
     }
     const admin = await this.accountsService.createAccount({
       account: dto.account,

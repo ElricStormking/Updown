@@ -3,4 +3,6 @@ export interface JwtPayload {
   account: string;
   type?: 'user' | 'admin';
   merchantId?: string;
+  launchSessionId?: string;
+  launchMode?: 'legacy' | 'callback';
 }

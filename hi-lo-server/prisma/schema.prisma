@@ -8,16 +8,21 @@ datasource db {
 }
 
 model Merchant {
-  id          String       @id @default(cuid())
-  merchantId  String       @unique
-  name        String
-  hashKey     String
-  isActive    Boolean      @default(true)
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  users       User[]
-  transfers   Transfer[]
-  gameConfigs GameConfig[]
+  id                     String                @id @default(cuid())
+  merchantId             String                @unique
+  name                   String
+  hashKey                String
+  currency               String                @default("USDT")
+  callbackEnabled        Boolean               @default(false)
+  loginPlayerCallbackUrl String?
+  updateBalanceCallbackUrl String?
+  isActive               Boolean               @default(true)
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime              @updatedAt
+  users                  User[]
+  transfers              Transfer[]
+  gameConfigs            GameConfig[]
+  launchSessions         MerchantLaunchSession[]
 }
 
 model Transfer {
@@ -53,6 +58,7 @@ model User {
   transfers          Transfer[]
   walletTransactions WalletTransaction[]
   playerLogins       PlayerLogin[]
+  launchSessions     MerchantLaunchSession[]
 
   @@unique([merchantId, merchantAccount])
 }
@@ -252,4 +258,50 @@ model PlayerLogin {
 
   @@index([merchantId, loginTime], map: "idx_player_login_merchant_time")
   @@index([userId, loginTime], map: "idx_player_login_user_time")
+}
+
+model MerchantLaunchSession {
+  id                  String                    @id @default(cuid())
+  merchantId          String
+  userId              String
+  account             String
+  playerId            String
+  merchantAccessToken String
+  currency            String
+  status              LaunchSessionStatus       @default(ACTIVE)
+  loginStatus         LaunchSessionLoginStatus  @default(PENDING)
+  offlineStatus       LaunchSessionOfflineStatus @default(ONLINE)
+  loginVerifiedAt     DateTime?
+  updateBalanceSentAt DateTime?
+  settledAt           DateTime?
+  expiresAt           DateTime
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime                  @updatedAt
+  merchant            Merchant                  @relation(fields: [merchantId], references: [merchantId])
+  user                User                      @relation(fields: [userId], references: [id])
+
+  @@index([merchantId, userId, status], map: "idx_launch_session_merchant_user_status")
+  @@index([expiresAt], map: "idx_launch_session_expires")
+  @@index([status, offlineStatus], map: "idx_launch_session_status_offline")
+}
+
+enum LaunchSessionStatus {
+  ACTIVE
+  SUPERSEDED
+  CLOSED
+  EXPIRED
+}
+
+enum LaunchSessionLoginStatus {
+  PENDING
+  VERIFIED
+  FAILED
+}
+
+enum LaunchSessionOfflineStatus {
+  ONLINE
+  OFFLINE_PENDING
+  CALLBACK_SENT
+  CALLBACK_FAILED
+  SETTLED
 }

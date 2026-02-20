@@ -68,6 +68,13 @@ export interface AuthResponse {
   };
 }
 
+export interface LaunchSessionStartResponse {
+  ready: boolean;
+  mode: 'legacy' | 'callback';
+  code: number;
+  message: string;
+}
+
 export interface WalletResponse {
   id: string;
   balance: string;

@@ -1,159 +1,140 @@
-# Platform Integration Service - Test Plan
+# Platform Integration Service - Test Plan (v1.1)
 
 ## Prerequisites
 
-1. Server running on port **4001**
-2. Database migration applied
-3. Test merchant seeded
+1. Server running on port `4001`.
+2. Latest migration applied and Prisma client generated.
+3. Test merchant seeded.
+4. For callback-mode tests, callback URLs configured for the merchant.
 
-## Step-by-Step Testing
+## Setup
 
-### Step 1: Apply Migration and Seed Database
+### 1. Apply migration and seed data
 
 ```bash
 cd hi-lo-server
 npx prisma migrate deploy
+npx prisma generate
 npx prisma db seed
 ```
 
-This creates the test merchant:
-- **merchantId**: `TEST_MERCHANT`
-- **hashKey**: `dGVzdGhhc2hrZXkxMjM0NTY3ODkwYWI=`
+Seeded test merchant defaults:
+- `merchantId`: `TEST_MERCHANT`
+- `hashKey`: `dGVzdGhhc2hrZXkxMjM0NTY3ODkwYWI=`
+- `callbackEnabled`: `false` (legacy mode by default)
 
-### Step 2: Start the Server
+### 2. Start services
 
 ```bash
+cd hi-lo-server
 npm run start:dev
 ```
 
-Server runs on: `http://localhost:4001`
+### 3. Start optional mock callback merchant (for callback-mode)
 
----
+```bash
+cd hi-lo-server
+npx ts-node Test-scripts/mock-merchant-callback-server.ts
+```
 
-## Test Scripts (PowerShell Commands)
+Mock callback routes:
+- `POST http://localhost:4100/login-player`
+- `POST http://localhost:4100/update-balance`
 
-The test helper script is located at: `hi-lo-server/Test-scripts/test-integration-api.ts`
+## Test helper scripts
 
-### 2.1 Create Account
+Primary helper script:
+- `hi-lo-server/Test-scripts/test-integration-api.ts`
+
+### Core command examples
 
 ```powershell
 & npx ts-node "D:\ProjectUpDown\hi-lo-server\Test-scripts\test-integration-api.ts" "create-account" "player001"
-```
-
-**Expected Response:**
-```json
-{
-  "success": true,
-  "errorCode": 0,
-  "errorMessage": "",
-  "data": null
-}
-```
-
-### 2.2 Transfer (Deposit) - Add funds to player
-
-```powershell
 & npx ts-node "D:\ProjectUpDown\hi-lo-server\Test-scripts\test-integration-api.ts" "transfer-in" "player001" "100" "ORDER001"
-```
-
-**Expected Response:**
-```json
-{
-  "success": true,
-  "errorCode": 0,
-  "errorMessage": "",
-  "data": { "balance": 100 }
-}
-```
-
-### 2.3 LaunchGame - Get game URL with token
-
-```powershell
 & npx ts-node "D:\ProjectUpDown\hi-lo-server\Test-scripts\test-integration-api.ts" "launch" "player001"
+& npx ts-node "D:\ProjectUpDown\hi-lo-server\Test-scripts\test-integration-api.ts" "launch-callback" "player001" "pid-001" "merchantToken001"
+& npx ts-node "D:\ProjectUpDown\hi-lo-server\Test-scripts\test-integration-api.ts" "all-transfer-out" "player001" "ORDER999"
 ```
 
-**Expected Response:**
-```json
-{
-  "success": true,
-  "errorCode": 0,
-  "errorMessage": "",
-  "data": { "url": "https://game.example.com?accessToken=<JWT_TOKEN>" }
-}
-```
+## Validation scenarios
 
-### 2.4 Transfer (Withdraw) - Withdraw funds from player
+### A. Backward compatibility (callback disabled)
 
-```powershell
-& npx ts-node "D:\ProjectUpDown\hi-lo-server\Test-scripts\test-integration-api.ts" "transfer-out" "player001" "50" "ORDER002"
-```
+1. Keep `callbackEnabled=false`.
+2. Call `launch`.
+3. Verify:
+- API returns success with URL.
+- Client launch proceeds without callback preflight blocking.
 
-**Expected Response:**
-```json
-{
-  "success": true,
-  "errorCode": 0,
-  "errorMessage": "",
-  "data": { "balance": 50 }
-}
-```
+### B. Callback-mode launch success
 
-### 2.5 GetTransferHistory - View transfer records
+1. Enable merchant callback config in admin data:
+- `callbackEnabled=true`
+- `loginPlayerCallbackUrl=http://localhost:4100/login-player`
+- `updateBalanceCallbackUrl=http://localhost:4100/update-balance`
+2. Call `launch-callback`.
+3. Open returned game URL in browser.
+4. Verify:
+- Client shows `Verifying launch with merchant...`.
+- `POST /integration/launch/session/start` returns `ready=true`.
+- Client continues and authenticates socket.
+- `PlayerLogin` record is created.
 
-```powershell
-& npx ts-node "D:\ProjectUpDown\hi-lo-server\Test-scripts\test-integration-api.ts" "transfer-history"
-```
+### C. Callback-mode launch failure/timeout
 
-**Expected Response:**
-```json
-{
-  "success": true,
-  "errorCode": 0,
-  "errorMessage": "",
-  "data": {
-    "transfers": [...],
-    "pageNumber": 1,
-    "pageSize": 10,
-    "totalCount": 2,
-    "totalPageNumber": 1
-  }
-}
-```
+1. Stop mock callback server or force fail:
+- `FAIL_LOGIN=true npx ts-node Test-scripts/mock-merchant-callback-server.ts`
+2. Launch using callback mode.
+3. Verify:
+- Preflight returns `ready=false` with 6xxx code/message.
+- Client shows blocked/failure status.
+- Gameplay socket is not connected.
 
-### 2.6 GetBetHistory - View bet records (after player places bets)
+### D. AllTransferOut behavior
 
-```powershell
-& npx ts-node "D:\ProjectUpDown\hi-lo-server\Test-scripts\test-integration-api.ts" "bet-history"
-```
+1. Deposit player balance.
+2. Call `all-transfer-out`.
+3. Verify:
+- Full balance is transferred out.
+- Response `data.balance` is `0`.
+- Duplicate `transferId` returns `DUPLICATE_ORDER_NUMBER`.
 
-**Expected Response:**
-```json
-{
-  "success": true,
-  "errorCode": 0,
-  "errorMessage": "",
-  "data": {
-    "bets": [...],
-    "pageNumber": 1,
-    "pageSize": 10,
-    "totalCount": 0,
-    "totalPageNumber": 0
-  }
-}
-```
+### E. UpdateBalance callback on offline trigger
 
----
+1. Successful callback-mode launch and socket auth.
+2. Disconnect last game socket and wait past grace window.
+3. Verify:
+- Server sends one `UpdateBalance` callback flow.
+- Launch session offline status updates to sent/failed.
+- Reconnect within grace window does not trigger callback.
 
-## Test Script Configuration
+### F. Session lifecycle
 
-Environment variables (optional):
-- `MERCHANT_ID` - Merchant ID (default: `TEST_MERCHANT`)
-- `HASH_KEY` - Merchant hash key (default: `dGVzdGhhc2hrZXkxMjM0NTY3ODkwYWI=`)
-- `API_BASE_URL` - API base URL (default: `http://localhost:4001`)
+1. Launch callback mode twice for same merchant/user.
+2. Verify previous active session becomes `SUPERSEDED`.
+3. Verify superseded session does not emit `UpdateBalance`.
 
----
+### G. Bet limit mapping (`betLimits`)
 
-## Error Codes Reference
+1. Call launch with `betLimits`.
+2. Verify mapped merchant config updates:
+- `bigSmall -> smallBig.max`
+- `oddEven -> oddEven.max`
+- `eachDouble -> double.max`
+- `eachTripple -> triple.max`
+- `sum -> sum.max`
+- `single -> single.max`
+- `anyTripple -> anyTriple.max`
+3. Verify legacy override fields still take precedence if sent together.
+
+## Environment variables for scripts
+
+- `MERCHANT_ID` (default `TEST_MERCHANT`)
+- `HASH_KEY` (default `dGVzdGhhc2hrZXkxMjM0NTY3ODkwYWI=`)
+- `API_BASE_URL` (default `http://localhost:4001`)
+- `PORT` / `FAIL_LOGIN` / `FAIL_UPDATE` (mock callback script)
+
+## Error codes
 
 | Code | Description |
 |------|-------------|
@@ -164,7 +145,16 @@ Environment variables (optional):
 | 1004 | Merchant inactive |
 | 2001 | Account already exists |
 | 2002 | Account not found |
+| 2003 | Account disabled |
 | 3001 | Insufficient balance |
 | 3002 | Duplicate order number |
 | 3003 | Invalid transfer type |
+| 5001 | Invalid bet amount limit |
+| 5002 | Invalid token values |
+| 6001 | Callback fields required |
+| 6002 | Callback merchant not configured |
+| 6003 | Launch session not found |
+| 6004 | Launch session not active |
+| 6005 | LoginPlayer callback failed |
+| 6006 | UpdateBalance callback failed |
 | 9999 | Internal error |

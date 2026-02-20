@@ -155,7 +155,8 @@ export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
       CacheKeys.activeRoundState,
     );
     if (cachedState) {
-      const normalizedCachedState = this.normalizeRoundStateForBroadcast(cachedState);
+      const normalizedCachedState =
+        this.normalizeRoundStateForBroadcast(cachedState);
       this.currentRound = normalizedCachedState;
       await this.loadRoundConfigSnapshot(cachedState.id);
       if (this.resumeTimersAfterRestore(normalizedCachedState)) {

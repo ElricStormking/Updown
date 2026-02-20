@@ -12,6 +12,7 @@ import {
   LaunchGameDto,
   UpdateBetLimitDto,
   UpdateTokenValuesDto,
+  AllTransferOutDto,
 } from './dto';
 
 @Controller('integration')
@@ -80,9 +81,24 @@ export class IntegrationController {
     return this.integrationService.launchGame(
       merchant,
       dto.account,
+      dto.playerId,
+      dto.accessToken,
+      dto.betLimits,
       dto.minBetAmount,
       dto.maxBetAmount,
       dto.digitBetAmountLimits,
+      dto.timestamp,
+      dto.hash,
+    );
+  }
+
+  @Post('all-transfer-out')
+  async allTransferOut(@Body() dto: AllTransferOutDto, @Req() req: any) {
+    const merchant: Merchant = req[MERCHANT_KEY];
+    return this.integrationService.allTransferOut(
+      merchant,
+      dto.account,
+      dto.transferId,
       dto.timestamp,
       dto.hash,
     );

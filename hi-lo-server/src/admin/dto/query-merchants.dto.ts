@@ -29,6 +29,25 @@ export class CreateMerchantDto {
   hashKey: string;
 
   @IsOptional()
+  @IsString()
+  @MinLength(1)
+  currency?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  callbackEnabled?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  loginPlayerCallbackUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  updateBalanceCallbackUrl?: string;
+
+  @IsOptional()
   @IsBoolean()
   isActive?: boolean;
 }
@@ -47,6 +66,25 @@ export class UpdateMerchantDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  currency?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  callbackEnabled?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  loginPlayerCallbackUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  updateBalanceCallbackUrl?: string;
 }
 
 export interface MerchantResponseItem {
@@ -54,6 +92,10 @@ export interface MerchantResponseItem {
   merchantId: string;
   name: string;
   hashKeyMasked: string;
+  currency: string;
+  callbackEnabled: boolean;
+  loginPlayerCallbackUrl: string | null;
+  updateBalanceCallbackUrl: string | null;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;

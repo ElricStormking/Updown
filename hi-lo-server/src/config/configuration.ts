@@ -49,6 +49,16 @@ export const configuration = () => ({
       process.env.INTEGRATION_TIMESTAMP_TOLERANCE_SEC ?? 10,
     ),
     gameUrl: process.env.INTEGRATION_GAME_URL ?? 'https://game.example.com',
+    callbackTimeoutMs: Number(
+      process.env.INTEGRATION_CALLBACK_TIMEOUT_MS ?? 5000,
+    ),
+    callbackRetryCount: Number(
+      process.env.INTEGRATION_CALLBACK_RETRY_COUNT ?? 2,
+    ),
+    offlineGraceMs: Number(process.env.INTEGRATION_OFFLINE_GRACE_MS ?? 30000),
+    launchSessionTtlSec: Number(
+      process.env.INTEGRATION_LAUNCH_SESSION_TTL_SEC ?? 3600,
+    ),
   },
 });
 

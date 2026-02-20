@@ -5,6 +5,7 @@ import type {
   BetHistoryPageResponse,
   ClearRoundBetsResponse,
   GameConfig,
+  LaunchSessionStartResponse,
   RoundHistoryItem,
   WalletResponse,
 } from '../types';
@@ -25,6 +26,13 @@ const authHeader = (token: string) => ({
 export const api = {
   login: (account: string, password: string) =>
     client.post<AuthResponse>('/auth/login', { account, password }),
+
+  startLaunchSession: (token: string) =>
+    client.post<LaunchSessionStartResponse>(
+      '/integration/launch/session/start',
+      {},
+      authHeader(token),
+    ),
 
   fetchWallet: (token: string) =>
     client.get<WalletResponse>('/wallet', authHeader(token)),

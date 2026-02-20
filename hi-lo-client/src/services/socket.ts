@@ -25,6 +25,7 @@ export const createGameSocket = (
 ) => {
   const socket: Socket = io(`${WS_URL}/game`, {
     withCredentials: true,
+    autoConnect: false,
   });
 
   socket.on('connect', () => {
@@ -48,6 +49,10 @@ export const createGameSocket = (
 };
 
 export const authenticateGameSocket = (socket: Socket, token: string) => {
-  socket.emit('client:ready', { token });
+  if (socket.connected) {
+    socket.emit('client:ready', { token });
+    return;
+  }
+  socket.connect();
 };
 

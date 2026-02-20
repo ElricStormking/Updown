@@ -9,6 +9,7 @@ import { WalletModule } from '../wallet/wallet.module';
 import { AuthModule } from '../auth/auth.module';
 import { GameGateway } from './game.gateway';
 import { GameConfigModule } from '../config/game-config.module';
+import { IntegrationModule } from '../integration/integration.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { GameConfigModule } from '../config/game-config.module';
     WalletModule,
     AuthModule,
     GameConfigModule,
+    IntegrationModule,
   ],
   providers: [RoundEngineService, GameGateway],
   exports: [RoundEngineService, GameGateway],

@@ -174,7 +174,10 @@ const buildDefaultSlotPayoutMeta = () => {
     }
   > = {};
   getAllDigitBetSlots().forEach((slot) => {
-    const suggestWinPct = getDefaultSuggestWinPct(slot.digitType, slot.selection);
+    const suggestWinPct = getDefaultSuggestWinPct(
+      slot.digitType,
+      slot.selection,
+    );
     meta[buildDigitBonusKey(slot)] = {
       suggestWinPct,
       suggestWinPctDouble: 0,

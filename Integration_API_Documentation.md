@@ -1,7 +1,13 @@
 # Platform Integration API Documentation
 
-**Version:** 1.0  
-**Last Updated:** February 17, 2026  
+**Version:** 1.1  
+**Last Updated:** February 21, 2026  
+
+**Change Highlights (Platform Spec Sync on February 21, 2026):**
+- Added callback-mode `Launch Game` fields: `playerId`, `accessToken`, and `betLimits`.
+- Added `All Transfer Out` integration endpoint.
+- Added merchant-side callback APIs: `LoginPlayer` and `UpdateBalance`.
+- Added login callback sequence flow from `image1.png`.
 
 ---
 
@@ -19,10 +25,13 @@
    - [Get Bet History](#3-get-bet-history)
    - [Get Transfer History](#4-get-transfer-history)
    - [Launch Game](#5-launch-game)
-   - [Get Bet Limit](#6-get-bet-limit)
-   - [Set Bet Limit](#7-set-bet-limit)
-   - [Get Token Values](#8-get-token-values)
-   - [Set Token Values](#9-set-token-values)
+   - [All Transfer Out](#6-all-transfer-out)
+   - [Callback: LoginPlayer (Merchant Side)](#7-callback-loginplayer-merchant-side)
+   - [Callback: UpdateBalance (Merchant Side)](#8-callback-updatebalance-merchant-side)
+   - [Get Bet Limit](#9-get-bet-limit)
+   - [Set Bet Limit](#10-set-bet-limit)
+   - [Get Token Values](#11-get-token-values)
+   - [Set Token Values](#12-set-token-values)
 8. [Data Types](#data-types)
 9. [Code Examples](#code-examples)
 
@@ -37,6 +46,8 @@ This document describes the Integration API for platform partners to integrate t
 - Query bet history
 - Query transfer history
 - Launch the game with authenticated player sessions
+- Transfer all remaining player balance back to merchant
+- Support merchant callback verification during login and offline settlement
 - Retrieve and configure global/per-rule bet limits and token values
 
 All API endpoints use **HTTP POST** method and accept/return **JSON** payloads.
@@ -192,6 +203,23 @@ All API responses follow this structure:
 ---
 
 ## API Endpoints
+
+### Operation Name Mapping (Platform Spec 2026-02-21)
+
+| Public Spec Operation | This Document |
+|-----------------------|---------------|
+| `AccountCreate` | `POST /integration/account/create` |
+| `Transfer` | `POST /integration/transfer` |
+| `GetBetHistory` | `POST /integration/bets` |
+| `GetTransferHistory` | `POST /integration/transfers` |
+| `LaunchGame` | `POST /integration/launch` |
+| `AllTransferOut` | `POST /integration/all-transfer-out` (or partner-provided route) |
+| `GetBetLimit` | `POST /integration/config/bet-limit/get` |
+| `SetBetLimit` | `POST /integration/config/bet-limit` |
+| `GetTokens` | `POST /integration/config/token-values/get` |
+| `SetTokens` | `POST /integration/config/token-values` |
+| `Callback: LoginPlayer` | Merchant callback URL configured in platform settings |
+| `Callback: UpdateBalance` | Merchant callback URL configured in platform settings |
 
 ### 1. Create Account
 
@@ -520,20 +548,23 @@ Generate an authenticated game URL for a player.
 |-----------|------|----------|-------------|
 | `merchantId` | string | Yes | Your merchant ID |
 | `account` | string | Yes | Player account identifier |
-| `minBetAmount` | number | No | Global minimum bet amount. If provided, game config is updated before URL generation |
-| `maxBetAmount` | number | No | Global maximum bet amount. If provided, game config is updated before URL generation |
-| `digitBetAmountLimits` | object | No | Per-rule min/max bet limits (7 digit rule groups). See [Digit Bet Amount Limits](#digit-bet-amount-limits) |
+| `playerId` | string | No (Yes for callback mode) | Merchant-side player ID used by callback APIs for merchant verification |
+| `accessToken` | string | No (Yes for callback mode) | Merchant-side access token used by callback APIs for merchant verification |
+| `betLimits` | object | No | Per-game-type limit object from latest platform spec. See [Launch betLimits Object](#launch-betlimits-object-platform-2026-02-21) |
+| `minBetAmount` | number | No | Legacy global minimum bet amount override before URL generation |
+| `maxBetAmount` | number | No | Legacy global maximum bet amount override before URL generation |
+| `digitBetAmountLimits` | object | No | Legacy per-rule min/max override. See [Digit Bet Amount Limits](#digit-bet-amount-limits) |
 | `timestamp` | integer | Yes | Unix timestamp in seconds |
 | `hash` | string | Yes | Request signature |
 
-**Signature Parameters (in order, legacy mode):**
+**Signature Parameters (in order, latest public platform spec - February 21, 2026):**
 ```
 hash = SHA256(merchantId + "&" + account + "&" + timestamp + "&" + hashKey)
 ```
 
-Use this legacy signature when **none** of `minBetAmount`, `maxBetAmount`, `digitBetAmountLimits` are included.
+Use this signature when using `playerId`, `accessToken`, and/or `betLimits` without legacy bet-limit override fields.
 
-**Signature Parameters (in order, bet-limit override mode):**
+**Signature Parameters (in order, legacy bet-limit override mode):**
 ```
 hash = SHA256(
   merchantId + "&" +
@@ -554,7 +585,29 @@ Where:
   (empty string if `digitBetAmountLimits` is omitted).
 - If `minBetAmount`/`maxBetAmount` are provided but `digitBetAmountLimits` is omitted, all 7 digit-rule limits are aligned to the provided global min/max.
 
-#### Request Example
+#### Request Example (Callback Mode with Platform Identity Fields)
+
+```json
+{
+  "merchantId": "MERCHANT001",
+  "playerId": "merchant-player-789",
+  "account": "player123",
+  "accessToken": "merchant-access-token-value",
+  "betLimits": {
+    "bigSmall": 1000,
+    "oddEven": 2000,
+    "eachDouble": 3000,
+    "eachTripple": 4000,
+    "sum": 5000,
+    "single": 6000,
+    "anyTripple": 7000
+  },
+  "timestamp": 1706886400,
+  "hash": "a1b2c3d4e5f6..."
+}
+```
+
+#### Request Example (Legacy Bet-Limit Override Mode)
 
 ```json
 {
@@ -597,9 +650,155 @@ Where:
 
 Open the returned URL in a browser or iframe to launch the game for the player. The access token is valid for 1 hour by default.
 
+#### Login Callback Flow (from `image1.png`)
+
+![LoginPlayer Callback Sequence Diagram](image1.png)
+
+1. Merchant server calls `POST /integration/launch` to obtain game URL.
+2. Merchant redirects player to the returned game URL.
+3. After game open, platform backend calls merchant `LoginPlayer` callback.
+4. Merchant verifies callback payload and calls `POST /integration/transfer` (`type=0`) to transfer player balance into game.
+5. Platform returns success/fail result page to player based on callback + transfer result.
+
 ---
 
-### 6. Get Bet Limit
+### 6. All Transfer Out
+
+Transfer all remaining game balance for a player back to merchant side.
+
+**Endpoint:** `POST /integration/all-transfer-out` (method name in latest platform spec: `AllTransferOut`)
+
+> The external platform spec names the method `AllTransferOut` but may provide route mapping separately during onboarding. Use partner-provided routing if it differs.
+
+#### Request
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `merchantId` | string | Yes | Your merchant ID |
+| `account` | string | Yes | Player account identifier |
+| `transferId` | string | Yes | Unique transfer ID for idempotency/audit |
+| `timestamp` | integer | Yes | Unix timestamp in seconds |
+| `hash` | string | Yes | Request signature |
+
+**Signature Parameters (in order):**
+```
+hash = SHA256(merchantId + "&" + account + "&" + timestamp + "&" + hashKey)
+```
+
+#### Request Example
+
+```json
+{
+  "merchantId": "MERCHANT001",
+  "account": "player123",
+  "transferId": "ALL-OUT-20260221-0001",
+  "timestamp": 1706886400,
+  "hash": "a1b2c3d4e5f6..."
+}
+```
+
+#### Response
+
+```json
+{
+  "success": true,
+  "errorCode": 0,
+  "errorMessage": "",
+  "data": {
+    "balance": 0
+  }
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `balance` | number | Remaining game-side balance after all funds are transferred out |
+
+---
+
+### 7. Callback: LoginPlayer (Merchant Side)
+
+Merchant must implement this callback endpoint for platform-initiated login verification.
+
+**Endpoint:** Merchant-configured callback URL (example: `POST {merchantCallbackBaseUrl}/login-player`)
+
+#### Purpose
+
+- Platform calls this endpoint when a player opens the game.
+- Merchant verifies player identity (`playerId`, `account`, `accessToken`) and currency.
+- Merchant then transfers balance into game (typically via `POST /integration/transfer`, `type=0`) and returns success/failure.
+
+#### Request
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `merchantId` | string | Yes | Merchant ID |
+| `playerId` | string | Yes | `playerId` originally passed in `Launch Game` |
+| `account` | string | Yes | Player game account |
+| `accessToken` | string | Yes | `accessToken` originally passed in `Launch Game` |
+| `currency` | string | Yes | Merchant-configured currency for validation |
+| `timestamp` | integer | Yes | Unix timestamp in seconds |
+| `hash` | string | Yes | Request signature |
+
+**Signature Parameters (in order):**
+```
+hash = SHA256(merchantId + "&" + timestamp + "&" + hashKey)
+```
+
+#### Response
+
+```json
+{
+  "success": true,
+  "errorCode": 0,
+  "errorMessage": ""
+}
+```
+
+---
+
+### 8. Callback: UpdateBalance (Merchant Side)
+
+Merchant must implement this callback endpoint for platform-initiated offline settlement.
+
+**Endpoint:** Merchant-configured callback URL (example: `POST {merchantCallbackBaseUrl}/update-balance`)
+
+#### Purpose
+
+- Platform calls this endpoint after player offline detection.
+- Merchant verifies callback payload and triggers balance settlement back to merchant side.
+- Merchant should call either `AllTransferOut` (preferred) or `Transfer` (`type=1`) based on platform contract, then return callback status.
+
+#### Request
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `merchantId` | string | Yes | Merchant ID |
+| `playerId` | string | Yes | `playerId` originally passed in `Launch Game` |
+| `account` | string | Yes | Player game account |
+| `accessToken` | string | Yes | `accessToken` originally passed in `Launch Game` |
+| `currency` | string | Yes | Merchant-configured currency for validation |
+| `timestamp` | integer | Yes | Unix timestamp in seconds |
+| `hash` | string | Yes | Request signature |
+
+**Signature Parameters (in order):**
+```
+hash = SHA256(merchantId + "&" + timestamp + "&" + hashKey)
+```
+
+#### Response
+
+```json
+{
+  "success": true,
+  "errorCode": 0,
+  "errorMessage": ""
+}
+```
+
+---
+
+### 9. Get Bet Limit
 
 Retrieve the current bet limits for this merchant.
 
@@ -659,7 +858,7 @@ hash = SHA256(merchantId + "&" + timestamp + "&" + hashKey)
 
 ---
 
-### 7. Set Bet Limit
+### 10. Set Bet Limit
 
 Set global and per-rule bet amount limits for this merchant.
 
@@ -748,7 +947,7 @@ Where `digitBetAmountLimitsToken` format is:
 
 ---
 
-### 8. Get Token Values
+### 11. Get Token Values
 
 Retrieve the 7 token values shown in the betting UI.
 
@@ -792,7 +991,7 @@ hash = SHA256(merchantId + "&" + timestamp + "&" + hashKey)
 
 ---
 
-### 9. Set Token Values
+### 12. Set Token Values
 
 Customize the 7 token values shown in the betting UI.
 
@@ -844,6 +1043,34 @@ Where `tokenValuesCSV` is the comma-joined string of the 7 values in the request
 ---
 
 ## Data Types
+
+### Launch betLimits Object (Platform 2026-02-21)
+
+`betLimits` in `Launch Game` uses per-game-type max amount keys from the latest public platform spec:
+
+| Key | Meaning |
+|-----|---------|
+| `bigSmall` | Limit for BIG/SMALL |
+| `oddEven` | Limit for ODD/EVEN |
+| `eachDouble` | Limit for each DOUBLE |
+| `eachTripple` | Limit for each TRIPLE (spelling follows external platform spec) |
+| `sum` | Limit for SUM |
+| `single` | Limit for SINGLE |
+| `anyTripple` | Limit for ANY_TRIPLE (spelling follows external platform spec) |
+
+Example:
+
+```json
+{
+  "bigSmall": 1000,
+  "oddEven": 2000,
+  "eachDouble": 3000,
+  "eachTripple": 4000,
+  "sum": 5000,
+  "single": 6000,
+  "anyTripple": 7000
+}
+```
 
 ### Digit Bet Amount Limits
 
@@ -1032,11 +1259,11 @@ class GameIntegration {
 
   async launchGame(account, options = {}) {
     const timestamp = this.getTimestamp();
-    const hasOverride =
+    const hasLegacyOverride =
       options.minBetAmount !== undefined ||
       options.maxBetAmount !== undefined ||
       options.digitBetAmountLimits !== undefined;
-    const hash = hasOverride
+    const hash = hasLegacyOverride
       ? this.generateSignature([
           this.merchantId,
           account,
@@ -1054,6 +1281,15 @@ class GameIntegration {
     const response = await axios.post(`${this.baseUrl}/integration/launch`, {
       merchantId: this.merchantId,
       account,
+      ...(options.playerId !== undefined
+        ? { playerId: options.playerId }
+        : {}),
+      ...(options.accessToken !== undefined
+        ? { accessToken: options.accessToken }
+        : {}),
+      ...(options.betLimits !== undefined
+        ? { betLimits: options.betLimits }
+        : {}),
       ...(options.minBetAmount !== undefined
         ? { minBetAmount: options.minBetAmount }
         : {}),
@@ -1063,6 +1299,25 @@ class GameIntegration {
       ...(options.digitBetAmountLimits !== undefined
         ? { digitBetAmountLimits: options.digitBetAmountLimits }
         : {}),
+      timestamp,
+      hash,
+    });
+
+    return response.data;
+  }
+
+  async allTransferOut(account, transferId) {
+    const timestamp = this.getTimestamp();
+    const hash = this.generateSignature([
+      this.merchantId,
+      account,
+      timestamp.toString(),
+    ]);
+
+    const response = await axios.post(`${this.baseUrl}/integration/all-transfer-out`, {
+      merchantId: this.merchantId,
+      account,
+      transferId,
       timestamp,
       hash,
     });
@@ -1092,8 +1347,20 @@ async function main() {
   );
   console.log('Deposit:', depositResult);
 
-  // Launch game
-  const launchResult = await integration.launchGame('player123');
+  // Launch game (callback mode)
+  const launchResult = await integration.launchGame('player123', {
+    playerId: 'merchant-player-789',
+    accessToken: 'merchant-access-token-value',
+    betLimits: {
+      bigSmall: 1000,
+      oddEven: 2000,
+      eachDouble: 3000,
+      eachTripple: 4000,
+      sum: 5000,
+      single: 6000,
+      anyTripple: 7000,
+    },
+  });
   console.log('Game URL:', launchResult.data?.url);
 
   // Get bet history
@@ -1112,6 +1379,13 @@ async function main() {
     50
   );
   console.log('Withdrawal:', withdrawResult);
+
+  // Transfer out all remaining balance
+  const allOutResult = await integration.allTransferOut(
+    'player123',
+    'ALL-OUT-' + Date.now()
+  );
+  console.log('All Transfer Out:', allOutResult);
 }
 
 main().catch(console.error);

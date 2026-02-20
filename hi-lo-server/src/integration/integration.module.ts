@@ -2,11 +2,14 @@ import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { IntegrationController } from './integration.controller';
+import { IntegrationLaunchSessionController } from './integration-launch-session.controller';
 import { IntegrationService } from './integration.service';
 import { MerchantAuthGuard } from './guards/merchant-auth.guard';
 import { PrismaModule } from '../prisma/prisma.module';
 import { WalletModule } from '../wallet/wallet.module';
 import { GameConfigModule } from '../config/game-config.module';
+import { LaunchSessionService } from './launch-session.service';
+import { MerchantCallbackService } from './merchant-callback.service';
 
 @Module({
   imports: [
@@ -25,8 +28,13 @@ import { GameConfigModule } from '../config/game-config.module';
       }),
     }),
   ],
-  controllers: [IntegrationController],
-  providers: [IntegrationService, MerchantAuthGuard],
-  exports: [IntegrationService],
+  controllers: [IntegrationController, IntegrationLaunchSessionController],
+  providers: [
+    IntegrationService,
+    MerchantAuthGuard,
+    LaunchSessionService,
+    MerchantCallbackService,
+  ],
+  exports: [IntegrationService, LaunchSessionService, MerchantCallbackService],
 })
 export class IntegrationModule {}

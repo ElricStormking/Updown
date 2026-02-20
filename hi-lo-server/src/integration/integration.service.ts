@@ -20,6 +20,7 @@ import {
 import { IntegrationResponseDto } from './dto/integration-response.dto';
 import {
   TransferResponseData,
+  AllTransferOutResponseData,
   GetBetHistoryResponseData,
   BetHistoryItem,
   GetTransferHistoryResponseData,
@@ -30,7 +31,9 @@ import {
   UpdateBetLimitResponseData,
   UpdateTokenValuesResponseData,
   DigitBetAmountLimitsDto,
+  LaunchBetLimitsDto,
 } from './dto';
+import { LaunchSessionService } from './launch-session.service';
 
 const DIGIT_BET_LIMIT_RULE_KEYS = [
   'smallBig',
@@ -42,6 +45,19 @@ const DIGIT_BET_LIMIT_RULE_KEYS = [
   'anyTriple',
 ] as const satisfies ReadonlyArray<keyof DigitBetAmountLimits>;
 
+const LAUNCH_BET_LIMIT_RULE_KEY_MAP = {
+  bigSmall: 'smallBig',
+  oddEven: 'oddEven',
+  eachDouble: 'double',
+  eachTripple: 'triple',
+  sum: 'sum',
+  single: 'single',
+  anyTripple: 'anyTriple',
+} as const satisfies Record<
+  keyof LaunchBetLimitsDto,
+  keyof DigitBetAmountLimits
+>;
+
 @Injectable()
 export class IntegrationService {
   private readonly logger = new Logger(IntegrationService.name);
@@ -52,6 +68,7 @@ export class IntegrationService {
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly gameConfigService: GameConfigService,
+    private readonly launchSessionService: LaunchSessionService,
   ) {}
 
   async createAccount(
@@ -207,6 +224,12 @@ export class IntegrationService {
 
         return wallet;
       });
+      if (type === 1) {
+        await this.launchSessionService.closeActiveSessionsByAccount(
+          merchant.merchantId,
+          account,
+        );
+      }
 
       return IntegrationResponseDto.success({
         balance: Number(result.balance),
@@ -222,6 +245,104 @@ export class IntegrationService {
         );
       }
       this.logger.error('Failed to process transfer', error);
+      return IntegrationResponseDto.error(
+        IntegrationErrorCodes.INTERNAL_ERROR,
+        IntegrationErrorMessages[IntegrationErrorCodes.INTERNAL_ERROR],
+      );
+    }
+  }
+
+  async allTransferOut(
+    merchant: Merchant,
+    account: string,
+    transferId: string,
+    timestamp: number,
+    hash: string,
+  ): Promise<IntegrationResponseDto<AllTransferOutResponseData>> {
+    const params = [merchant.merchantId, account, timestamp.toString()];
+    if (!validateSignature(params, merchant.hashKey, hash)) {
+      return IntegrationResponseDto.error(
+        IntegrationErrorCodes.INVALID_SIGNATURE,
+        IntegrationErrorMessages[IntegrationErrorCodes.INVALID_SIGNATURE],
+      );
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: {
+        merchantId_merchantAccount: {
+          merchantId: merchant.merchantId,
+          merchantAccount: account,
+        },
+      },
+    });
+    if (!user) {
+      return IntegrationResponseDto.error(
+        IntegrationErrorCodes.ACCOUNT_NOT_FOUND,
+        IntegrationErrorMessages[IntegrationErrorCodes.ACCOUNT_NOT_FOUND],
+      );
+    }
+
+    const existingTransfer = await this.prisma.transfer.findUnique({
+      where: {
+        merchantId_orderNo: {
+          merchantId: merchant.merchantId,
+          orderNo: transferId,
+        },
+      },
+    });
+    if (existingTransfer) {
+      return IntegrationResponseDto.error(
+        IntegrationErrorCodes.DUPLICATE_ORDER_NUMBER,
+        IntegrationErrorMessages[IntegrationErrorCodes.DUPLICATE_ORDER_NUMBER],
+      );
+    }
+
+    try {
+      const result = await this.prisma.$transaction(async (tx) => {
+        const walletBefore = await this.walletService.getOrCreateWallet(
+          user.id,
+          tx,
+        );
+        const amountDecimal = new Prisma.Decimal(walletBefore.balance);
+        const adjustAmount = amountDecimal.mul(-1);
+        const visibleId = this.generateTransferId();
+        const walletAfter = await this.walletService.adjustBalance(
+          user.id,
+          adjustAmount,
+          {
+            type: WalletTxType.TRANSFER_OUT,
+            merchantId: merchant.merchantId,
+            referenceId: visibleId,
+          },
+          tx,
+        );
+
+        await tx.transfer.create({
+          data: {
+            visibleId,
+            merchantId: merchant.merchantId,
+            userId: user.id,
+            orderNo: transferId,
+            type: 1,
+            amount: amountDecimal,
+            balanceBefore: walletBefore.balance,
+            balanceAfter: walletAfter.balance,
+          },
+        });
+
+        return walletAfter;
+      });
+
+      await this.launchSessionService.closeActiveSessionsByAccount(
+        merchant.merchantId,
+        account,
+      );
+
+      return IntegrationResponseDto.success({
+        balance: Number(result.balance),
+      });
+    } catch (error) {
+      this.logger.error('Failed to process all-transfer-out', error);
       return IntegrationResponseDto.error(
         IntegrationErrorCodes.INTERNAL_ERROR,
         IntegrationErrorMessages[IntegrationErrorCodes.INTERNAL_ERROR],
@@ -422,17 +543,20 @@ export class IntegrationService {
   async launchGame(
     merchant: Merchant,
     account: string,
+    playerId: string | undefined,
+    merchantAccessToken: string | undefined,
+    betLimits: LaunchBetLimitsDto | undefined,
     minBetAmount: number | undefined,
     maxBetAmount: number | undefined,
     digitBetAmountLimits: DigitBetAmountLimitsDto | undefined,
     timestamp: number,
     hash: string,
   ): Promise<IntegrationResponseDto<LaunchGameResponseData>> {
-    const hasBetLimitOverrides =
+    const hasLegacyBetLimitOverrides =
       minBetAmount !== undefined ||
       maxBetAmount !== undefined ||
       digitBetAmountLimits !== undefined;
-    const signatureParams = hasBetLimitOverrides
+    const signatureParams = hasLegacyBetLimitOverrides
       ? [
           merchant.merchantId,
           account,
@@ -471,7 +595,7 @@ export class IntegrationService {
     }
 
     try {
-      if (hasBetLimitOverrides) {
+      if (hasLegacyBetLimitOverrides) {
         const current = await this.gameConfigService.getActiveConfig(
           merchant.merchantId,
         );
@@ -513,12 +637,79 @@ export class IntegrationService {
           },
           merchant.merchantId,
         );
+      } else if (betLimits && this.hasAnyLaunchBetLimits(betLimits)) {
+        const current = await this.gameConfigService.getActiveConfig(
+          merchant.merchantId,
+        );
+        const mappedLimits = this.applyLaunchBetLimits(
+          current.digitBetAmountLimits,
+          betLimits,
+        );
+        const mappedMaxBetAmount = this.resolveMaxBetAmount(mappedLimits);
+        if (mappedMaxBetAmount < current.minBetAmount) {
+          return IntegrationResponseDto.error(
+            IntegrationErrorCodes.INVALID_BET_AMOUNT_LIMIT,
+            IntegrationErrorMessages[
+              IntegrationErrorCodes.INVALID_BET_AMOUNT_LIMIT
+            ],
+          );
+        }
+
+        await this.gameConfigService.updateConfig(
+          {
+            ...current,
+            maxBetAmount: mappedMaxBetAmount,
+            digitBetAmountLimits: mappedLimits,
+          },
+          merchant.merchantId,
+        );
+      }
+
+      let launchSessionId: string | undefined;
+      let launchMode: 'legacy' | 'callback' = 'legacy';
+
+      if (merchant.callbackEnabled) {
+        const normalizedPlayerId = playerId?.trim() ?? '';
+        const normalizedMerchantAccessToken = merchantAccessToken?.trim() ?? '';
+        if (!normalizedPlayerId || !normalizedMerchantAccessToken) {
+          return IntegrationResponseDto.error(
+            IntegrationErrorCodes.CALLBACK_FIELDS_REQUIRED,
+            IntegrationErrorMessages[
+              IntegrationErrorCodes.CALLBACK_FIELDS_REQUIRED
+            ],
+          );
+        }
+        if (
+          !merchant.loginPlayerCallbackUrl ||
+          !merchant.updateBalanceCallbackUrl
+        ) {
+          return IntegrationResponseDto.error(
+            IntegrationErrorCodes.CALLBACK_MERCHANT_NOT_CONFIGURED,
+            IntegrationErrorMessages[
+              IntegrationErrorCodes.CALLBACK_MERCHANT_NOT_CONFIGURED
+            ],
+          );
+        }
+
+        const launchSession =
+          await this.launchSessionService.createOrReplaceActiveSession({
+            merchantId: merchant.merchantId,
+            userId: user.id,
+            account,
+            playerId: normalizedPlayerId,
+            merchantAccessToken: normalizedMerchantAccessToken,
+            currency: merchant.currency,
+          });
+        launchSessionId = launchSession.id;
+        launchMode = 'callback';
       }
 
       const payload = {
         sub: user.id,
-        account: user.merchantAccount,
+        account: user.merchantAccount ?? account,
         merchantId: merchant.merchantId,
+        launchSessionId,
+        launchMode,
         type: 'user' as const,
       };
 
@@ -634,7 +825,9 @@ export class IntegrationService {
     ) {
       return IntegrationResponseDto.error(
         IntegrationErrorCodes.INVALID_BET_AMOUNT_LIMIT,
-        IntegrationErrorMessages[IntegrationErrorCodes.INVALID_BET_AMOUNT_LIMIT],
+        IntegrationErrorMessages[
+          IntegrationErrorCodes.INVALID_BET_AMOUNT_LIMIT
+        ],
       );
     }
 
@@ -688,6 +881,51 @@ export class IntegrationService {
       return '';
     }
     return String(value);
+  }
+
+  private hasAnyLaunchBetLimits(betLimits: LaunchBetLimitsDto): boolean {
+    return (
+      Object.keys(LAUNCH_BET_LIMIT_RULE_KEY_MAP) as Array<
+        keyof LaunchBetLimitsDto
+      >
+    ).some((key) => {
+      const value = betLimits[key];
+      return value !== undefined;
+    });
+  }
+
+  private applyLaunchBetLimits(
+    source: DigitBetAmountLimits,
+    betLimits: LaunchBetLimitsDto,
+  ): DigitBetAmountLimits {
+    const next = this.cloneDigitBetAmountLimits(source);
+
+    for (const [launchKey, digitRuleKey] of Object.entries(
+      LAUNCH_BET_LIMIT_RULE_KEY_MAP,
+    ) as Array<[keyof LaunchBetLimitsDto, keyof DigitBetAmountLimits]>) {
+      const raw = betLimits[launchKey];
+      if (raw === undefined) {
+        continue;
+      }
+      const value = Number(raw);
+      if (!Number.isFinite(value) || value < 0) {
+        throw new Error('Invalid launch betLimits');
+      }
+      next[digitRuleKey] = {
+        minBetAmount: source[digitRuleKey].minBetAmount,
+        maxBetAmount: Math.max(source[digitRuleKey].minBetAmount, value),
+      };
+    }
+
+    return next;
+  }
+
+  private resolveMaxBetAmount(limits: DigitBetAmountLimits): number {
+    let maxBetAmount = 0;
+    for (const key of DIGIT_BET_LIMIT_RULE_KEYS) {
+      maxBetAmount = Math.max(maxBetAmount, limits[key].maxBetAmount);
+    }
+    return maxBetAmount;
   }
 
   private isRecord(value: unknown): value is Record<string, unknown> {
@@ -785,7 +1023,8 @@ export class IntegrationService {
     return (
       message.includes('minbetamount') ||
       message.includes('maxbetamount') ||
-      message.includes('digitbetamountlimits')
+      message.includes('digitbetamountlimits') ||
+      message.includes('launch betlimits')
     );
   }
 

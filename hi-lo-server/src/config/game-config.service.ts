@@ -85,7 +85,9 @@ export class GameConfigService {
     return buildDefaultGameConfig();
   }
 
-  async getActiveConfig(merchantId?: string | null): Promise<GameConfigSnapshot> {
+  async getActiveConfig(
+    merchantId?: string | null,
+  ): Promise<GameConfigSnapshot> {
     const now = Date.now();
 
     // If merchantId is provided, get merchant-specific config
@@ -101,7 +103,10 @@ export class GameConfigService {
 
       if (record) {
         const config = this.fromRecord(record);
-        this.merchantCache.set(merchantId, { value: config, expiresAt: now + this.cacheTtlMs });
+        this.merchantCache.set(merchantId, {
+          value: config,
+          expiresAt: now + this.cacheTtlMs,
+        });
         return config;
       }
 
@@ -122,7 +127,9 @@ export class GameConfigService {
     return config;
   }
 
-  async getMerchantConfig(merchantId: string): Promise<GameConfigSnapshot | null> {
+  async getMerchantConfig(
+    merchantId: string,
+  ): Promise<GameConfigSnapshot | null> {
     const record = await this.prisma.gameConfig.findUnique({
       where: { merchantId },
     });
@@ -140,7 +147,9 @@ export class GameConfigService {
     return this.getDefaultConfig().configVersion ?? 'default';
   }
 
-  async listMerchantConfigs(): Promise<Array<{ merchantId: string | null; updatedAt: Date }>> {
+  async listMerchantConfigs(): Promise<
+    Array<{ merchantId: string | null; updatedAt: Date }>
+  > {
     const records = await this.prisma.gameConfig.findMany({
       select: { merchantId: true, updatedAt: true },
       orderBy: { updatedAt: 'desc' },
@@ -148,7 +157,9 @@ export class GameConfigService {
     return records;
   }
 
-  async getMerchantConfigSnapshots(): Promise<Record<string, GameConfigSnapshot>> {
+  async getMerchantConfigSnapshots(): Promise<
+    Record<string, GameConfigSnapshot>
+  > {
     const records = await this.prisma.gameConfig.findMany({
       where: { merchantId: { not: null } },
       orderBy: { updatedAt: 'desc' },
@@ -235,7 +246,10 @@ export class GameConfigService {
     };
   }
 
-  async updateFromInput(input: GameConfigInput, merchantId?: string | null): Promise<GameConfigSnapshot> {
+  async updateFromInput(
+    input: GameConfigInput,
+    merchantId?: string | null,
+  ): Promise<GameConfigSnapshot> {
     const current = await this.getActiveConfig(merchantId ?? null);
     const digitPayouts = this.parseDigitPayouts(input.digitPayouts);
     const digitBonusRatios = this.parseDigitBonusRatios(input.digitBonusRatios);
@@ -297,7 +311,10 @@ export class GameConfigService {
     return this.updateConfig(config, merchantId);
   }
 
-  async updateConfig(config: GameConfigSnapshot, merchantId?: string | null): Promise<GameConfigSnapshot> {
+  async updateConfig(
+    config: GameConfigSnapshot,
+    merchantId?: string | null,
+  ): Promise<GameConfigSnapshot> {
     const data = this.toRecordData(config);
 
     let saved;
@@ -322,7 +339,9 @@ export class GameConfigService {
             where: { id: existing.id },
             data,
           })
-        : await this.prisma.gameConfig.create({ data: { ...data, merchantId: null } });
+        : await this.prisma.gameConfig.create({
+            data: { ...data, merchantId: null },
+          });
 
       // Invalidate global cache
       this.cache = null;
@@ -331,7 +350,10 @@ export class GameConfigService {
     const next = this.fromRecord(saved);
 
     if (merchantId) {
-      this.merchantCache.set(merchantId, { value: next, expiresAt: Date.now() + this.cacheTtlMs });
+      this.merchantCache.set(merchantId, {
+        value: next,
+        expiresAt: Date.now() + this.cacheTtlMs,
+      });
     } else {
       this.cache = { value: next, expiresAt: Date.now() + this.cacheTtlMs };
     }
@@ -339,8 +361,11 @@ export class GameConfigService {
     return next;
   }
 
-  async copyConfigToMerchant(merchantId: string, sourceConfig?: GameConfigSnapshot): Promise<GameConfigSnapshot> {
-    const config = sourceConfig ?? await this.getActiveConfig();
+  async copyConfigToMerchant(
+    merchantId: string,
+    sourceConfig?: GameConfigSnapshot,
+  ): Promise<GameConfigSnapshot> {
+    const config = sourceConfig ?? (await this.getActiveConfig());
     return this.updateConfig(config, merchantId);
   }
 
@@ -370,7 +395,9 @@ export class GameConfigService {
     for (const key of DIGIT_BET_LIMIT_RULE_KEYS) {
       const ruleLimit = config.digitBetAmountLimits[key];
       if (!ruleLimit) {
-        throw new BadRequestException(`digitBetAmountLimits.${key} is required`);
+        throw new BadRequestException(
+          `digitBetAmountLimits.${key} is required`,
+        );
       }
       if (
         !Number.isFinite(ruleLimit.minBetAmount) ||
@@ -395,9 +422,7 @@ export class GameConfigService {
       throw new BadRequestException('tokenValues must contain 7 entries');
     }
     if (
-      config.tokenValues.some(
-        (value) => !Number.isFinite(value) || value <= 0,
-      )
+      config.tokenValues.some((value) => !Number.isFinite(value) || value <= 0)
     ) {
       throw new BadRequestException('tokenValues must be > 0');
     }
@@ -525,9 +550,18 @@ export class GameConfigService {
 
     const doubleBase = requireNumber(raw.double, 'digitPayouts.double');
     const tripleBase = requireNumber(raw.triple, 'digitPayouts.triple');
-    const singleBase = requireNumber(singleRaw.single, 'digitPayouts.single.single');
-    const singleDouble = requireNumber(singleRaw.double, 'digitPayouts.single.double');
-    const singleTriple = requireNumber(singleRaw.triple, 'digitPayouts.single.triple');
+    const singleBase = requireNumber(
+      singleRaw.single,
+      'digitPayouts.single.single',
+    );
+    const singleDouble = requireNumber(
+      singleRaw.double,
+      'digitPayouts.single.double',
+    );
+    const singleTriple = requireNumber(
+      singleRaw.triple,
+      'digitPayouts.single.triple',
+    );
 
     const bySlot = this.parseSlotPayouts(raw.bySlot, defaults.bySlot, raw);
     this.normalizeSingleSlotPayouts(bySlot, singleBase);
@@ -744,9 +778,7 @@ export class GameConfigService {
     };
   }
 
-  private cloneSlotPayoutMeta(
-    source: Record<string, SlotPayoutMetaEntry>,
-  ) {
+  private cloneSlotPayoutMeta(source: Record<string, SlotPayoutMetaEntry>) {
     const result: Record<string, SlotPayoutMetaEntry> = {};
     for (const [key, entry] of Object.entries(source)) {
       result[key] = { ...entry };
@@ -821,10 +853,19 @@ export class GameConfigService {
       return this.getDefaultConfig().bonusModeEnabled;
     }
     if (raw.bonusModeEnabled !== undefined) {
-      return this.parseBonusModeEnabled(raw.bonusModeEnabled, this.getDefaultConfig().bonusModeEnabled);
+      return this.parseBonusModeEnabled(
+        raw.bonusModeEnabled,
+        this.getDefaultConfig().bonusModeEnabled,
+      );
     }
-    if (isRecord(raw.digitPayouts) && raw.digitPayouts.bonusModeEnabled !== undefined) {
-      return this.parseBonusModeEnabled(raw.digitPayouts.bonusModeEnabled, this.getDefaultConfig().bonusModeEnabled);
+    if (
+      isRecord(raw.digitPayouts) &&
+      raw.digitPayouts.bonusModeEnabled !== undefined
+    ) {
+      return this.parseBonusModeEnabled(
+        raw.digitPayouts.bonusModeEnabled,
+        this.getDefaultConfig().bonusModeEnabled,
+      );
     }
     return this.getDefaultConfig().bonusModeEnabled;
   }
@@ -836,7 +877,10 @@ export class GameConfigService {
     if (raw.tokenValues !== undefined) {
       return raw.tokenValues;
     }
-    if (isRecord(raw.digitPayouts) && raw.digitPayouts.tokenValues !== undefined) {
+    if (
+      isRecord(raw.digitPayouts) &&
+      raw.digitPayouts.tokenValues !== undefined
+    ) {
       return raw.digitPayouts.tokenValues;
     }
     return undefined;
@@ -868,7 +912,9 @@ export class GameConfigService {
       return fallback.slice();
     }
     if (!Array.isArray(raw) || raw.length !== fallback.length) {
-      throw new BadRequestException('tokenValues must be an array of 7 numbers');
+      throw new BadRequestException(
+        'tokenValues must be an array of 7 numbers',
+      );
     }
     const values = raw.map((entry) => requireNumber(entry, 'tokenValues'));
     if (values.some((value) => value <= 0)) {

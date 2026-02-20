@@ -58,8 +58,10 @@ export class GameConfigController {
       targetMerchantId = requesterMerchantId;
     }
 
-    const config = await this.gameConfigService.getActiveConfig(targetMerchantId);
-    const runtimeVersion = await this.gameConfigService.getRuntimeConfigVersionTag();
+    const config =
+      await this.gameConfigService.getActiveConfig(targetMerchantId);
+    const runtimeVersion =
+      await this.gameConfigService.getRuntimeConfigVersionTag();
     return this.buildResponse(
       {
         ...config,
@@ -102,7 +104,8 @@ export class GameConfigController {
       dto,
       targetMerchantId,
     );
-    const runtimeVersion = await this.gameConfigService.getRuntimeConfigVersionTag();
+    const runtimeVersion =
+      await this.gameConfigService.getRuntimeConfigVersionTag();
     return this.buildResponse(
       {
         ...config,
@@ -116,7 +119,9 @@ export class GameConfigController {
   @Get('game/merchants')
   async listMerchantConfigs(
     @Req()
-    request?: { adminContext?: AdminContext },
+    request?: {
+      adminContext?: AdminContext;
+    },
   ) {
     const adminContext = request?.adminContext;
     if (adminContext && !adminContext.isSuperAdmin) {
@@ -137,56 +142,62 @@ export class GameConfigController {
       throw new ForbiddenException('Delete config is restricted');
     }
     await this.gameConfigService.deleteConfigForMerchant(merchantId);
-    return { success: true, message: `Config for merchant ${merchantId} deleted` };
+    return {
+      success: true,
+      message: `Config for merchant ${merchantId} deleted`,
+    };
   }
 
-  private buildResponse(config: {
-    configVersion?: string;
-    bettingDurationMs: number;
-    resultDurationMs: number;
-    resultDisplayDurationMs: number;
-    minBetAmount: number;
-    maxBetAmount: number;
-    digitBetAmountLimits: {
-      smallBig: { minBetAmount: number; maxBetAmount: number };
-      oddEven: { minBetAmount: number; maxBetAmount: number };
-      double: { minBetAmount: number; maxBetAmount: number };
-      triple: { minBetAmount: number; maxBetAmount: number };
-      sum: { minBetAmount: number; maxBetAmount: number };
-      single: { minBetAmount: number; maxBetAmount: number };
-      anyTriple: { minBetAmount: number; maxBetAmount: number };
-    };
-    tokenValues: number[];
-    payoutMultiplierUp: number;
-    payoutMultiplierDown: number;
-    priceSnapshotInterval: number;
-    bonusModeEnabled: boolean;
-    bonusSlotChanceTotal: number;
-    digitPayouts: {
-      smallBigOddEven: number;
-      anyTriple: number;
-      double: number;
-      triple: number;
-      single: {
-        single: number;
+  private buildResponse(
+    config: {
+      configVersion?: string;
+      bettingDurationMs: number;
+      resultDurationMs: number;
+      resultDisplayDurationMs: number;
+      minBetAmount: number;
+      maxBetAmount: number;
+      digitBetAmountLimits: {
+        smallBig: { minBetAmount: number; maxBetAmount: number };
+        oddEven: { minBetAmount: number; maxBetAmount: number };
+        double: { minBetAmount: number; maxBetAmount: number };
+        triple: { minBetAmount: number; maxBetAmount: number };
+        sum: { minBetAmount: number; maxBetAmount: number };
+        single: { minBetAmount: number; maxBetAmount: number };
+        anyTriple: { minBetAmount: number; maxBetAmount: number };
+      };
+      tokenValues: number[];
+      payoutMultiplierUp: number;
+      payoutMultiplierDown: number;
+      priceSnapshotInterval: number;
+      bonusModeEnabled: boolean;
+      bonusSlotChanceTotal: number;
+      digitPayouts: {
+        smallBigOddEven: number;
+        anyTriple: number;
         double: number;
         triple: number;
+        single: {
+          single: number;
+          double: number;
+          triple: number;
+        };
+        sum: Record<number, number>;
+        bySlot: Record<string, number>;
+        bySlotMeta: Record<
+          string,
+          {
+            suggestWinPct: number;
+            suggestWinPctDouble: number;
+            suggestWinPctTriple: number;
+            rtpFoolProofPct: number;
+            totalCounts: number;
+          }
+        >;
       };
-      sum: Record<number, number>;
-      bySlot: Record<string, number>;
-      bySlotMeta: Record<
-        string,
-        {
-          suggestWinPct: number;
-          suggestWinPctDouble: number;
-          suggestWinPctTriple: number;
-          rtpFoolProofPct: number;
-          totalCounts: number;
-        }
-      >;
-    };
-    digitBonusRatios: Record<string, { ratios: number[]; weights: number[] }>;
-  }, merchantId: string | null) {
+      digitBonusRatios: Record<string, { ratios: number[]; weights: number[] }>;
+    },
+    merchantId: string | null,
+  ) {
     return {
       merchantId: merchantId ?? null,
       configVersion: config.configVersion ?? null,

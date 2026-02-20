@@ -51,10 +51,7 @@ export class AdminAccountsService {
     );
   }
 
-  async queryAccounts(
-    dto: QueryAdminAccountsDto,
-    scope?: AdminAccountScope,
-  ) {
+  async queryAccounts(dto: QueryAdminAccountsDto, scope?: AdminAccountScope) {
     const { page = 0, limit = 20, account, status } = dto;
 
     const where: Prisma.AdminAccountWhereInput = {};
@@ -185,7 +182,10 @@ export class AdminAccountsService {
     };
   }
 
-  async queryLoginRecords(dto: QueryLoginRecordsDto, scope?: AdminAccountScope) {
+  async queryLoginRecords(
+    dto: QueryLoginRecordsDto,
+    scope?: AdminAccountScope,
+  ) {
     const { page = 0, limit = 20, start, end, account, result } = dto;
     const startDate = parseDateOnly(start);
     const endDate = parseDateOnly(end);

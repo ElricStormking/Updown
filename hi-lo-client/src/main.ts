@@ -381,11 +381,33 @@ async function bootstrapLaunchAuthFromUrl() {
     getMerchantId();
 
   if (!merchantId) {
+    socket.disconnect();
     setStatus('Launch token missing merchant ID. Please login manually.', true);
     return;
   }
 
   try {
+    setStatus('Verifying launch with merchant...');
+    const { data: launchSession } = await api.startLaunchSession(launchToken);
+    if (!launchSession.ready) {
+      updateState({
+        token: undefined,
+        user: undefined,
+        merchantId,
+        tokenPlacements: {},
+      });
+      socket.disconnect();
+      const blockedReason = launchSession.message?.trim();
+      setStatus(
+        blockedReason
+          ? `Launch blocked: ${blockedReason}`
+          : `Launch blocked (code ${launchSession.code}).`,
+        true,
+      );
+      return;
+    }
+
+    setStatus('Launch verified. Loading game...');
     const [{ data: config }, { data: wallet }] = await Promise.all([
       api.fetchGameConfig(launchToken, merchantId),
       api.fetchWallet(launchToken),
@@ -418,13 +440,14 @@ async function bootstrapLaunchAuthFromUrl() {
     void refreshPlayerData();
     clearLaunchTokenFromUrl();
     setStatus('Authenticated. Waiting for round updates.');
-  } catch {
+  } catch (error) {
     updateState({
       token: undefined,
       user: undefined,
       tokenPlacements: {},
     });
-    setStatus('Auto-launch authentication failed. Please login manually.', true);
+    socket.disconnect();
+    setStatus(extractLaunchErrorMessage(error), true);
   }
 }
 
@@ -760,6 +783,26 @@ function extractBetErrorMessage(error: unknown): string {
   }
 
   return 'Bet rejected';
+}
+
+function extractLaunchErrorMessage(error: unknown): string {
+  if (axios.isAxiosError(error)) {
+    const data = error.response?.data as
+      | { message?: unknown; errorMessage?: unknown }
+      | undefined;
+    if (typeof data?.message === 'string' && data.message.trim()) {
+      return `Launch verification failed: ${data.message}`;
+    }
+    if (typeof data?.errorMessage === 'string' && data.errorMessage.trim()) {
+      return `Launch verification failed: ${data.errorMessage}`;
+    }
+  }
+
+  if (error instanceof Error && error.message.trim()) {
+    return `Launch verification failed: ${error.message}`;
+  }
+
+  return 'Auto-launch authentication failed. Please login manually.';
 }
 
 // Keep the TypeScript compiler happy with the unused variable in some contexts.

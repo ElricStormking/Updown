@@ -28,9 +28,16 @@ import { BetsService } from '../bets/bets.service';
 import { WalletService } from '../wallet/wallet.service';
 import { ClientReadyDto } from './dto/client-ready.dto';
 import { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
-import { RoundStatus, UserStatus } from '@prisma/client';
+import {
+  LaunchSessionOfflineStatus,
+  LaunchSessionStatus,
+  RoundStatus,
+  UserStatus,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { RoundEvent } from './interfaces/round-event.interface';
+import { LaunchSessionService } from '../integration/launch-session.service';
+import { MerchantCallbackService } from '../integration/merchant-callback.service';
 
 @Injectable()
 @WebSocketGateway({
@@ -50,6 +57,11 @@ export class GameGateway
   private readonly logger = new Logger(GameGateway.name);
   private priceSub?: Subscription;
   private roundSub?: Subscription;
+  private readonly launchSessionConnections = new Map<string, number>();
+  private readonly offlineTimers = new Map<
+    string,
+    ReturnType<typeof setTimeout>
+  >();
 
   @WebSocketServer()
   private server!: Server;
@@ -62,6 +74,8 @@ export class GameGateway
     private readonly walletService: WalletService,
     private readonly jwtService: JwtService,
     private readonly prisma: PrismaService,
+    private readonly launchSessionService: LaunchSessionService,
+    private readonly merchantCallbackService: MerchantCallbackService,
   ) {}
 
   onModuleInit() {
@@ -77,6 +91,10 @@ export class GameGateway
   onModuleDestroy() {
     this.priceSub?.unsubscribe();
     this.roundSub?.unsubscribe();
+    for (const timer of this.offlineTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.offlineTimers.clear();
   }
 
   async handleConnection(client: Socket) {
@@ -98,9 +116,16 @@ export class GameGateway
     }
   }
 
-  handleDisconnect(client: Socket) {
+  async handleDisconnect(client: Socket) {
     if (client.data.userId) {
-      client.leave(this.getUserRoom(client.data.userId));
+      await client.leave(this.getUserRoom(client.data.userId));
+    }
+    const launchSessionId =
+      typeof client.data.launchSessionId === 'string'
+        ? client.data.launchSessionId
+        : '';
+    if (launchSessionId) {
+      await this.handleLaunchSessionDisconnect(launchSessionId);
     }
   }
 
@@ -125,7 +150,36 @@ export class GameGateway
         throw new UnauthorizedException('Account is disabled');
       }
       if (!user.merchantId) {
-        throw new UnauthorizedException('Account is not assigned to a merchant');
+        throw new UnauthorizedException(
+          'Account is not assigned to a merchant',
+        );
+      }
+      const launchSessionId =
+        typeof payload.launchSessionId === 'string'
+          ? payload.launchSessionId.trim()
+          : '';
+      const launchMode = payload.launchMode ?? 'legacy';
+      if (launchMode === 'callback') {
+        if (!launchSessionId) {
+          throw new UnauthorizedException('Missing launch session ID');
+        }
+        const session = await this.launchSessionService.getLaunchSessionForUser(
+          launchSessionId,
+          user.id,
+          user.merchantId,
+        );
+        if (!session || session.status !== LaunchSessionStatus.ACTIVE) {
+          throw new UnauthorizedException('Launch session is not active');
+        }
+        if (session.loginStatus !== 'VERIFIED') {
+          throw new UnauthorizedException(
+            'Launch verification required. Call /integration/launch/session/start first.',
+          );
+        }
+
+        await this.launchSessionService.markOnline(launchSessionId);
+        this.incrementLaunchSessionConnection(launchSessionId);
+        client.data.launchSessionId = launchSessionId;
       }
 
       client.data.userId = user.id;
@@ -203,6 +257,80 @@ export class GameGateway
   private async verifyToken(token: string) {
     const secret = this.configService.getOrThrow<string>('auth.jwtSecret');
     return this.jwtService.verifyAsync<JwtPayload>(token, { secret });
+  }
+
+  private incrementLaunchSessionConnection(sessionId: string) {
+    const current = this.launchSessionConnections.get(sessionId) ?? 0;
+    this.launchSessionConnections.set(sessionId, current + 1);
+
+    const timer = this.offlineTimers.get(sessionId);
+    if (timer) {
+      clearTimeout(timer);
+      this.offlineTimers.delete(sessionId);
+    }
+  }
+
+  private async handleLaunchSessionDisconnect(sessionId: string) {
+    const current = this.launchSessionConnections.get(sessionId) ?? 0;
+    const next = Math.max(0, current - 1);
+    this.launchSessionConnections.set(sessionId, next);
+
+    if (next > 0) {
+      return;
+    }
+
+    await this.launchSessionService.markOfflinePending(sessionId);
+
+    const graceMs =
+      this.configService.get<number>('integration.offlineGraceMs') ?? 30000;
+    const existingTimer = this.offlineTimers.get(sessionId);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+    }
+
+    const timer = setTimeout(() => {
+      void this.triggerUpdateBalanceIfStillOffline(sessionId);
+    }, graceMs);
+    this.offlineTimers.set(sessionId, timer);
+  }
+
+  private async triggerUpdateBalanceIfStillOffline(sessionId: string) {
+    this.offlineTimers.delete(sessionId);
+
+    const connectionCount = this.launchSessionConnections.get(sessionId) ?? 0;
+    if (connectionCount > 0) {
+      return;
+    }
+
+    const session =
+      await this.launchSessionService.getLaunchSessionById(sessionId);
+    if (!session || session.status !== LaunchSessionStatus.ACTIVE) {
+      return;
+    }
+    if (session.loginStatus !== 'VERIFIED') {
+      return;
+    }
+    if (
+      session.offlineStatus === LaunchSessionOfflineStatus.CALLBACK_SENT ||
+      session.offlineStatus === LaunchSessionOfflineStatus.SETTLED
+    ) {
+      return;
+    }
+
+    const callbackResult = await this.merchantCallbackService.sendUpdateBalance(
+      session.merchant,
+      session,
+    );
+    await this.launchSessionService.markUpdateBalanceResult(
+      session.id,
+      callbackResult.success,
+    );
+
+    if (!callbackResult.success) {
+      this.logger.warn(
+        `UpdateBalance callback failed for session ${session.id}: ${callbackResult.errorMessage}`,
+      );
+    }
   }
 
   private unwrapError(error: unknown) {
