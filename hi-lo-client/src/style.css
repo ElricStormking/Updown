@@ -297,7 +297,7 @@ html {
 /* Locked layout mode (post-bonus in RESULT_PENDING): use alternate frame art */
 #game-container.locked-layout #tradingview-chart {
   height: 45%;
-  top: var(--hud-chart-top, clamp(84px, 12%, 170px));
+  top: calc(var(--hud-chart-top, clamp(84px, 12%, 170px)) - 15px);
   transform: translateX(-50%) scale(0.9);
   transform-origin: center top;
   background: url('/main_screen_UI/Line_chart_box2.png') no-repeat center / 100% 100%;

@@ -111,9 +111,12 @@ export class HiLoScene extends Phaser.Scene {
 
   private priceText?: Phaser.GameObjects.Text;
   private priceTextHighlight?: Phaser.GameObjects.Text; // Last 3 digits highlighted
+  private priceTextGlow?: Phaser.GameObjects.Text;
+  private priceTextHighlightGlow?: Phaser.GameObjects.Text;
   private priceTextDecimal?: Phaser.GameObjects.Text; // Decimal part
   private priceArrowText?: Phaser.GameObjects.Text;
   private priceLabelText?: Phaser.GameObjects.Text;
+  private priceGlowTween?: Phaser.Tweens.Tween;
   private priceTextY = 465;
   private timerText?: Phaser.GameObjects.Text;
   private sumTriangleText?: Phaser.GameObjects.Text;
@@ -128,6 +131,8 @@ export class HiLoScene extends Phaser.Scene {
   private roundText?: Phaser.GameObjects.Text;
   private statusText?: Phaser.GameObjects.Text;
   private balanceText?: Phaser.GameObjects.Text;
+  private balanceTextBaseScaleX = 1;
+  private balanceTextBaseScaleY = 1;
   private oddsLeftText?: Phaser.GameObjects.Text;
   private oddsCenterText?: Phaser.GameObjects.Text;
   private oddsRightText?: Phaser.GameObjects.Text;
@@ -194,13 +199,15 @@ export class HiLoScene extends Phaser.Scene {
   private winnerEffectsRoundId?: number;
   private winnerEffectsScheduledRoundId?: number;
 
-  private roundStartText?: Phaser.GameObjects.Text;
+  private roundStartText?: Phaser.GameObjects.Container;
   private roundStartTween?: Phaser.Tweens.Tween;
+  private roundStartFxTween?: Phaser.Tweens.Tween;
   private lastSeenRoundId?: number;
   private chartRevealTimer?: Phaser.Time.TimerEvent;
   private chartRevealExpectedStatus?: RoundStatePayload['status'];
-  private lockedBannerText?: Phaser.GameObjects.Text;
+  private lockedBannerText?: Phaser.GameObjects.Container;
   private lockedBannerTween?: Phaser.Tweens.Tween;
+  private lockedBannerFxTween?: Phaser.Tweens.Tween;
   private lockedBannerTimers: Phaser.Time.TimerEvent[] = [];
   private pendingRoundState?: RoundStatePayload;
   private pendingRoundStateTimer?: Phaser.Time.TimerEvent;
@@ -780,54 +787,135 @@ export class HiLoScene extends Phaser.Scene {
         fontStyle: 'bold',
       })
       .setOrigin(0.5);
+    this.balanceTextBaseScaleX = this.balanceText.scaleX || 1;
+    this.balanceTextBaseScaleY = this.balanceText.scaleY || 1;
 
     this.statusText = this.add
-      .text(540, 260, t(this.language, 'scene.connecting'), {
+      .text(540, 280, t(this.language, 'scene.connecting'), {
         fontFamily: 'Rajdhani',
-        fontSize: '18px',
+        fontSize: '27px',
         color: '#b2bec3',
         fontStyle: 'bold',
       })
       .setOrigin(0.5);
 
-    // Price display split into 3 parts: prefix, last 3 digits (highlighted), decimal
-    // Example: "75" + "830" + ".16" for price 75830.16
+    // Price display split into 3 parts: prefix + highlighted trailing block.
+    // Example: "7564" + "9.99" for price 75649.99
+    this.priceTextGlow = this.add
+      .text(540, this.priceTextY, '00', {
+        fontFamily: "'Oxanium', 'Rajdhani', sans-serif",
+        fontSize: '62px',
+        color: '#5cf4ff',
+        fontStyle: 'bold',
+        stroke: '#5cf4ff',
+        strokeThickness: 12,
+        shadow: {
+          offsetX: 0,
+          offsetY: 0,
+          color: 'rgba(92, 244, 255, 0.95)',
+          blur: 24,
+          fill: true,
+          stroke: true,
+        },
+      })
+      .setOrigin(1, 0.5)
+      .setAlpha(0.38)
+      .setBlendMode(Phaser.BlendModes.ADD);
+
     this.priceText = this.add
       .text(540, this.priceTextY, '00', {
-        fontFamily: 'Roboto Mono',
-        fontSize: '54px',
-        color: '#ffffff',
+        fontFamily: "'Oxanium', 'Rajdhani', sans-serif",
+        fontSize: '56px',
+        color: '#cfffff',
         fontStyle: 'bold',
+        stroke: '#04222f',
+        strokeThickness: 6,
+        shadow: {
+          offsetX: 0,
+          offsetY: 3,
+          color: 'rgba(0,0,0,0.75)',
+          blur: 8,
+          fill: true,
+        },
       })
-      .setOrigin(1, 0.5); // Right-aligned to connect with highlight
+      .setOrigin(1, 0.5);
+
+    this.priceTextHighlightGlow = this.add
+      .text(540, this.priceTextY, '0.00', {
+        fontFamily: "'Oxanium', 'Rajdhani', sans-serif",
+        fontSize: '62px',
+        color: '#ffe071',
+        fontStyle: 'bold',
+        stroke: '#ffe071',
+        strokeThickness: 12,
+        shadow: {
+          offsetX: 0,
+          offsetY: 0,
+          color: 'rgba(255, 224, 113, 1)',
+          blur: 26,
+          fill: true,
+          stroke: true,
+        },
+      })
+      .setOrigin(0, 0.5)
+      .setAlpha(0.42)
+      .setBlendMode(Phaser.BlendModes.ADD);
 
     this.priceTextHighlight = this.add
-      .text(540, this.priceTextY, '000', {
-        fontFamily: 'Roboto Mono',
-        fontSize: '54px',
-        color: '#ffffff', // Will change to highlight color during locked phase
+      .text(540, this.priceTextY, '0.00', {
+        fontFamily: "'Oxanium', 'Rajdhani', sans-serif",
+        fontSize: '56px',
+        color: '#fff5b8',
         fontStyle: 'bold',
+        stroke: '#352100',
+        strokeThickness: 6,
+        shadow: {
+          offsetX: 0,
+          offsetY: 3,
+          color: 'rgba(0,0,0,0.78)',
+          blur: 8,
+          fill: true,
+        },
       })
-      .setOrigin(0, 0.5); // Left-aligned to connect with prefix
+      .setOrigin(0, 0.5);
 
+    // Legacy placeholder kept for compatibility with older layout logic.
     this.priceTextDecimal = this.add
-      .text(540, this.priceTextY, '.00', {
-        fontFamily: 'Roboto Mono',
-        fontSize: '54px',
+      .text(540, this.priceTextY, '', {
+        fontFamily: "'Oxanium', 'Rajdhani', sans-serif",
+        fontSize: '56px',
         color: '#ffffff',
-        fontStyle: 'bold',
       })
-      .setOrigin(0, 0.5); // Left-aligned after highlight
+      .setOrigin(0, 0.5)
+      .setVisible(false);
 
     this.priceArrowText = this.add
       .text(720, this.priceTextY, '', {
-        fontFamily: 'Rajdhani',
-        fontSize: '30px',
+        fontFamily: "'Oxanium', 'Rajdhani', sans-serif",
+        fontSize: '34px',
         color: '#ffffff',
         fontStyle: 'bold',
+        stroke: '#03151f',
+        strokeThickness: 4,
+        shadow: {
+          offsetX: 0,
+          offsetY: 1,
+          color: 'rgba(0,0,0,0.7)',
+          blur: 5,
+          fill: true,
+        },
       })
       .setOrigin(0.5)
       .setAlpha(0);
+
+    this.priceGlowTween = this.tweens.add({
+      targets: [this.priceTextGlow, this.priceTextHighlightGlow],
+      alpha: { from: 0.28, to: 0.62 },
+      duration: 420,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
 
     // Create three separate digit text objects for each frame
     this.roundDigitsLeftText = this.add
@@ -2322,9 +2410,11 @@ export class HiLoScene extends Phaser.Scene {
     const highlight = `${lastDigit}.${decPart}`; // e.g., "9.99"
     
     // Update text content
+    this.priceTextGlow?.setText(prefix);
     this.priceText?.setText(prefix);
+    this.priceTextHighlightGlow?.setText(highlight);
     this.priceTextHighlight?.setText(highlight);
-    this.priceTextDecimal?.setText(''); // Not used anymore
+    this.priceTextDecimal?.setText('');
     
     // Position the text elements to form continuous price display
     const centerX = 540;
@@ -2333,24 +2423,36 @@ export class HiLoScene extends Phaser.Scene {
     const totalWidth = prefixWidth + highlightWidth;
     
     const startX = centerX - totalWidth / 2;
+    // Slight overlap prevents any seam between the split text segments.
+    const joinX = startX + prefixWidth - 1;
+    this.priceTextGlow?.setX(startX + prefixWidth);
     this.priceText?.setX(startX + prefixWidth);
-    this.priceTextHighlight?.setX(startX + prefixWidth);
+    this.priceTextHighlightGlow?.setX(joinX);
+    this.priceTextHighlight?.setX(joinX);
+
+    const isUp = previous === undefined ? true : update.price >= previous;
+    const trendColor = isUp ? '#7af8ff' : '#ff9aad';
+    const trendGlowColor = isUp ? '#2ceaff' : '#ff5f83';
+    const accentColor = this.isLockedLayoutMode
+      ? '#ffe66d'
+      : isUp
+        ? '#fff6c8'
+        : '#ffe3ea';
+    const accentGlowColor = this.isLockedLayoutMode
+      ? '#ffd13d'
+      : isUp
+        ? '#ffe78a'
+        : '#ff91ae';
+
+    this.priceText?.setColor(trendColor);
+    this.priceTextHighlight?.setColor(accentColor);
+    this.priceTextGlow?.setColor(trendGlowColor).setStroke(trendGlowColor, 12);
+    this.priceTextHighlightGlow?.setColor(accentGlowColor).setStroke(accentGlowColor, 12);
 
     if (previous !== undefined && this.priceArrowText) {
-      const isUp = update.price >= previous;
-      const baseColor = isUp ? '#00ffb2' : '#ff7675';
+      const baseColor = isUp ? '#3effcb' : '#ff6f96';
       const arrow = isUp ? '\u25B2' : '\u25BC';
       const offset = isUp ? -6 : 6;
-
-      // Set colors - highlight last 3 digits during locked/result phase
-      this.priceText?.setColor(baseColor);
-      
-      // Highlight color for last 3 digits (1 digit + decimal + 2 digits) during locked phase
-      if (this.isLockedLayoutMode) {
-        this.priceTextHighlight?.setColor('#ffff00'); // Bright yellow highlight
-      } else {
-        this.priceTextHighlight?.setColor(baseColor);
-      }
       
       this.priceArrowText.setText(arrow).setColor(baseColor).setAlpha(1);
 
@@ -2364,6 +2466,9 @@ export class HiLoScene extends Phaser.Scene {
         yoyo: true,
         ease: 'Sine.easeInOut',
       });
+    } else if (this.priceArrowText) {
+      this.tweens.killTweensOf(this.priceArrowText);
+      this.priceArrowText.setText('').setAlpha(0);
     }
   }
 
@@ -3086,19 +3191,37 @@ export class HiLoScene extends Phaser.Scene {
     // Arrival effects (once per round, not per slot)
     const arrivalDelay = 650;
 
-    // Pulse balance text when coins land
+    // Balance hit feedback: pulse scale, then always restore original size.
     if (this.balanceText) {
       const balRef = this.balanceText;
       this.time.delayedCall(arrivalDelay, () => {
         if (!balRef.scene) return;
+        const baseScaleX = this.balanceTextBaseScaleX;
+        const baseScaleY = this.balanceTextBaseScaleY;
+        this.tweens.killTweensOf(balRef);
+        balRef.setScale(baseScaleX, baseScaleY);
+        balRef.setColor('#00ffb2');
+        balRef.setAlpha(1);
         this.tweens.add({
           targets: balRef,
-          scaleX: 1.3,
-          scaleY: 1.3,
+          scaleX: baseScaleX * 1.3,
+          scaleY: baseScaleY * 1.3,
           duration: 90,
           yoyo: true,
           repeat: 3,
           ease: 'Sine.easeInOut',
+          onStop: () => {
+            if (!balRef.scene) return;
+            balRef.setScale(baseScaleX, baseScaleY);
+            balRef.setColor('#00ffb2');
+            balRef.setAlpha(1);
+          },
+          onComplete: () => {
+            if (!balRef.scene) return;
+            balRef.setScale(baseScaleX, baseScaleY);
+            balRef.setColor('#00ffb2');
+            balRef.setAlpha(1);
+          },
         });
       });
     }
@@ -3188,61 +3311,146 @@ export class HiLoScene extends Phaser.Scene {
     });
   }
 
-  private showRoundStartBanner() {
-    // Clean up any existing banner
+  private buildSystemBanner(
+    cx: number,
+    cy: number,
+    message: string,
+    coreColor: string,
+    glowColor: string,
+  ): {
+    banner: Phaser.GameObjects.Container;
+    fxTween: Phaser.Tweens.Tween;
+  } {
+    const bannerWidth = Math.max(430, message.length * 52);
+    const frameColor = Phaser.Display.Color.HexStringToColor(glowColor).color;
+    const banner = this.add
+      .container(cx, cy)
+      .setDepth(200)
+      .setScrollFactor(0)
+      .setScale(0.28)
+      .setAlpha(0);
+
+    const backplate = this.add.rectangle(0, 8, bannerWidth, 104, 0x020912, 0.34);
+    backplate.setStrokeStyle(2, frameColor, 0.58);
+
+    const glow = this.add
+      .text(0, 0, message, {
+        fontFamily: "'Oxanium', 'Rajdhani', sans-serif",
+        fontSize: '102px',
+        color: glowColor,
+        fontStyle: '900',
+        stroke: glowColor,
+        strokeThickness: 14,
+        shadow: {
+          offsetX: 0,
+          offsetY: 0,
+          color: glowColor,
+          blur: 26,
+          fill: true,
+          stroke: true,
+        },
+      })
+      .setOrigin(0.5)
+      .setAlpha(0.3)
+      .setBlendMode(Phaser.BlendModes.ADD);
+
+    const core = this.add
+      .text(0, 0, message, {
+        fontFamily: "'Oxanium', 'Rajdhani', sans-serif",
+        fontSize: '92px',
+        color: coreColor,
+        fontStyle: '900',
+        stroke: '#130f06',
+        strokeThickness: 7,
+        shadow: {
+          offsetX: 0,
+          offsetY: 4,
+          color: 'rgba(0,0,0,0.7)',
+          blur: 10,
+          fill: true,
+        },
+      })
+      .setOrigin(0.5);
+
+    const sheen = this.add
+      .text(0, -3, message, {
+        fontFamily: "'Oxanium', 'Rajdhani', sans-serif",
+        fontSize: '92px',
+        color: '#fff7d8',
+        fontStyle: '900',
+        stroke: '#3b2500',
+        strokeThickness: 2,
+        shadow: {
+          offsetX: 0,
+          offsetY: 0,
+          color: 'rgba(255,255,255,0.45)',
+          blur: 6,
+          fill: true,
+        },
+      })
+      .setOrigin(0.5)
+      .setAlpha(0.2);
+
+    banner.add([backplate, glow, core, sheen]);
+
+    const fxTween = this.tweens.add({
+      targets: [glow, sheen],
+      alpha: { from: 0.2, to: 0.68 },
+      duration: 300,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+
+    return { banner, fxTween };
+  }
+
+  private clearRoundStartBanner() {
     if (this.roundStartTween) {
       this.roundStartTween.stop();
       this.roundStartTween = undefined;
+    }
+    if (this.roundStartFxTween) {
+      this.roundStartFxTween.stop();
+      this.roundStartFxTween = undefined;
     }
     if (this.roundStartText) {
       this.roundStartText.destroy();
       this.roundStartText = undefined;
     }
+  }
+
+  private showRoundStartBanner() {
+    this.clearRoundStartBanner();
 
     const cx = this.scale.width / 2;
-    const cy = this.scale.height / 2/3;
+    const cy = this.scale.height / 2 / 3;
+    const { banner, fxTween } = this.buildSystemBanner(
+      cx,
+      cy,
+      'Round Start!',
+      '#d9ffe8',
+      '#00e6a8',
+    );
+    this.roundStartText = banner;
+    this.roundStartFxTween = fxTween;
 
-    this.roundStartText = this.add
-      .text(cx, cy, 'Round Start!', {
-        fontFamily: 'Rajdhani',
-        fontSize: '92px',
-        color: '#00ffb2',
-        fontStyle: 'bold',
-        stroke: '#003311',
-        strokeThickness: 6,
-        shadow: {
-          offsetX: 0,
-          offsetY: 4,
-          color: 'rgba(0,0,0,0.6)',
-          blur: 12,
-          fill: true,
-        },
-      })
-      .setOrigin(0.5)
-      .setDepth(200)
-      .setScrollFactor(0)
-      .setScale(0.3)
-      .setAlpha(0);
-
-    // Scale-in & fade-in, hold, then fade-out
     this.tweens.add({
       targets: this.roundStartText,
       scale: 1,
       alpha: 1,
-      duration: 250,
+      duration: 280,
       ease: 'Back.Out',
       onComplete: () => {
         this.roundStartTween = this.tweens.add({
           targets: this.roundStartText,
           alpha: 0,
-          scale: 1.15,
-          delay: 550,
-          duration: 200,
+          scale: 1.16,
+          delay: 620,
+          duration: 220,
           ease: 'Sine.easeIn',
           onComplete: () => {
-            this.roundStartText?.destroy();
-            this.roundStartText = undefined;
-            this.roundStartTween = undefined;
+            this.clearRoundStartBanner();
           },
         });
       },
@@ -3255,6 +3463,10 @@ export class HiLoScene extends Phaser.Scene {
     if (this.lockedBannerTween) {
       this.lockedBannerTween.stop();
       this.lockedBannerTween = undefined;
+    }
+    if (this.lockedBannerFxTween) {
+      this.lockedBannerFxTween.stop();
+      this.lockedBannerFxTween = undefined;
     }
     if (this.lockedBannerText) {
       this.lockedBannerText.destroy();
@@ -3286,38 +3498,37 @@ export class HiLoScene extends Phaser.Scene {
       this.lockedBannerTween.stop();
       this.lockedBannerTween = undefined;
     }
+    if (this.lockedBannerFxTween) {
+      this.lockedBannerFxTween.stop();
+      this.lockedBannerFxTween = undefined;
+    }
     if (this.lockedBannerText) {
       this.lockedBannerText.destroy();
       this.lockedBannerText = undefined;
     }
 
     const cx = this.scale.width / 2;
-    const cy = this.scale.height / 2/3;
+    const cy = this.scale.height / 2 / 3;
     const introDuration = Math.min(250, Math.max(120, Math.floor(totalMs * 0.25)));
     const outroDuration = Math.min(200, Math.max(120, Math.floor(totalMs * 0.2)));
     const holdDuration = Math.max(0, totalMs - introDuration - outroDuration);
+    const normalizedColor = color.toLowerCase();
+    const coreColor =
+      normalizedColor === '#ffd166'
+        ? '#fff1bf'
+        : normalizedColor === '#00d2ff'
+          ? '#d7f8ff'
+          : '#eafff3';
 
-    this.lockedBannerText = this.add
-      .text(cx, cy, message, {
-        fontFamily: 'Rajdhani',
-        fontSize: '92px',
-        color,
-        fontStyle: 'bold',
-        stroke: '#003311',
-        strokeThickness: 6,
-        shadow: {
-          offsetX: 0,
-          offsetY: 4,
-          color: 'rgba(0,0,0,0.6)',
-          blur: 12,
-          fill: true,
-        },
-      })
-      .setOrigin(0.5)
-      .setDepth(200)
-      .setScrollFactor(0)
-      .setScale(0.3)
-      .setAlpha(0);
+    const { banner, fxTween } = this.buildSystemBanner(
+      cx,
+      cy,
+      message,
+      coreColor,
+      color,
+    );
+    this.lockedBannerText = banner;
+    this.lockedBannerFxTween = fxTween;
 
     this.lockedBannerTween = this.tweens.add({
       targets: this.lockedBannerText,
@@ -3334,6 +3545,10 @@ export class HiLoScene extends Phaser.Scene {
           duration: outroDuration,
           ease: 'Sine.easeIn',
           onComplete: () => {
+            if (this.lockedBannerFxTween) {
+              this.lockedBannerFxTween.stop();
+              this.lockedBannerFxTween = undefined;
+            }
             this.lockedBannerText?.destroy();
             this.lockedBannerText = undefined;
             this.lockedBannerTween = undefined;
@@ -3352,6 +3567,7 @@ export class HiLoScene extends Phaser.Scene {
     const height = this.scale.height;
 
     this.clearResultOverlay();
+    this.sumTriangleText?.setVisible(false);
 
     let color = 0xb2bec3;
     let titleStr = t(this.language, 'scene.roundResult');
@@ -3496,11 +3712,20 @@ export class HiLoScene extends Phaser.Scene {
   }
 
   private setPriceDisplayVisible(visible: boolean) {
+    this.priceTextGlow?.setVisible(visible);
     this.priceText?.setVisible(visible);
+    this.priceTextHighlightGlow?.setVisible(visible);
     this.priceTextHighlight?.setVisible(visible);
     this.priceTextDecimal?.setVisible(visible);
     this.priceArrowText?.setVisible(visible);
     this.priceLabelText?.setVisible(visible);
+    if (this.priceGlowTween) {
+      if (visible) {
+        this.priceGlowTween.resume();
+      } else {
+        this.priceGlowTween.pause();
+      }
+    }
     if (!visible && this.priceArrowText) {
       this.tweens.killTweensOf(this.priceArrowText);
       this.priceArrowText.setAlpha(0);
@@ -3716,7 +3941,8 @@ export class HiLoScene extends Phaser.Scene {
           this.boxTotalSprite = undefined;
         }
         this.setTopDigitDisplayVisible(true);
-        if (this.sumTriangleText && this.lastSumTriangleValue !== null) {
+        // Never re-show SUM while the result overlay card is visible.
+        if (!this.resultOverlay && this.sumTriangleText && this.lastSumTriangleValue !== null) {
           this.sumTriangleText.setText(this.lastSumTriangleValue);
           this.sumTriangleText.setVisible(true);
         }

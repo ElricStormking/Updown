@@ -16,7 +16,11 @@ const WINDOW_SECONDS = 1 * 20; // 10 minutes
 const PRICE_LABEL_INTERVAL = 1; // dollars
 const MIN_PRICE_RANGE = PRICE_LABEL_INTERVAL * 5; // 5 dollars - smaller range makes price changes more visible
 const BARS_PER_SECOND = 2; // We plot at 2Hz (every 0.5s).
-const RIGHT_OFFSET_BARS = Math.round(WINDOW_SECONDS * BARS_PER_SECOND * 0.5);
+const WINDOW_BARS = Math.max(10, Math.round(WINDOW_SECONDS * BARS_PER_SECOND));
+const ENDPOINT_X_RATIO = 0.88;
+const RIGHT_LOOKAHEAD_BARS = WINDOW_BARS * (1 - ENDPOINT_X_RATIO);
+const LEFT_VISIBLE_BARS = WINDOW_BARS - RIGHT_LOOKAHEAD_BARS;
+const RANGE_ENFORCE_INTERVAL_MS = 500;
 
 let chart: IChartApi | null = null;
 let series: ISeriesApi<'Line'> | null = null;
@@ -26,10 +30,10 @@ let points: Array<{ time: UTCTimestamp; value: number }> = [];
 let lockedPrice: number | null = null;
 let roundLockSec: number | null = null;
 let roundEndSec: number | null = null;
-let lockedBadgeEl: HTMLDivElement | null = null;
 let sonarDotEl: HTMLDivElement | null = null;
 let priceUpdatesFrozen = false;
 let currentSonarUrgent = false;
+let rangeEnforcerIntervalId: number | null = null;
 
 function getContainer() {
   const el = document.getElementById(CONTAINER_ID);
@@ -42,6 +46,8 @@ function getContainer() {
 function ensureChart() {
   const container = getContainer();
   if (chart && series) {
+    ensureRangeEnforcer();
+    refreshViewportAnchor();
     return;
   }
 
@@ -52,25 +58,6 @@ function ensureChart() {
       container.style.position = 'relative';
     }
   }
-
-  lockedBadgeEl = document.createElement('div');
-  lockedBadgeEl.style.position = 'absolute';
-  lockedBadgeEl.style.top = '10px';
-  lockedBadgeEl.style.right = '10px';
-  lockedBadgeEl.style.zIndex = '10';
-  lockedBadgeEl.style.pointerEvents = 'none';
-  lockedBadgeEl.style.padding = '6px 10px';
-  lockedBadgeEl.style.borderRadius = '999px';
-  lockedBadgeEl.style.fontFamily =
-    'Rajdhani, system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
-  lockedBadgeEl.style.fontWeight = '700';
-  lockedBadgeEl.style.fontSize = '14px';
-  lockedBadgeEl.style.letterSpacing = '0.06em';
-  lockedBadgeEl.style.color = '#0b1b2a';
-  lockedBadgeEl.style.background = '#ff9f1a';
-  lockedBadgeEl.style.boxShadow = '0 8px 18px rgba(0,0,0,0.35)';
-  lockedBadgeEl.style.display = 'none';
-  container.appendChild(lockedBadgeEl);
 
   // Create sonar/pulse dot for the line end point
   sonarDotEl = document.createElement('div');
@@ -188,9 +175,10 @@ function ensureChart() {
       borderVisible: false,
       timeVisible: true,
       secondsVisible: false,
-      rightOffset: RIGHT_OFFSET_BARS,
-      fixLeftEdge: true,
-      fixRightEdge: true,
+      rightOffset: 0,
+      lockVisibleTimeRangeOnResize: true,
+      fixLeftEdge: false,
+      fixRightEdge: false,
       tickMarkFormatter: (time: Time) => {
         // Show labels every 10 minutes on the X axis.
         if (typeof time !== 'number') return null;
@@ -218,40 +206,41 @@ function ensureChart() {
   // We'll control the visible price range manually to keep the scale tight.
   chart.priceScale('right').setAutoScale(false);
 
-  // If we already have a lock signal (set before the chart initialized), show it now.
-  if (lockedPrice !== null) {
-    void setLockedPrice(lockedPrice);
-  }
+  ensureRangeEnforcer();
 }
 
-function getRightEdgeSec(nowSec: number) {
-  if (lockedPrice !== null && roundEndSec !== null) {
-    // Keep a future-anchored right edge during LOCKED, but never so far
-    // ahead that the whole visible window contains no plotted data.
-    const maxSafeRightEdge = nowSec + WINDOW_SECONDS;
-    const pinnedRightEdge = Math.min(roundEndSec, maxSafeRightEdge);
-    return Math.max(nowSec, pinnedRightEdge);
+function ensureRangeEnforcer() {
+  if (typeof window === 'undefined' || rangeEnforcerIntervalId !== null) {
+    return;
   }
-  return nowSec;
+  rangeEnforcerIntervalId = window.setInterval(() => {
+    refreshViewportAnchor();
+  }, RANGE_ENFORCE_INTERVAL_MS);
+}
+
+function refreshViewportAnchor() {
+  if (lastPlottedTime === null) return;
+  renderRange();
+  if (lastPlottedPrice !== null) {
+    updateSonarPosition(lastPlottedTime, lastPlottedPrice);
+  }
 }
 
 function prune(nowSec: number) {
-  const rightEdge = getRightEdgeSec(nowSec);
-  const minSec = rightEdge - WINDOW_SECONDS;
+  const minSec = nowSec - WINDOW_SECONDS;
   points = points.filter((p) => Number(p.time) >= minSec);
 }
 
-function renderRange(nowSec: number) {
-  if (!chart || !Number.isFinite(nowSec)) return;
-  const rightEdge = getRightEdgeSec(nowSec);
-  if (!Number.isFinite(rightEdge)) return;
-  const from = (rightEdge - WINDOW_SECONDS) as UTCTimestamp;
-  const to = rightEdge as UTCTimestamp;
+function renderRange() {
+  if (!chart || points.length === 0) return;
+  const latestLogical = points.length - 1;
+  const from = latestLogical - LEFT_VISIBLE_BARS;
+  const to = latestLogical + RIGHT_LOOKAHEAD_BARS;
   if (!Number.isFinite(from) || !Number.isFinite(to) || from >= to) {
     return;
   }
   try {
-    chart.timeScale().setVisibleRange({ from, to });
+    chart.timeScale().setVisibleLogicalRange({ from, to });
   } catch {
     // Ignore transient chart range errors; next tick will re-render.
   }
@@ -322,23 +311,10 @@ export function setRoundTiming(lockTimeIso: string, endTimeIso: string) {
   }
 }
 
-// Show/hide the locked badge during the locked phase.
+// Keep lock state for phase orchestration; UI badge is intentionally removed.
 export function setLockedPrice(nextLockedPrice: number | null) {
   lockedPrice = typeof nextLockedPrice === 'number' ? nextLockedPrice : null;
   ensureChart();
-  if (!series || !chart) return;
-
-  if (lockedPrice === null) {
-    if (lockedBadgeEl) {
-      lockedBadgeEl.style.display = 'none';
-    }
-    return;
-  }
-
-  if (lockedBadgeEl) {
-    lockedBadgeEl.textContent = 'LOCKED';
-    lockedBadgeEl.style.display = 'block';
-  }
 }
 
 export function setPriceFreeze(
@@ -424,7 +400,7 @@ function applyPriceUpdate(update: PriceUpdate, force = false) {
     lastPlottedPrice = price;
     points = [{ time: t as UTCTimestamp, value: price }];
     series.setData(points);
-    renderRange(t);
+    renderRange();
     updatePriceScaleRange(price);
     updateSonarPosition(t, price);
     return;
@@ -448,7 +424,7 @@ function applyPriceUpdate(update: PriceUpdate, force = false) {
 
   prune(t);
   series.setData(points);
-  renderRange(t);
+  renderRange();
   updatePriceScaleRange(price);
   updateSonarPosition(t, price);
 }

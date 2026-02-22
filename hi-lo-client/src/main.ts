@@ -561,10 +561,10 @@ async function handlePlaceDigitBet(selection: {
     throw new Error('Waiting for next round to begin.');
   }
   if (state.currentRound.status !== 'BETTING') {
-    throw new Error('Not Betting Phase');
+    throw new Error('Locked Phase');
   }
   if (new Date(state.currentRound.lockTime).getTime() <= Date.now()) {
-    throw new Error('Not Betting Phase');
+    throw new Error('Locked Phase');
   }
 
   const tokenValue = state.selectedTokenValue;
@@ -625,7 +625,7 @@ async function handleClearTokens() {
     throw new Error('Waiting for next round to begin.');
   }
   if (state.currentRound.status !== 'BETTING') {
-    throw new Error('Not Betting Phase');
+    throw new Error('Locked Phase');
   }
   if (new Date(state.currentRound.lockTime).getTime() <= Date.now()) {
     throw new Error('Round already locked');
@@ -789,7 +789,7 @@ function extractBetErrorMessage(error: unknown): string {
         message.includes('Betting window is closed') ||
         message.includes('Round already locked')
       ) {
-        return 'Not Betting Phase';
+        return 'Locked Phase';
       }
       return message;
     }
