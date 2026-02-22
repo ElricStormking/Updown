@@ -28,6 +28,7 @@ let digitResultSumEl: HTMLSpanElement | null = null;
 let authScreenEl: HTMLDivElement | null = null;
 let appShellEl: HTMLDivElement | null = null;
 let authStatusEl: HTMLElement | null = null;
+let authFormEl: HTMLFormElement | null = null;
 let tokenOptionsEl: HTMLDivElement | null = null;
 let tokenBarFloatingChipsEl: HTMLDivElement | null = null;
 let tokenBarFloatingEl: HTMLDivElement | null = null;
@@ -70,6 +71,7 @@ let bettingHistoryPrevBtn: HTMLButtonElement | null = null;
 let bettingHistoryNextBtn: HTMLButtonElement | null = null;
 let bettingHistoryPageLabelEl: HTMLSpanElement | null = null;
 let bettingHistoryListEl: HTMLDivElement | null = null;
+let authFormLocked = false;
 
 // Track if user has passed through the fullscreen gate (mobile only)
 let fullscreenGatePassed = false;
@@ -627,12 +629,16 @@ export const initControls = (handlers: ControlHandlers) => {
   );
   digitResultSumEl = root.querySelector('#digit-result .digit-result-sum');
 
-  const authForm = root.querySelector<HTMLFormElement>('#auth-form');
-  authForm?.addEventListener('submit', async (event) => {
+  authFormEl = root.querySelector<HTMLFormElement>('#auth-form');
+  authFormEl?.addEventListener('submit', async (event) => {
     event.preventDefault();
+    if (authFormLocked) {
+      setStatus('Launch URL is disabled. Please request a new launch.', true);
+      return;
+    }
     // Blur inputs immediately to prevent mobile zoom from persisting
-    authForm.querySelectorAll('input').forEach((input) => input.blur());
-    const formData = new FormData(authForm);
+    authFormEl.querySelectorAll('input').forEach((input) => input.blur());
+    const formData = new FormData(authFormEl);
     const account = formData.get('account')?.toString() ?? '';
     const merchantId = formData.get('merchantId')?.toString() ?? '';
     const password = formData.get('password')?.toString() ?? '';
@@ -1164,6 +1170,17 @@ export const setStatus = (message: string, isError = false) => {
       new CustomEvent('app:status', { detail: { message, isError } }),
     );
   }
+};
+
+export const setAuthFormLocked = (locked: boolean) => {
+  authFormLocked = locked;
+  if (!authFormEl) return;
+  const controls = authFormEl.querySelectorAll<
+    HTMLInputElement | HTMLButtonElement
+  >('input, button');
+  controls.forEach((control) => {
+    control.disabled = locked;
+  });
 };
 
 const celebrateWinningBetSlots = (nextState: typeof state) => {

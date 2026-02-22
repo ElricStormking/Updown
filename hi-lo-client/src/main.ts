@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import axios from 'axios';
 import './style.css';
 import { HiLoScene } from './scenes/HiLoScene';
-import { initControls, setStatus } from './ui/domControls';
+import { initControls, setAuthFormLocked, setStatus } from './ui/domControls';
 import type { BetSide, DigitBetType } from './types';
 import { api } from './services/api';
 import { authenticateGameSocket, createGameSocket } from './services/socket';
@@ -371,6 +371,7 @@ async function bootstrapLaunchAuthFromUrl() {
 
   const launchToken = (new URLSearchParams(window.location.search).get('accessToken') ?? '').trim();
   if (!launchToken) {
+    setAuthFormLocked(false);
     return;
   }
 
@@ -382,14 +383,20 @@ async function bootstrapLaunchAuthFromUrl() {
 
   if (!merchantId) {
     socket.disconnect();
-    setStatus('Launch token missing merchant ID. Please login manually.', true);
+    setAuthFormLocked(true);
+    setStatus('Launch token missing merchant ID. Please request a new launch URL.', true);
     return;
   }
 
   try {
+    setAuthFormLocked(true);
     setStatus('Verifying launch with merchant...');
     const { data: launchSession } = await api.startLaunchSession(launchToken);
     if (!launchSession.ready) {
+      const lockLaunchUrl = shouldLockAuthForBlockedLaunch(
+        launchSession.code,
+        launchSession.message,
+      );
       updateState({
         token: undefined,
         user: undefined,
@@ -397,11 +404,14 @@ async function bootstrapLaunchAuthFromUrl() {
         tokenPlacements: {},
       });
       socket.disconnect();
+      setAuthFormLocked(lockLaunchUrl);
       const blockedReason = launchSession.message?.trim();
       setStatus(
-        blockedReason
-          ? `Launch blocked: ${blockedReason}`
-          : `Launch blocked (code ${launchSession.code}).`,
+        lockLaunchUrl
+          ? 'Launch URL disabled because this player account is blacklisted.'
+          : blockedReason
+            ? `Launch blocked: ${blockedReason}`
+            : `Launch blocked (code ${launchSession.code}).`,
         true,
       );
       return;
@@ -439,15 +449,24 @@ async function bootstrapLaunchAuthFromUrl() {
     authenticateGameSocket(socket, launchToken);
     void refreshPlayerData();
     clearLaunchTokenFromUrl();
+    setAuthFormLocked(false);
     setStatus('Authenticated. Waiting for round updates.');
   } catch (error) {
+    const lockLaunchUrl = shouldLockAuthForLaunchError(error);
     updateState({
       token: undefined,
       user: undefined,
       tokenPlacements: {},
     });
     socket.disconnect();
-    setStatus(extractLaunchErrorMessage(error), true);
+    clearLaunchTokenFromUrl();
+    setAuthFormLocked(lockLaunchUrl);
+    setStatus(
+      lockLaunchUrl
+        ? 'Launch URL disabled because this player account is blacklisted.'
+        : extractLaunchErrorMessage(error),
+      true,
+    );
   }
 }
 
@@ -803,6 +822,37 @@ function extractLaunchErrorMessage(error: unknown): string {
   }
 
   return 'Auto-launch authentication failed. Please login manually.';
+}
+
+function shouldLockAuthForLaunchError(error: unknown): boolean {
+  if (!axios.isAxiosError(error)) {
+    return false;
+  }
+  const status = error.response?.status;
+  if (status !== 401 && status !== 403) {
+    return false;
+  }
+  const data = error.response?.data as
+    | { message?: unknown; errorMessage?: unknown }
+    | undefined;
+  const candidates = [data?.message, data?.errorMessage]
+    .filter((value): value is string => typeof value === 'string')
+    .map((value) => value.toLowerCase());
+  return candidates.some(
+    (message) =>
+      message.includes('disabled') || message.includes('blacklist'),
+  );
+}
+
+function shouldLockAuthForBlockedLaunch(
+  code: number | string | undefined,
+  message: string | undefined,
+): boolean {
+  if (String(code) === '2003') {
+    return true;
+  }
+  const normalized = (message ?? '').toLowerCase();
+  return normalized.includes('disabled') || normalized.includes('blacklist');
 }
 
 // Keep the TypeScript compiler happy with the unused variable in some contexts.
