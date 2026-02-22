@@ -12,6 +12,7 @@ model Merchant {
   merchantId             String                @unique
   name                   String
   hashKey                String
+  integrationAllowedIps  String[]              @default([])
   currency               String                @default("USDT")
   callbackEnabled        Boolean               @default(false)
   loginPlayerCallbackUrl String?

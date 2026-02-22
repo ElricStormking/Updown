@@ -4,6 +4,7 @@ import {
   Injectable,
   Logger,
 } from '@nestjs/common';
+import { isIP } from 'node:net';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { validateTimestamp } from '../utils/signature.utils';
@@ -77,6 +78,20 @@ export class MerchantAuthGuard implements CanActivate {
       return false;
     }
 
+    const clientIp = this.extractClientIp(request);
+    const allowedIps = this.normalizeWhitelist(merchant.integrationAllowedIps);
+    if (!clientIp || !allowedIps.includes(clientIp)) {
+      this.logger.warn(
+        `Blocked integration request for merchant=${merchant.merchantId} ip=${clientIp ?? 'unknown'} whitelist=[${allowedIps.join(',')}]`,
+      );
+      this.sendError(
+        response,
+        IntegrationErrorCodes.IP_NOT_ALLOWED,
+        IntegrationErrorMessages[IntegrationErrorCodes.IP_NOT_ALLOWED],
+      );
+      return false;
+    }
+
     request[MERCHANT_KEY] = merchant;
     return true;
   }
@@ -85,5 +100,78 @@ export class MerchantAuthGuard implements CanActivate {
     response
       .status(200)
       .json(IntegrationResponseDto.error(errorCode, errorMessage));
+  }
+
+  private normalizeWhitelist(ips: string[] | null | undefined): string[] {
+    if (!ips || !ips.length) return [];
+    const normalized = ips
+      .map((entry) => this.normalizeIp(entry))
+      .filter((entry): entry is string => Boolean(entry));
+    return Array.from(new Set(normalized));
+  }
+
+  private extractClientIp(request: any): string | null {
+    const candidates: string[] = [];
+
+    const forwardedFor = request?.headers?.['x-forwarded-for'];
+    if (typeof forwardedFor === 'string' && forwardedFor.trim()) {
+      candidates.push(forwardedFor.split(',')[0] ?? '');
+    } else if (Array.isArray(forwardedFor) && forwardedFor.length > 0) {
+      const first = forwardedFor[0];
+      if (typeof first === 'string' && first.trim()) {
+        candidates.push(first.split(',')[0] ?? '');
+      }
+    }
+
+    const realIp = request?.headers?.['x-real-ip'];
+    if (typeof realIp === 'string' && realIp.trim()) {
+      candidates.push(realIp);
+    }
+
+    candidates.push(
+      request?.ip ?? '',
+      request?.socket?.remoteAddress ?? '',
+      request?.connection?.remoteAddress ?? '',
+    );
+
+    for (const candidate of candidates) {
+      const normalized = this.normalizeIp(candidate);
+      if (normalized) return normalized;
+    }
+
+    return null;
+  }
+
+  private normalizeIp(value: string): string | null {
+    let ip = value.trim();
+    if (!ip) return null;
+
+    const commaIndex = ip.indexOf(',');
+    if (commaIndex >= 0) {
+      ip = ip.slice(0, commaIndex).trim();
+    }
+
+    if (ip.startsWith('[') && ip.includes(']')) {
+      ip = ip.slice(1, ip.indexOf(']')).trim();
+    }
+
+    if (ip.toLowerCase().startsWith('::ffff:')) {
+      ip = ip.slice(7);
+    }
+
+    const zoneIndex = ip.indexOf('%');
+    if (zoneIndex >= 0) {
+      ip = ip.slice(0, zoneIndex);
+    }
+
+    const ipv4WithPort = ip.match(/^(\d{1,3}(?:\.\d{1,3}){3}):(\d+)$/);
+    if (ipv4WithPort) {
+      ip = ipv4WithPort[1];
+    }
+
+    const version = isIP(ip);
+    if (!version) return null;
+
+    return version === 6 ? ip.toLowerCase() : ip;
   }
 }

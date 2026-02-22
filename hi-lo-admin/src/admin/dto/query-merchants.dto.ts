@@ -1,4 +1,11 @@
-import { IsBoolean, IsOptional, IsString, MinLength } from 'class-validator';
+import {
+  ArrayMaxSize,
+  IsArray,
+  IsBoolean,
+  IsOptional,
+  IsString,
+  MinLength,
+} from 'class-validator';
 import { PaginationQueryDto } from './pagination.dto';
 
 export class QueryMerchantsDto extends PaginationQueryDto {
@@ -50,6 +57,13 @@ export class CreateMerchantDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(50)
+  @IsString({ each: true })
+  @MinLength(1, { each: true })
+  integrationAllowedIps?: string[];
 }
 
 export class UpdateMerchantDto {
@@ -85,6 +99,13 @@ export class UpdateMerchantDto {
   @IsString()
   @MinLength(1)
   updateBalanceCallbackUrl?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(50)
+  @IsString({ each: true })
+  @MinLength(1, { each: true })
+  integrationAllowedIps?: string[];
 }
 
 export interface MerchantResponseItem {
@@ -96,6 +117,7 @@ export interface MerchantResponseItem {
   callbackEnabled: boolean;
   loginPlayerCallbackUrl: string | null;
   updateBalanceCallbackUrl: string | null;
+  integrationAllowedIps: string[];
   isActive: boolean;
   createdAt: string;
   updatedAt: string;

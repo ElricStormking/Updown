@@ -1077,7 +1077,7 @@
               <button type="button" id="merchants-new" class="secondary limited-hide">+ New</button>
             </form>
             <div class="status" id="merchants-status"></div>
-            <div class="table-wrapper"><table><thead><tr><th>ID</th><th>Merchant ID</th><th>Name</th><th>Hash Key</th><th>Active</th><th>Created</th><th class="limited-hide">Actions</th></tr></thead><tbody id="merchants-table-body"></tbody></table></div>
+            <div class="table-wrapper"><table><thead><tr><th>ID</th><th>Merchant ID</th><th>Name</th><th>Hash Key</th><th>IP Whitelist</th><th>Active</th><th>Created</th><th class="limited-hide">Actions</th></tr></thead><tbody id="merchants-table-body"></tbody></table></div>
             <div class="pagination" id="merchants-pagination"></div>
           </section>
         </div>
@@ -1129,6 +1129,7 @@
             <label>Merchant ID<input id="merchant-admin-merchant-id" type="text" required /></label>
             <label>Merchant Name<input id="merchant-admin-merchant-name" type="text" required /></label>
             <label>Merchant Hash Key<input id="merchant-admin-hash-key" type="text" minlength="8" required /></label>
+            <label>Integration Whitelist IPs (comma separated)<input id="merchant-admin-integration-ips" type="text" placeholder="e.g. 203.0.113.10,203.0.113.11" required /></label>
             <label>Admin Account<input id="merchant-admin-account" type="text" required /></label>
             <label>Admin Password<input id="merchant-admin-password" type="password" minlength="6" required /></label>
           </div>
@@ -1179,6 +1180,7 @@
       const merchantAdminMerchantIdInput = $('#merchant-admin-merchant-id');
       const merchantAdminMerchantNameInput = $('#merchant-admin-merchant-name');
       const merchantAdminHashKeyInput = $('#merchant-admin-hash-key');
+      const merchantAdminIntegrationIpsInput = $('#merchant-admin-integration-ips');
       const merchantAdminAccountInput = $('#merchant-admin-account');
       const merchantAdminPasswordInput = $('#merchant-admin-password');
       const logoutBtn = $('#logout-btn');
@@ -1368,6 +1370,7 @@
         transactions: 0,
       };
       const pageLimit = 20;
+      const merchantItemsById = new Map();
       const formatDate = (iso) => iso ? new Date(iso).toLocaleString() : '--';
       const formatNum = (v) => Number.isFinite(v) ? v.toLocaleString('en-US', { maximumFractionDigits: 2 }) : '--';
 
@@ -1609,10 +1612,15 @@
           const id = $('#merchants-id')?.value; const name = $('#merchants-name')?.value; const active = $('#merchants-active')?.value;
           if (id) params.set('merchantId', id); if (name) params.set('name', name); if (active) params.set('isActive', active);
           const data = await apiFetch('/admin/merchants?' + params);
+          merchantItemsById.clear();
+          (data.items || []).forEach((item) => merchantItemsById.set(item.id, item));
           const canEditMerchants = isSuperAdmin();
           $('#merchants-table-body').innerHTML = data.items.length
             ? data.items
                 .map((m) => {
+                  const whitelist = Array.isArray(m.integrationAllowedIps) && m.integrationAllowedIps.length
+                    ? m.integrationAllowedIps.join(', ')
+                    : '--';
                   const actionCellHtml = canEditMerchants
                     ? `<td><div class="action-buttons"><button class="small secondary" onclick="editMerchant('${m.id}')">Edit</button><button class="small danger" onclick="deleteMerchant('${m.id}')">Delete</button></div></td>`
                     : '';
@@ -1622,6 +1630,7 @@
                     `<td>${m.merchantId}</td>` +
                     `<td>${m.name}</td>` +
                     `<td>${m.hashKeyMasked}</td>` +
+                    `<td title="${whitelist}">${whitelist}</td>` +
                     `<td><span class="badge ${m.isActive ? 'success' : 'error'}">${m.isActive ? 'Active' : 'Inactive'}</span></td>` +
                     `<td>${formatDate(m.createdAt)}</td>` +
                     actionCellHtml +
@@ -1629,7 +1638,7 @@
                   );
                 })
                 .join('')
-            : `<tr><td colspan="${canEditMerchants ? 7 : 6}">No data</td></tr>`;
+            : `<tr><td colspan="${canEditMerchants ? 8 : 7}">No data</td></tr>`;
           renderPagination('merchants', data, loadMerchants);
           setStatus(statusEl, '');
         } catch (err) { setStatus(statusEl, err.message, true); }
@@ -1651,10 +1660,11 @@
         const merchantId = merchantAdminMerchantIdInput?.value.trim() || '';
         const name = merchantAdminMerchantNameInput?.value.trim() || '';
         const hashKey = merchantAdminHashKeyInput?.value.trim() || '';
+        const integrationIpsRaw = merchantAdminIntegrationIpsInput?.value.trim() || '';
         const account = merchantAdminAccountInput?.value.trim() || '';
         const password = merchantAdminPasswordInput?.value.trim() || '';
 
-        if (!merchantId || !name || !hashKey || !account || !password) {
+        if (!merchantId || !name || !hashKey || !integrationIpsRaw || !account || !password) {
           setStatus(merchantAdminStatus, 'Please fill all fields.', true);
           return;
         }
@@ -1662,12 +1672,25 @@
           setStatus(merchantAdminStatus, 'Merchant hash key must be at least 8 characters.', true);
           return;
         }
+        const integrationAllowedIps = integrationIpsRaw
+          .split(',')
+          .map((ip) => ip.trim())
+          .filter(Boolean);
+        if (!integrationAllowedIps.length) {
+          setStatus(merchantAdminStatus, 'At least one whitelist IP is required.', true);
+          return;
+        }
 
         setStatus(merchantAdminStatus, 'Creating merchant and admin account...');
         try {
           await apiFetch('/admin/merchants', {
             method: 'POST',
-            body: JSON.stringify({ merchantId, name, hashKey }),
+            body: JSON.stringify({
+              merchantId,
+              name,
+              hashKey,
+              integrationAllowedIps,
+            }),
           });
         } catch (error) {
           setStatus(merchantAdminStatus, error.message || 'Failed to create merchant.', true);
@@ -1699,8 +1722,33 @@
           alert('Only superadmin can edit merchant information.');
           return;
         }
-        const name = prompt('New name (empty to skip):'); const hashKey = prompt('New hash key (empty to skip):'); const activeStr = prompt('Active? (true/false, empty to skip):');
-        const updates = {}; if (name) updates.name = name; if (hashKey) updates.hashKey = hashKey; if (activeStr === 'true') updates.isActive = true; if (activeStr === 'false') updates.isActive = false;
+        const current = merchantItemsById.get(id) || null;
+        const currentWhitelist = Array.isArray(current?.integrationAllowedIps)
+          ? current.integrationAllowedIps.join(',')
+          : '';
+        const name = prompt('New name (empty to skip):');
+        const hashKey = prompt('New hash key (empty to skip):');
+        const whitelistStr = prompt(
+          'Whitelist IPs (comma separated, empty to skip):',
+          currentWhitelist,
+        );
+        const activeStr = prompt('Active? (true/false, empty to skip):');
+        const updates = {};
+        if (name) updates.name = name;
+        if (hashKey) updates.hashKey = hashKey;
+        if (whitelistStr !== null) {
+          const ips = whitelistStr
+            .split(',')
+            .map((ip) => ip.trim())
+            .filter(Boolean);
+          if (!ips.length) {
+            alert('Whitelist must contain at least one IP.');
+            return;
+          }
+          updates.integrationAllowedIps = ips;
+        }
+        if (activeStr === 'true') updates.isActive = true;
+        if (activeStr === 'false') updates.isActive = false;
         if (!Object.keys(updates).length) return;
         try { await apiFetch('/admin/merchants/' + id, { method: 'PUT', body: JSON.stringify(updates) }); loadMerchants(pageState.merchants); } catch (err) { alert(err.message); }
       };

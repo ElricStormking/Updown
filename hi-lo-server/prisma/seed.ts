@@ -13,6 +13,7 @@ async function seedTestMerchant() {
     update: {
       name: merchantName,
       hashKey,
+      integrationAllowedIps: ['127.0.0.1', '::1'],
       currency: 'USDT',
       callbackEnabled: false,
       loginPlayerCallbackUrl: null,
@@ -22,6 +23,7 @@ async function seedTestMerchant() {
       merchantId,
       name: merchantName,
       hashKey,
+      integrationAllowedIps: ['127.0.0.1', '::1'],
       currency: 'USDT',
       callbackEnabled: false,
       loginPlayerCallbackUrl: null,
@@ -113,6 +115,7 @@ async function seedQaAdminAccount() {
   await prisma.merchant.upsert({
     where: { merchantId },
     update: {
+      integrationAllowedIps: ['127.0.0.1', '::1'],
       isActive: true,
       currency: 'USDT',
       callbackEnabled: false,
@@ -123,6 +126,7 @@ async function seedQaAdminAccount() {
       merchantId,
       name: 'QA Merchant',
       hashKey: 'cWFtZXJjaGFudDE=',
+      integrationAllowedIps: ['127.0.0.1', '::1'],
       currency: 'USDT',
       callbackEnabled: false,
       loginPlayerCallbackUrl: null,

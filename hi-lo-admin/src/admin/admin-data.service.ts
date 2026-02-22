@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { isIP } from 'node:net';
 import { Prisma, UserStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -49,6 +50,27 @@ const normalizeOptionalText = (value?: string) => {
   if (value === undefined) return undefined;
   const next = value.trim();
   return next ? next : null;
+};
+
+const normalizeAndValidateIpWhitelist = (input?: string[] | null) => {
+  const list = (input ?? [])
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const unique = Array.from(new Set(list));
+
+  if (!unique.length) {
+    throw new BadRequestException(
+      'Integration IP whitelist requires at least one IP address',
+    );
+  }
+
+  for (const ip of unique) {
+    if (!isIP(ip)) {
+      throw new BadRequestException(`Invalid IP in whitelist: ${ip}`);
+    }
+  }
+
+  return unique;
 };
 
 @Injectable()
@@ -384,6 +406,7 @@ export class AdminDataService {
         callbackEnabled: m.callbackEnabled,
         loginPlayerCallbackUrl: m.loginPlayerCallbackUrl,
         updateBalanceCallbackUrl: m.updateBalanceCallbackUrl,
+        integrationAllowedIps: m.integrationAllowedIps,
         isActive: m.isActive,
         createdAt: m.createdAt.toISOString(),
         updatedAt: m.updatedAt.toISOString(),
@@ -404,6 +427,9 @@ export class AdminDataService {
       normalizeOptionalText(dto.loginPlayerCallbackUrl) ?? null;
     const updateBalanceCallbackUrl =
       normalizeOptionalText(dto.updateBalanceCallbackUrl) ?? null;
+    const integrationAllowedIps = normalizeAndValidateIpWhitelist(
+      dto.integrationAllowedIps,
+    );
     this.validateMerchantCallbackConfig({
       callbackEnabled,
       loginPlayerCallbackUrl,
@@ -419,6 +445,7 @@ export class AdminDataService {
         callbackEnabled,
         loginPlayerCallbackUrl,
         updateBalanceCallbackUrl,
+        integrationAllowedIps,
         isActive: dto.isActive ?? true,
       },
     });
@@ -431,6 +458,7 @@ export class AdminDataService {
       callbackEnabled: merchant.callbackEnabled,
       loginPlayerCallbackUrl: merchant.loginPlayerCallbackUrl,
       updateBalanceCallbackUrl: merchant.updateBalanceCallbackUrl,
+      integrationAllowedIps: merchant.integrationAllowedIps,
       isActive: merchant.isActive,
       createdAt: merchant.createdAt.toISOString(),
       updatedAt: merchant.updatedAt.toISOString(),
@@ -455,6 +483,10 @@ export class AdminDataService {
         normalizeOptionalText(dto.updateBalanceCallbackUrl) ??
         existing.updateBalanceCallbackUrl,
     };
+    const integrationAllowedIps =
+      dto.integrationAllowedIps === undefined
+        ? undefined
+        : normalizeAndValidateIpWhitelist(dto.integrationAllowedIps);
     this.validateMerchantCallbackConfig(next);
 
     const data: Prisma.MerchantUpdateInput = {};
@@ -469,6 +501,9 @@ export class AdminDataService {
       data.loginPlayerCallbackUrl = next.loginPlayerCallbackUrl;
     if (dto.updateBalanceCallbackUrl !== undefined)
       data.updateBalanceCallbackUrl = next.updateBalanceCallbackUrl;
+    if (integrationAllowedIps !== undefined) {
+      data.integrationAllowedIps = integrationAllowedIps;
+    }
 
     const merchant = await this.prisma.merchant.update({
       where: { id },
@@ -483,6 +518,7 @@ export class AdminDataService {
       callbackEnabled: merchant.callbackEnabled,
       loginPlayerCallbackUrl: merchant.loginPlayerCallbackUrl,
       updateBalanceCallbackUrl: merchant.updateBalanceCallbackUrl,
+      integrationAllowedIps: merchant.integrationAllowedIps,
       isActive: merchant.isActive,
       createdAt: merchant.createdAt.toISOString(),
       updatedAt: merchant.updatedAt.toISOString(),
@@ -503,6 +539,7 @@ export class AdminDataService {
       callbackEnabled: merchant.callbackEnabled,
       loginPlayerCallbackUrl: merchant.loginPlayerCallbackUrl,
       updateBalanceCallbackUrl: merchant.updateBalanceCallbackUrl,
+      integrationAllowedIps: merchant.integrationAllowedIps,
       isActive: merchant.isActive,
       createdAt: merchant.createdAt.toISOString(),
       updatedAt: merchant.updatedAt.toISOString(),
