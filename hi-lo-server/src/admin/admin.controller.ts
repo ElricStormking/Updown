@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   ForbiddenException,
   Get,
   Header,
@@ -208,11 +209,28 @@ export class AdminController {
     @Body() dto: UpdateMerchantDto,
     @Req() request?: { adminContext?: AdminContext },
   ) {
+    if (!request?.adminContext?.isSuperAdmin) {
+      throw new ForbiddenException(
+        'Only superadmin can edit merchant information',
+      );
+    }
     return this.dataService.updateMerchant(
       id,
       dto,
-      this.resolveMerchantScope(request),
+      undefined,
     );
+  }
+
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  @Delete('merchants/:id')
+  deleteMerchant(
+    @Param('id') id: string,
+    @Req() request?: { adminContext?: AdminContext },
+  ) {
+    if (!request?.adminContext?.isSuperAdmin) {
+      throw new ForbiddenException('Only superadmin can delete merchants');
+    }
+    return this.dataService.deleteMerchant(id);
   }
 
   // Financial Management - Transfers
@@ -303,6 +321,21 @@ export class AdminController {
     return this.accountsService.updateAccount(
       id,
       dto,
+      this.resolveAdminScope(request),
+    );
+  }
+
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  @Delete('accounts/:id')
+  deleteAdminAccount(
+    @Param('id') id: string,
+    @Req() request?: { adminContext?: AdminContext },
+  ) {
+    if (!request?.adminContext?.isSuperAdmin) {
+      throw new ForbiddenException('Only superadmin can delete admin accounts');
+    }
+    return this.accountsService.deleteAccount(
+      id,
       this.resolveAdminScope(request),
     );
   }

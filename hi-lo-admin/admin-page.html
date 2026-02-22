@@ -71,6 +71,36 @@
         gap: 0.6rem;
         align-items: center;
       }
+      .admin-identity {
+        margin: -0.2rem 0 1rem;
+        padding: 0.75rem 0.95rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        background: rgba(15, 23, 42, 0.72);
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.8rem 1.2rem;
+        align-items: center;
+      }
+      .admin-identity-item {
+        display: inline-flex;
+        gap: 0.45rem;
+        align-items: baseline;
+      }
+      .admin-identity-label {
+        color: var(--muted);
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.09em;
+      }
+      .admin-identity-value {
+        font-size: 0.92rem;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+      }
+      .admin-identity-role .badge {
+        letter-spacing: 0.06em;
+      }
       button {
         cursor: pointer;
         border: 1px solid var(--border);
@@ -100,6 +130,15 @@
       button.secondary {
         background: transparent;
         color: var(--text);
+      }
+      button.danger {
+        border-color: rgba(248, 113, 113, 0.45);
+        background: rgba(127, 29, 29, 0.28);
+        color: #fecaca;
+      }
+      button.danger:hover:not(:disabled) {
+        border-color: rgba(248, 113, 113, 0.75);
+        box-shadow: 0 10px 24px rgba(127, 29, 29, 0.4);
       }
       button:disabled {
         opacity: 0.6;
@@ -567,6 +606,11 @@
       .badge.error { background: rgba(239, 68, 68, 0.2); color: #f87171; }
       .badge.info { background: rgba(59, 130, 246, 0.2); color: #60a5fa; }
       button.small { padding: 0.35rem 0.75rem; font-size: 0.8rem; }
+      .action-buttons {
+        display: flex;
+        gap: 0.4rem;
+        flex-wrap: wrap;
+      }
       .admin-limited .limited-hide {
         display: none;
       }
@@ -611,6 +655,9 @@
         button {
           width: 100%;
         }
+        .admin-identity {
+          margin-top: -0.4rem;
+        }
         .tabs { overflow-x: auto; flex-wrap: nowrap; }
       }
     </style>
@@ -626,6 +673,20 @@
           <button id="logout-btn" class="secondary hidden" type="button">Logout</button>
         </div>
       </header>
+      <div id="admin-identity" class="admin-identity hidden" aria-live="polite">
+        <div class="admin-identity-item">
+          <span class="admin-identity-label">Admin</span>
+          <span id="admin-identity-account" class="admin-identity-value">--</span>
+        </div>
+        <div class="admin-identity-item">
+          <span class="admin-identity-label">Merchant</span>
+          <span id="admin-identity-merchant" class="admin-identity-value">--</span>
+        </div>
+        <div class="admin-identity-item admin-identity-role">
+          <span class="admin-identity-label">Role</span>
+          <span id="admin-identity-role-badge" class="badge info">--</span>
+        </div>
+      </div>
 
       <section class="section" id="login-section">
         <h2>Admin Login</h2>
@@ -645,27 +706,6 @@
           </div>
           <div class="status" id="login-status"></div>
         </form>
-        <div class="divider">or</div>
-        <form id="register-form">
-          <div class="grid">
-            <label>
-              New account
-              <input id="register-account" type="text" autocomplete="username" required />
-            </label>
-            <label>
-              New password
-              <input id="register-password" type="password" autocomplete="new-password" required />
-            </label>
-            <label>
-              Merchant ID
-              <input id="register-merchant" type="text" required />
-            </label>
-          </div>
-          <div class="form-actions">
-            <button class="secondary" type="submit">Create admin account</button>
-          </div>
-          <div class="status" id="register-status"></div>
-        </form>
       </section>
 
       <!-- Main Content with Tabs -->
@@ -676,6 +716,7 @@
           <button class="tab-btn" data-tab="rounds">Rounds</button>
           <button class="tab-btn" data-tab="bets">Bets</button>
           <button class="tab-btn" data-tab="players">Players</button>
+          <button class="tab-btn limited-hide" data-tab="admin-accounts">Admin Accounts</button>
           <button class="tab-btn" data-tab="merchants">Merchants</button>
           <button class="tab-btn" data-tab="transfers">Transfers</button>
           <button class="tab-btn" data-tab="transactions">Transactions</button>
@@ -978,6 +1019,33 @@
           </section>
         </div>
 
+        <!-- Admin Accounts Tab -->
+        <div class="tab-content limited-hide" id="tab-admin-accounts">
+          <section class="section">
+            <h2>Admin Accounts</h2>
+            <form id="admin-accounts-create-form" class="filters limited-hide">
+              <label>Account<input id="admin-accounts-create-account" type="text" /></label>
+              <label>Password<input id="admin-accounts-create-password" type="password" /></label>
+              <label>Merchant ID<input id="admin-accounts-create-merchant" type="text" /></label>
+              <label>
+                <input id="admin-accounts-create-super" type="checkbox" />
+                Create as superadmin
+              </label>
+              <button class="primary" type="submit">Create</button>
+            </form>
+            <div class="status" id="admin-accounts-warning"></div>
+            <div class="status" id="admin-accounts-create-status"></div>
+            <form id="admin-accounts-filter-form" class="filters">
+              <label>Account<input id="admin-accounts-filter-account" type="text" /></label>
+              <label>Status<select id="admin-accounts-filter-status"><option value="">All</option><option value="ENABLED">ENABLED</option><option value="LOCKED">LOCKED</option><option value="DISABLED">DISABLED</option></select></label>
+              <button class="primary" type="submit">Search</button>
+            </form>
+            <div class="status" id="admin-accounts-status"></div>
+            <div class="table-wrapper"><table><thead><tr><th>ID</th><th>Account</th><th>Merchant ID</th><th>Role</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead><tbody id="admin-accounts-table-body"></tbody></table></div>
+            <div class="pagination" id="admin-accounts-pagination"></div>
+          </section>
+        </div>
+
         <!-- Merchants Tab -->
         <div class="tab-content" id="tab-merchants">
           <section class="section">
@@ -990,7 +1058,7 @@
               <button type="button" id="merchants-new" class="secondary limited-hide">+ New</button>
             </form>
             <div class="status" id="merchants-status"></div>
-            <div class="table-wrapper"><table><thead><tr><th>ID</th><th>Merchant ID</th><th>Name</th><th>Hash Key</th><th>Active</th><th>Created</th><th>Actions</th></tr></thead><tbody id="merchants-table-body"></tbody></table></div>
+            <div class="table-wrapper"><table><thead><tr><th>ID</th><th>Merchant ID</th><th>Name</th><th>Hash Key</th><th>Active</th><th>Created</th><th class="limited-hide">Actions</th></tr></thead><tbody id="merchants-table-body"></tbody></table></div>
             <div class="pagination" id="merchants-pagination"></div>
           </section>
         </div>
@@ -1065,11 +1133,18 @@
       const mainContent = $('#main-content');
       const loginForm = $('#login-form');
       const loginStatus = $('#login-status');
-      const registerForm = $('#register-form');
-      const registerStatus = $('#register-status');
-      const registerAccountInput = $('#register-account');
-      const registerPasswordInput = $('#register-password');
-      const registerMerchantInput = $('#register-merchant');
+      const adminAccountsCreateForm = $('#admin-accounts-create-form');
+      const adminAccountsCreateStatus = $('#admin-accounts-create-status');
+      const adminAccountsWarning = $('#admin-accounts-warning');
+      const adminAccountsCreateAccountInput = $('#admin-accounts-create-account');
+      const adminAccountsCreatePasswordInput = $('#admin-accounts-create-password');
+      const adminAccountsCreateMerchantInput = $('#admin-accounts-create-merchant');
+      const adminAccountsCreateSuperInput = $('#admin-accounts-create-super');
+      const adminAccountsFilterForm = $('#admin-accounts-filter-form');
+      const adminAccountsFilterAccountInput = $('#admin-accounts-filter-account');
+      const adminAccountsFilterStatusInput = $('#admin-accounts-filter-status');
+      const adminAccountsStatus = $('#admin-accounts-status');
+      const adminAccountsTableBody = $('#admin-accounts-table-body');
       const merchantAdminModal = $('#merchant-admin-modal');
       const merchantAdminForm = $('#merchant-admin-form');
       const merchantAdminStatus = $('#merchant-admin-status');
@@ -1080,6 +1155,10 @@
       const merchantAdminAccountInput = $('#merchant-admin-account');
       const merchantAdminPasswordInput = $('#merchant-admin-password');
       const logoutBtn = $('#logout-btn');
+      const adminIdentity = $('#admin-identity');
+      const adminIdentityAccount = $('#admin-identity-account');
+      const adminIdentityMerchant = $('#admin-identity-merchant');
+      const adminIdentityRoleBadge = $('#admin-identity-role-badge');
       const configSection = $('#config-section');
       const configForm = document.querySelector('#config-form');
       const configStatus = document.querySelector('#config-status');
@@ -1251,7 +1330,7 @@
       });
 
       // Pagination state
-      const pageState = { rounds: 0, bets: 0, players: 0, merchants: 0, transfers: 0, transactions: 0 };
+      const pageState = { rounds: 0, bets: 0, players: 0, adminAccounts: 0, merchants: 0, transfers: 0, transactions: 0 };
       const pageLimit = 20;
       const formatDate = (iso) => iso ? new Date(iso).toLocaleString() : '--';
       const formatNum = (v) => Number.isFinite(v) ? v.toLocaleString('en-US', { maximumFractionDigits: 2 }) : '--';
@@ -1318,6 +1397,130 @@
         try { await apiFetch('/admin/players/' + id + '/status', { method: 'PUT', body: JSON.stringify({ status: newStatus }) }); loadPlayers(pageState.players); } catch (err) { alert(err.message); }
       };
 
+      // Admin Accounts
+      const syncAdminAccountsWarning = () => {
+        if (!adminAccountsWarning || !adminAccountsCreateSuperInput || !adminAccountsCreateMerchantInput) {
+          return;
+        }
+        if (!adminAccountsCreateSuperInput.checked) {
+          setStatus(adminAccountsWarning, '');
+          return;
+        }
+        const merchantId = adminAccountsCreateMerchantInput.value.trim();
+        if (merchantId !== 'hotcoregm') {
+          setStatus(
+            adminAccountsWarning,
+            'Superadmin account requires merchantId=hotcoregm.',
+            true,
+          );
+          return;
+        }
+        setStatus(
+          adminAccountsWarning,
+          'Creating superadmin with merchantId=hotcoregm.',
+        );
+      };
+
+      const loadAdminAccounts = async (page = 0) => {
+        pageState.adminAccounts = page;
+        if (!adminAccountsStatus || !adminAccountsTableBody) return;
+        setStatus(adminAccountsStatus, 'Loading...');
+        try {
+          const params = new URLSearchParams({ page, limit: pageLimit });
+          const account = adminAccountsFilterAccountInput?.value?.trim();
+          const status = adminAccountsFilterStatusInput?.value?.trim();
+          if (account) params.set('account', account);
+          if (status) params.set('status', status);
+          const data = await apiFetch('/admin/accounts?' + params.toString());
+          adminAccountsTableBody.innerHTML = data.items.length
+            ? data.items.map((item) => {
+                const isSuper = item.merchantId === 'hotcoregm';
+                const roleBadge = isSuper ? 'SUPERADMIN' : 'ADMIN';
+                const roleBadgeClass = isSuper ? 'warning' : 'info';
+                const statusBadgeClass =
+                  item.status === 'ENABLED'
+                    ? 'success'
+                    : item.status === 'LOCKED'
+                      ? 'warning'
+                      : 'error';
+                const actionHtml = isSuper
+                  ? '--'
+                  : '<button class="small danger" onclick="deleteAdminAccount(\'' + item.id + '\')">Delete</button>';
+                return '<tr>' +
+                  '<td title="' + item.id + '">' + item.id.slice(0, 8) + '...</td>' +
+                  '<td>' + item.account + '</td>' +
+                  '<td>' + item.merchantId + '</td>' +
+                  '<td><span class="badge ' + roleBadgeClass + '">' + roleBadge + '</span></td>' +
+                  '<td><span class="badge ' + statusBadgeClass + '">' + item.status + '</span></td>' +
+                  '<td>' + formatDate(item.createdAt) + '</td>' +
+                  '<td>' + actionHtml + '</td>' +
+                  '</tr>';
+              }).join('')
+            : '<tr><td colspan="7">No data</td></tr>';
+          renderPagination('admin-accounts', data, loadAdminAccounts);
+          setStatus(adminAccountsStatus, '');
+        } catch (err) {
+          setStatus(adminAccountsStatus, err.message, true);
+        }
+      };
+
+      adminAccountsFilterForm?.addEventListener('submit', (e) => {
+        e.preventDefault();
+        void loadAdminAccounts(0);
+      });
+
+      adminAccountsCreateSuperInput?.addEventListener('change', syncAdminAccountsWarning);
+      adminAccountsCreateMerchantInput?.addEventListener('input', syncAdminAccountsWarning);
+
+      adminAccountsCreateForm?.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (!isSuperAdmin()) {
+          setStatus(adminAccountsCreateStatus, 'Only superadmin can create admin accounts.', true);
+          return;
+        }
+
+        const account = adminAccountsCreateAccountInput?.value.trim() || '';
+        const password = adminAccountsCreatePasswordInput?.value.trim() || '';
+        const merchantId = adminAccountsCreateMerchantInput?.value.trim() || '';
+        const isSuperadminCreate = Boolean(adminAccountsCreateSuperInput?.checked);
+
+        if (!account || !password || !merchantId) {
+          setStatus(
+            adminAccountsCreateStatus,
+            'Account, password, and merchant ID are required.',
+            true,
+          );
+          return;
+        }
+        if (isSuperadminCreate && merchantId !== 'hotcoregm') {
+          setStatus(
+            adminAccountsCreateStatus,
+            'Superadmin account must use merchantId=hotcoregm',
+            true,
+          );
+          return;
+        }
+
+        setStatus(adminAccountsCreateStatus, 'Creating admin account...');
+        try {
+          await apiFetch('/admin/accounts', {
+            method: 'POST',
+            body: JSON.stringify({
+              account,
+              password,
+              merchantId,
+              isSuperadminCreate,
+            }),
+          });
+          setStatus(adminAccountsCreateStatus, 'Admin account created.');
+          adminAccountsCreateForm.reset();
+          syncAdminAccountsWarning();
+          await loadAdminAccounts(0);
+        } catch (err) {
+          setStatus(adminAccountsCreateStatus, err.message || 'Failed to create admin account.', true);
+        }
+      });
+
       // Merchants
       const loadMerchants = async (page = 0) => {
         pageState.merchants = page;
@@ -1328,7 +1531,27 @@
           const id = $('#merchants-id')?.value; const name = $('#merchants-name')?.value; const active = $('#merchants-active')?.value;
           if (id) params.set('merchantId', id); if (name) params.set('name', name); if (active) params.set('isActive', active);
           const data = await apiFetch('/admin/merchants?' + params);
-          $('#merchants-table-body').innerHTML = data.items.length ? data.items.map(m => '<tr><td title="'+m.id+'">'+m.id.slice(0,8)+'...</td><td>'+m.merchantId+'</td><td>'+m.name+'</td><td>'+m.hashKeyMasked+'</td><td><span class="badge '+(m.isActive?'success':'error')+'">'+(m.isActive?'Active':'Inactive')+'</span></td><td>'+formatDate(m.createdAt)+'</td><td><button class="small secondary" onclick="editMerchant(\''+m.id+'\')">Edit</button></td></tr>').join('') : '<tr><td colspan="7">No data</td></tr>';
+          const canEditMerchants = isSuperAdmin();
+          $('#merchants-table-body').innerHTML = data.items.length
+            ? data.items
+                .map((m) => {
+                  const actionCellHtml = canEditMerchants
+                    ? `<td><div class="action-buttons"><button class="small secondary" onclick="editMerchant('${m.id}')">Edit</button><button class="small danger" onclick="deleteMerchant('${m.id}')">Delete</button></div></td>`
+                    : '';
+                  return (
+                    `<tr>` +
+                    `<td title="${m.id}">${m.id.slice(0, 8)}...</td>` +
+                    `<td>${m.merchantId}</td>` +
+                    `<td>${m.name}</td>` +
+                    `<td>${m.hashKeyMasked}</td>` +
+                    `<td><span class="badge ${m.isActive ? 'success' : 'error'}">${m.isActive ? 'Active' : 'Inactive'}</span></td>` +
+                    `<td>${formatDate(m.createdAt)}</td>` +
+                    actionCellHtml +
+                    `</tr>`
+                  );
+                })
+                .join('')
+            : `<tr><td colspan="${canEditMerchants ? 7 : 6}">No data</td></tr>`;
           renderPagination('merchants', data, loadMerchants);
           setStatus(statusEl, '');
         } catch (err) { setStatus(statusEl, err.message, true); }
@@ -1394,10 +1617,40 @@
         }
       });
       window.editMerchant = async (id) => {
+        if (!isSuperAdmin()) {
+          alert('Only superadmin can edit merchant information.');
+          return;
+        }
         const name = prompt('New name (empty to skip):'); const hashKey = prompt('New hash key (empty to skip):'); const activeStr = prompt('Active? (true/false, empty to skip):');
         const updates = {}; if (name) updates.name = name; if (hashKey) updates.hashKey = hashKey; if (activeStr === 'true') updates.isActive = true; if (activeStr === 'false') updates.isActive = false;
         if (!Object.keys(updates).length) return;
         try { await apiFetch('/admin/merchants/' + id, { method: 'PUT', body: JSON.stringify(updates) }); loadMerchants(pageState.merchants); } catch (err) { alert(err.message); }
+      };
+      window.deleteMerchant = async (id) => {
+        if (!isSuperAdmin()) {
+          alert('Only superadmin can delete merchants.');
+          return;
+        }
+        if (!confirm('Delete this merchant? This action cannot be undone.')) return;
+        try {
+          await apiFetch('/admin/merchants/' + id, { method: 'DELETE' });
+          await loadMerchants(pageState.merchants);
+        } catch (err) {
+          alert(err.message);
+        }
+      };
+      window.deleteAdminAccount = async (id) => {
+        if (!isSuperAdmin()) {
+          alert('Only superadmin can delete admin accounts.');
+          return;
+        }
+        if (!confirm('Delete this limited admin account? This action cannot be undone.')) return;
+        try {
+          await apiFetch('/admin/accounts/' + id, { method: 'DELETE' });
+          await loadAdminAccounts(pageState.adminAccounts);
+        } catch (err) {
+          alert(err.message);
+        }
       };
 
       // Transfers
@@ -1445,7 +1698,18 @@
         const { page, hasNext } = data;
         el.innerHTML = '<button '+(page===0?'disabled':'')+' onclick="window._loadPage(\''+key+'\','+(page-1)+')">Prev</button><span>Page '+(page+1)+'</span><button '+(!hasNext?'disabled':'')+' onclick="window._loadPage(\''+key+'\','+(page+1)+')">Next</button>';
       };
-      window._loadPage = (k, p) => { const fns = { rounds: loadRounds, bets: loadBets, players: loadPlayers, merchants: loadMerchants, transfers: loadTransfers, transactions: loadTransactions }; fns[k]?.(p); };
+      window._loadPage = (k, p) => {
+        const fns = {
+          rounds: loadRounds,
+          bets: loadBets,
+          players: loadPlayers,
+          'admin-accounts': loadAdminAccounts,
+          merchants: loadMerchants,
+          transfers: loadTransfers,
+          transactions: loadTransactions,
+        };
+        fns[k]?.(p);
+      };
 
       const parseErrorMessage = async (response) => {
         try {
@@ -2181,13 +2445,44 @@
         }
       };
 
+      const renderAdminIdentity = () => {
+        if (!adminIdentity) return;
+        const hasAdmin = Boolean(currentAdmin && currentAdmin.account);
+        adminIdentity.classList.toggle('hidden', !hasAdmin);
+        if (!hasAdmin) {
+          if (adminIdentityAccount) adminIdentityAccount.textContent = '--';
+          if (adminIdentityMerchant) adminIdentityMerchant.textContent = '--';
+          if (adminIdentityRoleBadge) {
+            adminIdentityRoleBadge.textContent = '--';
+            adminIdentityRoleBadge.className = 'badge info';
+          }
+          return;
+        }
+
+        if (adminIdentityAccount) {
+          adminIdentityAccount.textContent = currentAdmin.account || '--';
+        }
+        if (adminIdentityMerchant) {
+          adminIdentityMerchant.textContent = currentAdmin.merchantId || '--';
+        }
+        if (adminIdentityRoleBadge) {
+          const isSuper = Boolean(currentAdmin.isSuperAdmin);
+          adminIdentityRoleBadge.textContent = isSuper
+            ? 'SUPERADMIN'
+            : 'LIMITED ADMIN';
+          adminIdentityRoleBadge.className = 'badge ' + (isSuper ? 'warning' : 'info');
+        }
+      };
+
       const saveAdminInfo = (admin) => {
         currentAdmin = admin || null;
         if (!admin) {
           localStorage.removeItem(adminInfoKey);
+          renderAdminIdentity();
           return;
         }
         localStorage.setItem(adminInfoKey, JSON.stringify(admin));
+        renderAdminIdentity();
       };
 
       const isSuperAdmin = () => Boolean(currentAdmin && currentAdmin.isSuperAdmin);
@@ -2445,50 +2740,8 @@
         loadRtp().catch((error) =>
           setStatus(rtpStatus, error.message || 'Failed to load RTP', true),
         );
-      });
-
-      registerForm?.addEventListener('submit', async (event) => {
-        event.preventDefault();
-        if (!registerAccountInput || !registerPasswordInput || !registerMerchantInput) {
-          return;
-        }
-        setStatus(registerStatus, 'Creating admin account...');
-        const account = registerAccountInput.value.trim();
-        const password = registerPasswordInput.value.trim();
-        const merchantId = registerMerchantInput.value.trim();
-        if (!account || !password || !merchantId) {
-          setStatus(registerStatus, 'Account, password, and merchant ID are required', true);
-          return;
-        }
-        try {
-          const res = await fetch('/admin/auth/register', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ account, password, merchantId }),
-          });
-          if (!res.ok) {
-            const detail = await res.json().catch(() => ({}));
-            throw new Error(detail.message || 'Registration failed');
-          }
-          const data = await res.json();
-          setStatus(registerStatus, 'Admin account created. You can now log in.');
-          if (data?.accessToken) {
-            token = data.accessToken;
-            localStorage.setItem(tokenKey, token);
-            saveAdminInfo(data.user || null);
-            setAuthState(true);
-            loadConfig().catch((error) =>
-              setStatus(configStatus, error.message || 'Failed to load config', true),
-            );
-            loadRtp().catch((error) =>
-              setStatus(rtpStatus, error.message || 'Failed to load RTP', true),
-            );
-          } else {
-            $('#login-account').value = account;
-            $('#login-password').value = '';
-          }
-        } catch (error) {
-          setStatus(registerStatus, error.message || 'Registration failed', true);
+        if (isSuperAdmin()) {
+          void loadAdminAccounts(0);
         }
       });
 
@@ -2576,6 +2829,7 @@
       });
 
       initDefaults();
+      syncAdminAccountsWarning();
       const storedAdmin = loadStoredAdmin();
       if (storedAdmin) {
         saveAdminInfo(storedAdmin);
@@ -2596,6 +2850,9 @@
         hydrateAdminProfile().finally(() => {
           loadConfig().catch((error) => setStatus(configStatus, error.message || 'Failed to load config', true));
           loadRtp().catch((error) => setStatus(rtpStatus, error.message || 'Failed to load RTP', true));
+          if (isSuperAdmin()) {
+            void loadAdminAccounts(0);
+          }
         });
       }
     </script>

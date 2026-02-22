@@ -1,4 +1,4 @@
-import { IsString, MinLength } from 'class-validator';
+import { IsBoolean, IsOptional, IsString, MinLength } from 'class-validator';
 
 export class AdminLoginDto {
   @IsString()
@@ -22,4 +22,8 @@ export class AdminRegisterDto {
   @IsString()
   @MinLength(3)
   merchantId: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isSuperadminCreate?: boolean;
 }

@@ -5,6 +5,7 @@ import {
   Get,
   Post,
   Req,
+  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -35,21 +36,33 @@ export class AdminAuthController {
   }
 
   @Post('register')
-  @UseGuards(JwtAuthGuard, AdminGuard)
   async register(
     @Body() dto: AdminRegisterDto,
     @Req()
-    request?: { adminContext?: AdminContext },
+    request?: {
+      headers?: {
+        authorization?: string | string[];
+      };
+    },
   ) {
-    if (!request?.adminContext?.isSuperAdmin) {
+    const bearerToken = this.extractBearerToken(
+      request?.headers?.authorization,
+    );
+    if (!bearerToken) {
+      return this.registerBootstrap(dto);
+    }
+
+    const requesterAdmin = await this.resolveRequesterAdmin(bearerToken);
+    if (!requesterAdmin.isSuperAdmin) {
       throw new ForbiddenException('Only superadmin can create admin accounts');
     }
     const admin = await this.accountsService.createAccount({
       account: dto.account,
       password: dto.password,
       merchantId: dto.merchantId,
+      isSuperadminCreate: dto.isSuperadminCreate,
     });
-    return this.buildAuthResponse(admin);
+    return { created: admin };
   }
 
   @UseGuards(JwtAuthGuard, AdminGuard)
@@ -94,6 +107,70 @@ export class AdminAuthController {
         isAdmin: true,
         isSuperAdmin: admin.merchantId === 'hotcoregm',
       },
+    };
+  }
+
+  private async registerBootstrap(dto: AdminRegisterDto) {
+    if (dto.merchantId !== 'hotcoregm') {
+      throw new ForbiddenException(
+        'First superadmin bootstrap must use merchantId=hotcoregm',
+      );
+    }
+    const hasSuperAdmin = await this.accountsService.hasSuperAdminAccount();
+    if (hasSuperAdmin) {
+      throw new ForbiddenException(
+        'Superadmin already exists. Login as superadmin to create admin accounts.',
+      );
+    }
+    const admin = await this.accountsService.createAccount({
+      account: dto.account,
+      password: dto.password,
+      merchantId: dto.merchantId,
+      isSuperadminCreate: true,
+    });
+    return this.buildAuthResponse(admin);
+  }
+
+  private extractBearerToken(
+    authorizationHeader: string | string[] | undefined,
+  ) {
+    if (!authorizationHeader) {
+      return '';
+    }
+    const raw = Array.isArray(authorizationHeader)
+      ? authorizationHeader[0]
+      : authorizationHeader;
+    const [scheme, token] = raw.split(' ');
+    if (scheme?.toLowerCase() !== 'bearer' || !token) {
+      return '';
+    }
+    return token.trim();
+  }
+
+  private async resolveRequesterAdmin(token: string) {
+    const secret =
+      this.configService.get<AppConfig['auth']>('auth')?.jwtSecret ??
+      'change-me';
+
+    let payload: JwtPayload;
+    try {
+      payload = await this.jwtService.verifyAsync<JwtPayload>(token, { secret });
+    } catch {
+      throw new UnauthorizedException('Invalid or expired admin token');
+    }
+
+    if (payload.type !== 'admin') {
+      throw new ForbiddenException('Admin access required');
+    }
+
+    const admin = await this.accountsService.getActiveAccountById(payload.sub);
+    if (!admin) {
+      throw new UnauthorizedException('Admin access required');
+    }
+
+    return {
+      id: admin.id,
+      isSuperAdmin: admin.merchantId === 'hotcoregm',
     };
   }
 }

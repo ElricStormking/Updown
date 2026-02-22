@@ -1,4 +1,10 @@
-import { IsEnum, IsOptional, IsString, MinLength } from 'class-validator';
+import {
+  IsBoolean,
+  IsEnum,
+  IsOptional,
+  IsString,
+  MinLength,
+} from 'class-validator';
 import { AdminAccountStatus } from '@prisma/client';
 import { DateRangeQueryDto, PaginationQueryDto } from './pagination.dto';
 
@@ -28,6 +34,10 @@ export class CreateAdminAccountDto {
   @IsOptional()
   @IsEnum(AdminAccountStatus)
   status?: AdminAccountStatus;
+
+  @IsOptional()
+  @IsBoolean()
+  isSuperadminCreate?: boolean;
 }
 
 export class UpdateAdminAccountDto {

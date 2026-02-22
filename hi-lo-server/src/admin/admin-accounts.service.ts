@@ -87,6 +87,12 @@ export class AdminAccountsService {
   }
 
   async createAccount(dto: CreateAdminAccountDto) {
+    if (dto.isSuperadminCreate && dto.merchantId !== 'hotcoregm') {
+      throw new BadRequestException(
+        'Superadmin account must use merchantId=hotcoregm',
+      );
+    }
+
     const existing = await this.prisma.adminAccount.findUnique({
       where: { account: dto.account },
     });
@@ -118,6 +124,23 @@ export class AdminAccountsService {
       createdAt: account.createdAt.toISOString(),
       updatedAt: account.updatedAt.toISOString(),
     };
+  }
+
+  async hasSuperAdminAccount() {
+    const count = await this.prisma.adminAccount.count({
+      where: { merchantId: 'hotcoregm' },
+    });
+    return count > 0;
+  }
+
+  async getActiveAccountById(id: string) {
+    const admin = await this.prisma.adminAccount.findUnique({
+      where: { id },
+    });
+    if (!admin || admin.status !== AdminAccountStatus.ENABLED) {
+      return null;
+    }
+    return admin;
   }
 
   async updateAccount(
@@ -159,6 +182,40 @@ export class AdminAccountsService {
       status: account.status,
       createdAt: account.createdAt.toISOString(),
       updatedAt: account.updatedAt.toISOString(),
+    };
+  }
+
+  async deleteAccount(id: string, scope?: AdminAccountScope) {
+    if (!scope?.isSuperAdmin) {
+      throw new ForbiddenException('Only superadmin can delete admin accounts');
+    }
+
+    const existing = await this.prisma.adminAccount.findUnique({
+      where: { id },
+    });
+    if (!existing) {
+      throw new NotFoundException('Admin account not found');
+    }
+    if (existing.merchantId === 'hotcoregm') {
+      throw new BadRequestException(
+        'Cannot delete superadmin accounts from this action',
+      );
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.adminLoginRecord.deleteMany({
+        where: { adminId: existing.id },
+      });
+      await tx.adminAccount.delete({
+        where: { id: existing.id },
+      });
+    });
+
+    return {
+      deleted: true,
+      id: existing.id,
+      account: existing.account,
+      merchantId: existing.merchantId,
     };
   }
 
