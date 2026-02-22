@@ -717,6 +717,7 @@
           <button class="tab-btn" data-tab="bets">Bets</button>
           <button class="tab-btn" data-tab="players">Players</button>
           <button class="tab-btn limited-hide" data-tab="admin-accounts">Admin Accounts</button>
+          <button class="tab-btn" data-tab="admin-login-records">Admin Logins</button>
           <button class="tab-btn" data-tab="merchants">Merchants</button>
           <button class="tab-btn" data-tab="transfers">Transfers</button>
           <button class="tab-btn" data-tab="transactions">Transactions</button>
@@ -1046,6 +1047,24 @@
           </section>
         </div>
 
+        <!-- Admin Login Records Tab -->
+        <div class="tab-content" id="tab-admin-login-records">
+          <section class="section">
+            <h2>Admin Login History</h2>
+            <div class="status" id="admin-login-records-scope-note"></div>
+            <form id="admin-login-records-form" class="filters">
+              <label>Account<input id="admin-login-records-account" type="text" /></label>
+              <label>Result<select id="admin-login-records-result"><option value="">All</option><option value="true">SUCCESS</option><option value="false">FAILED</option></select></label>
+              <label>Start<input id="admin-login-records-start" type="date" /></label>
+              <label>End<input id="admin-login-records-end" type="date" /></label>
+              <button class="primary" type="submit">Search</button>
+            </form>
+            <div class="status" id="admin-login-records-status"></div>
+            <div class="table-wrapper"><table><thead><tr><th>ID</th><th>Account</th><th>Result</th><th>Reason</th><th>Login Time</th></tr></thead><tbody id="admin-login-records-table-body"></tbody></table></div>
+            <div class="pagination" id="admin-login-records-pagination"></div>
+          </section>
+        </div>
+
         <!-- Merchants Tab -->
         <div class="tab-content" id="tab-merchants">
           <section class="section">
@@ -1145,6 +1164,14 @@
       const adminAccountsFilterStatusInput = $('#admin-accounts-filter-status');
       const adminAccountsStatus = $('#admin-accounts-status');
       const adminAccountsTableBody = $('#admin-accounts-table-body');
+      const adminLoginRecordsForm = $('#admin-login-records-form');
+      const adminLoginRecordsAccountInput = $('#admin-login-records-account');
+      const adminLoginRecordsResultInput = $('#admin-login-records-result');
+      const adminLoginRecordsStartInput = $('#admin-login-records-start');
+      const adminLoginRecordsEndInput = $('#admin-login-records-end');
+      const adminLoginRecordsStatus = $('#admin-login-records-status');
+      const adminLoginRecordsTableBody = $('#admin-login-records-table-body');
+      const adminLoginRecordsScopeNote = $('#admin-login-records-scope-note');
       const merchantAdminModal = $('#merchant-admin-modal');
       const merchantAdminForm = $('#merchant-admin-form');
       const merchantAdminStatus = $('#merchant-admin-status');
@@ -1330,7 +1357,16 @@
       });
 
       // Pagination state
-      const pageState = { rounds: 0, bets: 0, players: 0, adminAccounts: 0, merchants: 0, transfers: 0, transactions: 0 };
+      const pageState = {
+        rounds: 0,
+        bets: 0,
+        players: 0,
+        adminAccounts: 0,
+        adminLoginRecords: 0,
+        merchants: 0,
+        transfers: 0,
+        transactions: 0,
+      };
       const pageLimit = 20;
       const formatDate = (iso) => iso ? new Date(iso).toLocaleString() : '--';
       const formatNum = (v) => Number.isFinite(v) ? v.toLocaleString('en-US', { maximumFractionDigits: 2 }) : '--';
@@ -1521,6 +1557,48 @@
         }
       });
 
+      const loadAdminLoginRecords = async (page = 0) => {
+        pageState.adminLoginRecords = page;
+        if (!adminLoginRecordsStatus || !adminLoginRecordsTableBody) return;
+        setStatus(adminLoginRecordsStatus, 'Loading...');
+        try {
+          const params = new URLSearchParams({ page, limit: pageLimit });
+          const account = adminLoginRecordsAccountInput?.value?.trim();
+          const result = adminLoginRecordsResultInput?.value?.trim();
+          const start = adminLoginRecordsStartInput?.value?.trim();
+          const end = adminLoginRecordsEndInput?.value?.trim();
+          if (account) params.set('account', account);
+          if (result) params.set('result', result);
+          if (start) params.set('start', start);
+          if (end) params.set('end', end);
+          const data = await apiFetch('/admin/accounts/login-records?' + params.toString());
+          adminLoginRecordsTableBody.innerHTML = data.items.length
+            ? data.items
+                .map((item) => {
+                  const resultBadgeClass = item.result ? 'success' : 'error';
+                  const resultText = item.result ? 'SUCCESS' : 'FAILED';
+                  return '<tr>' +
+                    '<td title="' + item.id + '">' + item.id.slice(0, 8) + '...</td>' +
+                    '<td>' + item.account + '</td>' +
+                    '<td><span class="badge ' + resultBadgeClass + '">' + resultText + '</span></td>' +
+                    '<td>' + (item.failureReason || '--') + '</td>' +
+                    '<td>' + formatDate(item.loginTime) + '</td>' +
+                    '</tr>';
+                })
+                .join('')
+            : '<tr><td colspan="5">No data</td></tr>';
+          renderPagination('admin-login-records', data, loadAdminLoginRecords);
+          setStatus(adminLoginRecordsStatus, '');
+        } catch (err) {
+          setStatus(adminLoginRecordsStatus, err.message, true);
+        }
+      };
+
+      adminLoginRecordsForm?.addEventListener('submit', (e) => {
+        e.preventDefault();
+        void loadAdminLoginRecords(0);
+      });
+
       // Merchants
       const loadMerchants = async (page = 0) => {
         pageState.merchants = page;
@@ -1704,6 +1782,7 @@
           bets: loadBets,
           players: loadPlayers,
           'admin-accounts': loadAdminAccounts,
+          'admin-login-records': loadAdminLoginRecords,
           merchants: loadMerchants,
           transfers: loadTransfers,
           transactions: loadTransactions,
@@ -2500,6 +2579,11 @@
         if (limited) {
           closeMerchantAdminModal();
         }
+        if (adminLoginRecordsScopeNote) {
+          adminLoginRecordsScopeNote.textContent = limited
+            ? 'Showing your own login history.'
+            : 'Showing login history for all admin accounts.';
+        }
       };
 
       const buildGameConfigPath = () => '/config/game?_t=' + String(Date.now());
@@ -2740,6 +2824,7 @@
         loadRtp().catch((error) =>
           setStatus(rtpStatus, error.message || 'Failed to load RTP', true),
         );
+        void loadAdminLoginRecords(0);
         if (isSuperAdmin()) {
           void loadAdminAccounts(0);
         }
@@ -2850,6 +2935,7 @@
         hydrateAdminProfile().finally(() => {
           loadConfig().catch((error) => setStatus(configStatus, error.message || 'Failed to load config', true));
           loadRtp().catch((error) => setStatus(rtpStatus, error.message || 'Failed to load RTP', true));
+          void loadAdminLoginRecords(0);
           if (isSuperAdmin()) {
             void loadAdminAccounts(0);
           }
