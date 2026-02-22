@@ -1077,13 +1077,13 @@ export const initControls = (handlers: ControlHandlers) => {
       return;
     }
 
-    // Desktop/tablet: restore original layout (game left, panel right).
+    // Desktop/tablet: keep game centered in the portrait stage.
     if (gameContainer.parentElement !== layout) {
       layout.insertBefore(gameContainer, controlPanel);
       window.dispatchEvent(new Event('app:layout:shown'));
     }
-    if (tokenBarFloating && appShell && tokenBarFloating.parentElement !== appShell) {
-      appShell.appendChild(tokenBarFloating);
+    if (tokenBarFloating && tokenBarFloating.parentElement !== gameContainer) {
+      gameContainer.appendChild(tokenBarFloating);
       window.dispatchEvent(new Event('app:layout:shown'));
     }
     updateFullscreenPrompt();
