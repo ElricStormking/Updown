@@ -1,0 +1,307 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Merchant {
+  id                     String                @id @default(cuid())
+  merchantId             String                @unique
+  name                   String
+  hashKey                String
+  currency               String                @default("USDT")
+  callbackEnabled        Boolean               @default(false)
+  loginPlayerCallbackUrl String?
+  updateBalanceCallbackUrl String?
+  isActive               Boolean               @default(true)
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime              @updatedAt
+  users                  User[]
+  transfers              Transfer[]
+  gameConfigs            GameConfig[]
+  launchSessions         MerchantLaunchSession[]
+}
+
+model Transfer {
+  id           String   @id @default(cuid())
+  visibleId    String   @unique
+  merchantId   String
+  userId       String
+  orderNo      String
+  type         Int
+  amount       Decimal  @db.Decimal(18, 6)
+  balanceBefore Decimal @db.Decimal(18, 6)
+  balanceAfter Decimal  @db.Decimal(18, 6)
+  createdAt    DateTime @default(now())
+  merchant     Merchant @relation(fields: [merchantId], references: [merchantId])
+  user         User     @relation(fields: [userId], references: [id])
+
+  @@unique([merchantId, orderNo])
+  @@index([merchantId, createdAt], map: "idx_transfer_merchant_created")
+}
+
+model User {
+  id                 String              @id @default(cuid())
+  email              String              @unique
+  password           String
+  merchantId         String?
+  merchantAccount    String?
+  status             UserStatus          @default(ENABLED)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  bets               Bet[]
+  wallet             Wallet?
+  merchant           Merchant?           @relation(fields: [merchantId], references: [merchantId])
+  transfers          Transfer[]
+  walletTransactions WalletTransaction[]
+  playerLogins       PlayerLogin[]
+  launchSessions     MerchantLaunchSession[]
+
+  @@unique([merchantId, merchantAccount])
+}
+
+enum UserStatus {
+  ENABLED
+  DISABLED
+}
+
+model Wallet {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  balance   Decimal  @default(0) @db.Decimal(18, 6)
+  currency  String   @default("USDT")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model Round {
+  id             Int             @id @default(autoincrement())
+  startTime      DateTime
+  lockTime       DateTime
+  endTime        DateTime
+  oddsUp         Decimal         @default(1.95) @db.Decimal(6, 3)
+  oddsDown       Decimal         @default(1.95) @db.Decimal(6, 3)
+  lockedPrice    Decimal?        @db.Decimal(18, 8)
+  finalPrice     Decimal?        @db.Decimal(18, 8)
+  digitResult    String?
+  digitSum       Int?
+  gameConfigSnapshot Json?
+  digitBonusSlots  Json?
+  digitBonusFactor Decimal?      @db.Decimal(6, 3)
+  winningSide    BetSide?
+  status         RoundStatus     @default(PENDING)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  bets           Bet[]
+  priceSnapshots PriceSnapshot[]
+
+  @@index([status, id], map: "idx_round_status_id")
+}
+
+model Bet {
+  id         String       @id @default(cuid())
+  userId     String
+  roundId    Int
+  merchantId String?
+  betType    BetType      @default(HILO)
+  side       BetSide?
+  digitType  DigitBetType?
+  selection  String?
+  amount     Decimal      @db.Decimal(18, 6)
+  payout     Decimal      @default(0) @db.Decimal(18, 6)
+  odds       Decimal      @default(1.95) @db.Decimal(6, 3)
+  result     BetResult    @default(PENDING)
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+  round      Round        @relation(fields: [roundId], references: [id])
+  user       User         @relation(fields: [userId], references: [id])
+
+  @@index([userId], map: "idx_bet_user")
+  @@index([roundId], map: "idx_bet_round")
+  @@index([userId, createdAt], map: "idx_bet_user_created")
+  @@index([merchantId, createdAt], map: "idx_bet_merchant_created")
+}
+
+model PriceSnapshot {
+  id        String   @id @default(cuid())
+  timestamp DateTime @default(now())
+  price     Decimal  @db.Decimal(18, 8)
+  source    String   @default("BINANCE")
+  roundId   Int?
+  round     Round?   @relation(fields: [roundId], references: [id])
+
+  @@index([timestamp], map: "idx_snapshot_time")
+}
+
+model GameConfig {
+  id                      Int       @id @default(autoincrement())
+  merchantId              String?
+  bettingDurationMs       Int
+  resultDurationMs        Int
+  resultDisplayDurationMs Int
+  minBetAmount            Decimal   @db.Decimal(18, 6)
+  maxBetAmount            Decimal   @db.Decimal(18, 6)
+  payoutMultiplierUp      Decimal   @db.Decimal(6, 3)
+  payoutMultiplierDown    Decimal   @db.Decimal(6, 3)
+  priceSnapshotInterval   Int
+  digitPayouts            Json
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+  merchant                Merchant? @relation(fields: [merchantId], references: [merchantId])
+
+  @@unique([merchantId])
+  @@index([merchantId], map: "idx_game_config_merchant")
+}
+
+enum BetSide {
+  UP
+  DOWN
+}
+
+enum BetType {
+  HILO
+  DIGIT
+}
+
+enum DigitBetType {
+  SMALL
+  BIG
+  ODD
+  EVEN
+  ANY_TRIPLE
+  DOUBLE
+  TRIPLE
+  SUM
+  SINGLE
+}
+
+enum BetResult {
+  PENDING
+  WIN
+  LOSE
+  REFUND
+}
+
+enum RoundStatus {
+  PENDING
+  BETTING
+  RESULT_PENDING
+  COMPLETED
+}
+
+// Admin Account Management
+model AdminAccount {
+  id           String             @id @default(cuid())
+  account      String             @unique
+  merchantId   String             @default("hotcoregm")
+  password     String
+  status       AdminAccountStatus @default(ENABLED)
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  loginRecords AdminLoginRecord[]
+}
+
+enum AdminAccountStatus {
+  ENABLED
+  LOCKED
+  DISABLED
+}
+
+model AdminLoginRecord {
+  id            String       @id @default(cuid())
+  adminId       String
+  result        Boolean
+  failureReason String?
+  loginTime     DateTime     @default(now())
+  admin         AdminAccount @relation(fields: [adminId], references: [id])
+
+  @@index([adminId, loginTime], map: "idx_admin_login_admin_time")
+}
+
+// Wallet Transaction Records
+model WalletTransaction {
+  id            String       @id @default(cuid())
+  merchantId    String?
+  userId        String
+  type          WalletTxType
+  referenceId   String?
+  balanceBefore Decimal      @db.Decimal(18, 6)
+  amount        Decimal      @db.Decimal(18, 6)
+  balanceAfter  Decimal      @db.Decimal(18, 6)
+  createdAt     DateTime     @default(now())
+  user          User         @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt], map: "idx_wallet_tx_user_created")
+  @@index([merchantId, createdAt], map: "idx_wallet_tx_merchant_created")
+}
+
+enum WalletTxType {
+  TRANSFER_IN
+  TRANSFER_OUT
+  BET
+  CANCEL
+  PAYOUT
+  BONUS
+}
+
+// Player Login (Game Launch) Records
+model PlayerLogin {
+  id         String   @id @default(cuid())
+  merchantId String
+  userId     String
+  loginTime  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id])
+
+  @@index([merchantId, loginTime], map: "idx_player_login_merchant_time")
+  @@index([userId, loginTime], map: "idx_player_login_user_time")
+}
+
+model MerchantLaunchSession {
+  id                  String                    @id @default(cuid())
+  merchantId          String
+  userId              String
+  account             String
+  playerId            String
+  merchantAccessToken String
+  currency            String
+  status              LaunchSessionStatus       @default(ACTIVE)
+  loginStatus         LaunchSessionLoginStatus  @default(PENDING)
+  offlineStatus       LaunchSessionOfflineStatus @default(ONLINE)
+  loginVerifiedAt     DateTime?
+  updateBalanceSentAt DateTime?
+  settledAt           DateTime?
+  expiresAt           DateTime
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime                  @updatedAt
+  merchant            Merchant                  @relation(fields: [merchantId], references: [merchantId])
+  user                User                      @relation(fields: [userId], references: [id])
+
+  @@index([merchantId, userId, status], map: "idx_launch_session_merchant_user_status")
+  @@index([expiresAt], map: "idx_launch_session_expires")
+  @@index([status, offlineStatus], map: "idx_launch_session_status_offline")
+}
+
+enum LaunchSessionStatus {
+  ACTIVE
+  SUPERSEDED
+  CLOSED
+  EXPIRED
+}
+
+enum LaunchSessionLoginStatus {
+  PENDING
+  VERIFIED
+  FAILED
+}
+
+enum LaunchSessionOfflineStatus {
+  ONLINE
+  OFFLINE_PENDING
+  CALLBACK_SENT
+  CALLBACK_FAILED
+  SETTLED
+}

@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-1. Server running on port `4001`.
+1. Gateway running on port `4000` with `/integration/*` routed to `hi-lo-merchant`.
 2. Latest migration applied and Prisma client generated.
 3. Test merchant seeded.
 4. For callback-mode tests, callback URLs configured for the merchant.
@@ -26,8 +26,11 @@ Seeded test merchant defaults:
 ### 2. Start services
 
 ```bash
-cd hi-lo-server
-npm run start:dev
+# in separate terminals
+cd hi-lo-server && npm run start:dev
+cd hi-lo-admin && npm run start:dev
+cd hi-lo-merchant && npm run start:dev
+cd .. && npm run start:gateway
 ```
 
 ### 3. Start optional mock callback merchant (for callback-mode)
@@ -131,7 +134,7 @@ Primary helper script:
 
 - `MERCHANT_ID` (default `TEST_MERCHANT`)
 - `HASH_KEY` (default `dGVzdGhhc2hrZXkxMjM0NTY3ODkwYWI=`)
-- `API_BASE_URL` (default `http://localhost:4001`)
+- `API_BASE_URL` (default `http://localhost:4000`)
 - `PORT` / `FAIL_LOGIN` / `FAIL_UPDATE` (mock callback script)
 
 ## Error codes

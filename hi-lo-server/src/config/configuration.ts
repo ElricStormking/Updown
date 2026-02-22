@@ -44,6 +44,9 @@ export const configuration = () => ({
     playerLimit: Number(process.env.PLAYER_BET_HISTORY_LIMIT ?? 100),
     roundLimit: Number(process.env.ROUND_HISTORY_LIMIT ?? 100),
   },
+  routing: {
+    adminUiUrl: process.env.ADMIN_UI_URL ?? 'http://localhost:4002/admin',
+  },
   integration: {
     timestampToleranceSec: Number(
       process.env.INTEGRATION_TIMESTAMP_TOLERANCE_SEC ?? 10,

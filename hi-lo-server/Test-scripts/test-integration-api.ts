@@ -3,7 +3,7 @@ import * as crypto from 'crypto';
 const CONFIG = {
   merchantId: process.env.MERCHANT_ID ?? 'TEST_MERCHANT',
   hashKey: process.env.HASH_KEY ?? 'dGVzdGhhc2hrZXkxMjM0NTY3ODkwYWI=',
-  apiBaseUrl: process.env.API_BASE_URL ?? 'http://localhost:4001',
+  apiBaseUrl: process.env.API_BASE_URL ?? 'http://localhost:4000',
 };
 
 function generateSignature(params: string[], hashKey: string): string {

@@ -1,0 +1,5 @@
+GATEWAY_PORT=4000
+GAME_SERVER_URL=http://localhost:4001
+ADMIN_SERVER_URL=http://localhost:4002
+MERCHANT_SERVER_URL=http://localhost:4003
+

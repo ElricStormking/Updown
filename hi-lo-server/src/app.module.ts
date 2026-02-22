@@ -5,7 +5,6 @@ import { AppService } from './app.service';
 import { configuration } from './config/configuration';
 import { validateEnv } from './config/env.validation';
 import { GameConfigModule } from './config/game-config.module';
-import { AdminModule } from './admin/admin.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
@@ -15,7 +14,6 @@ import { BinanceModule } from './binance/binance.module';
 import { GameModule } from './game/game.module';
 import { BetsModule } from './bets/bets.module';
 import { HistoryModule } from './history/history.module';
-import { IntegrationModule } from './integration/integration.module';
 
 @Module({
   imports: [
@@ -28,7 +26,6 @@ import { IntegrationModule } from './integration/integration.module';
     }),
     PrismaModule,
     RedisModule,
-    AdminModule,
     GameConfigModule,
     UsersModule,
     AuthModule,
@@ -37,7 +34,6 @@ import { IntegrationModule } from './integration/integration.module';
     BetsModule,
     HistoryModule,
     GameModule,
-    IntegrationModule,
   ],
   controllers: [AppController],
   providers: [AppService],

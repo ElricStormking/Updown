@@ -36,8 +36,8 @@ import {
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { RoundEvent } from './interfaces/round-event.interface';
-import { LaunchSessionService } from '../integration/launch-session.service';
-import { MerchantCallbackService } from '../integration/merchant-callback.service';
+import { LaunchSessionService } from '../launch-runtime/launch-session.service';
+import { MerchantCallbackService } from '../launch-runtime/merchant-callback.service';
 
 @Injectable()
 @WebSocketGateway({

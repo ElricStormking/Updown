@@ -40,12 +40,11 @@ import {
 } from './dto';
 import type { AdminContext } from '../auth/guards/admin.guard';
 
-const ADMIN_PAGE_RELATIVE_PATH = ['hi-lo-admin', 'admin-page.html'];
 const ADMIN_PAGE_CANDIDATES = [
-  path.resolve(process.cwd(), '..', ...ADMIN_PAGE_RELATIVE_PATH),
-  path.resolve(process.cwd(), ...ADMIN_PAGE_RELATIVE_PATH),
-  path.resolve(__dirname, '..', '..', ...ADMIN_PAGE_RELATIVE_PATH),
-  path.resolve(__dirname, '..', '..', '..', ...ADMIN_PAGE_RELATIVE_PATH),
+  path.resolve(process.cwd(), 'admin-page.html'),
+  path.resolve(process.cwd(), '..', 'hi-lo-admin', 'admin-page.html'),
+  path.resolve(__dirname, '..', '..', 'admin-page.html'),
+  path.resolve(__dirname, '..', '..', '..', 'admin-page.html'),
 ];
 
 let adminPagePathCache: string | null = null;

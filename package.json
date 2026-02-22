@@ -1,0 +1,23 @@
+{
+  "name": "projectupdown-workspace",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Workspace scripts for split hi-lo services",
+  "scripts": {
+    "start:server": "npm run start:dev --prefix hi-lo-server",
+    "start:admin": "npm run start:dev --prefix hi-lo-admin",
+    "start:merchant": "npm run start:dev --prefix hi-lo-merchant",
+    "start:gateway": "node gateway/dev-proxy.mjs",
+    "start:all": "concurrently -n server,admin,merchant,gateway -c cyan,magenta,green,yellow \"npm run start:server\" \"npm run start:admin\" \"npm run start:merchant\" \"npm run start:gateway\"",
+    "install:all": "npm install && npm install --prefix hi-lo-server && npm install --prefix hi-lo-admin && npm install --prefix hi-lo-merchant",
+    "build:server": "npm run build --prefix hi-lo-server",
+    "build:admin": "npm run build --prefix hi-lo-admin",
+    "build:merchant": "npm run build --prefix hi-lo-merchant"
+  },
+  "dependencies": {
+    "http-proxy": "^1.18.1"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

@@ -20,6 +20,7 @@ const envSchema = z.object({
   ROUND_STATE_TTL: z.coerce.number().min(5000).default(60000),
   PLAYER_BET_HISTORY_LIMIT: z.coerce.number().min(1).max(1000).default(100),
   ROUND_HISTORY_LIMIT: z.coerce.number().min(1).max(1000).default(100),
+  ADMIN_UI_URL: z.string().url().default('http://localhost:4002/admin'),
   INTEGRATION_TIMESTAMP_TOLERANCE_SEC: z.coerce.number().min(1).default(10),
   INTEGRATION_GAME_URL: z.string().url().default('https://game.example.com'),
   INTEGRATION_CALLBACK_TIMEOUT_MS: z.coerce.number().min(1000).default(5000),

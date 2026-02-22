@@ -1,6 +1,11 @@
 # Hi-Lo Server
 
-Backend for the Hi-Lo Bitcoin Prediction prototype. The service consumes the Binance BTC/USDT feed, orchestrates 25-second rounds, and exposes REST + WebSocket APIs consumed by the Phaser client.
+Backend game-runtime service for the Hi-Lo Bitcoin Prediction prototype. The service consumes the Binance BTC/USDT feed, orchestrates rounds, and exposes player/game REST + WebSocket APIs consumed by the Phaser client.
+
+Admin APIs/UI and merchant integration APIs are now split into separate services:
+
+- `../hi-lo-admin`
+- `../hi-lo-merchant`
 
 ## Stack
 
@@ -73,9 +78,14 @@ npm run db:seed                         # seed demo wallet/user
 
 ## Ports
 
-- API (Nest): configurable via `API_PORT` (default 4001)
+- Game runtime API (Nest): configurable via `API_PORT` (default 4001)
 - Web client (Phaser): serve via a separate process on port 3000
-- Admin UI: `http://localhost:4001/admin` (or `http://localhost:3000/admin` via Vite proxy)
+- Admin service: `http://localhost:4002/admin`
+- Merchant integration service: `http://localhost:4003/integration/*`
+- Gateway (recommended entrypoint): `http://localhost:4000`
+
+Compatibility note:
+- `http://localhost:4001/admin` now redirects to `ADMIN_UI_URL` (default `http://localhost:4002/admin`).
 
 ## Manual QA script
 
