@@ -706,6 +706,33 @@
           </div>
           <div class="status" id="login-status"></div>
         </form>
+        <div class="divider">Or</div>
+        <div id="bootstrap-section" class="hidden">
+          <h3 style="margin: 0 0 0.75rem 0; font-size: 1rem; font-family: 'Fraunces', 'Times New Roman', serif;">
+            Bootstrap first superadmin
+          </h3>
+          <div class="status" id="bootstrap-hint" style="margin-top: 0; margin-bottom: 0.8rem;"></div>
+          <form id="bootstrap-form">
+            <div class="grid">
+              <label>
+                Account
+                <input id="bootstrap-account" type="text" autocomplete="username" required />
+              </label>
+              <label>
+                Password
+                <input id="bootstrap-password" type="password" autocomplete="new-password" minlength="6" required />
+              </label>
+              <label>
+                Merchant ID
+                <input id="bootstrap-merchant-id" type="text" autocomplete="off" required />
+              </label>
+            </div>
+            <div class="form-actions">
+              <button class="primary" type="submit">Bootstrap superadmin</button>
+            </div>
+            <div class="status" id="bootstrap-status"></div>
+          </form>
+        </div>
       </section>
 
       <!-- Main Content with Tabs -->
@@ -1153,6 +1180,13 @@
       const mainContent = $('#main-content');
       const loginForm = $('#login-form');
       const loginStatus = $('#login-status');
+      const bootstrapSection = $('#bootstrap-section');
+      const bootstrapForm = $('#bootstrap-form');
+      const bootstrapAccountInput = $('#bootstrap-account');
+      const bootstrapPasswordInput = $('#bootstrap-password');
+      const bootstrapMerchantIdInput = $('#bootstrap-merchant-id');
+      const bootstrapHint = $('#bootstrap-hint');
+      const bootstrapStatus = $('#bootstrap-status');
       const adminAccountsCreateForm = $('#admin-accounts-create-form');
       const adminAccountsCreateStatus = $('#admin-accounts-create-status');
       const adminAccountsWarning = $('#admin-accounts-warning');
@@ -1223,6 +1257,8 @@
       const singleSlotKeys = [];
       const doubleSlotKeys = [];
       const tripleSlotKeys = [];
+      let bootstrapRequiredMerchantId = 'hotcoregm';
+      let bootstrapAvailable = false;
 
       const buildBonusSlotDefs = () => {
         const defs = [];
@@ -1321,6 +1357,51 @@
         merchantAdminMerchantIdInput?.focus();
       };
 
+      const applyBootstrapStatus = (status) => {
+        bootstrapAvailable = Boolean(status?.canBootstrap);
+        const requiredIdRaw =
+          typeof status?.requiredMerchantId === 'string'
+            ? status.requiredMerchantId.trim()
+            : '';
+        bootstrapRequiredMerchantId = requiredIdRaw || 'hotcoregm';
+
+        if (bootstrapSection) {
+          bootstrapSection.classList.toggle('hidden', !bootstrapAvailable);
+        }
+        if (bootstrapHint) {
+          if (bootstrapAvailable) {
+            setStatus(
+              bootstrapHint,
+              'Fresh install detected. Create the first superadmin. Merchant ID must be ' +
+                bootstrapRequiredMerchantId +
+                '.',
+            );
+          } else {
+            setStatus(bootstrapHint, '');
+          }
+        }
+        if (!bootstrapAvailable && bootstrapStatus) {
+          setStatus(bootstrapStatus, '');
+        }
+      };
+
+      const refreshBootstrapStatus = async () => {
+        if (token) {
+          applyBootstrapStatus({ canBootstrap: false });
+          return;
+        }
+        try {
+          const response = await fetch('/admin/auth/bootstrap-status');
+          if (!response.ok) {
+            throw new Error(await parseErrorMessage(response));
+          }
+          const data = await response.json();
+          applyBootstrapStatus(data);
+        } catch (error) {
+          applyBootstrapStatus({ canBootstrap: false });
+        }
+      };
+
       const setAuthState = (authed) => {
         if (loginSection) loginSection.classList.toggle('hidden', authed);
         if (mainContent) mainContent.classList.toggle('hidden', !authed);
@@ -1331,6 +1412,7 @@
         } else {
           document.body.classList.remove('admin-limited');
           closeMerchantAdminModal();
+          void refreshBootstrapStatus();
         }
       };
 
@@ -1872,6 +1954,34 @@
           throw new Error(message);
         }
         return response.json();
+      };
+
+      const completeAuthSuccess = (data, statusEl, successMessage) => {
+        if (!data || !data.accessToken) {
+          setStatus(statusEl, 'Login failed: missing token', true);
+          return false;
+        }
+        if (data.user && data.user.isAdmin === false) {
+          handleAuthFailure('Admin access required.');
+          return false;
+        }
+
+        token = data.accessToken;
+        localStorage.setItem(tokenKey, token);
+        saveAdminInfo(data.user || null);
+        setStatus(statusEl, successMessage || 'Login successful.');
+        setAuthState(true);
+        loadConfig().catch((error) =>
+          setStatus(configStatus, error.message || 'Failed to load config', true),
+        );
+        loadRtp().catch((error) =>
+          setStatus(rtpStatus, error.message || 'Failed to load RTP', true),
+        );
+        void loadAdminLoginRecords(0);
+        if (isSuperAdmin()) {
+          void loadAdminAccounts(0);
+        }
+        return true;
       };
 
       const readNumber = (id, label) => {
@@ -2851,31 +2961,66 @@
           setStatus(loginStatus, error.message || 'Login failed', true);
           return;
         }
+        completeAuthSuccess(data, loginStatus, 'Login successful.');
+      });
 
-        if (!data || !data.accessToken) {
-          setStatus(loginStatus, 'Login failed: missing token', true);
+      bootstrapForm?.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (!bootstrapAvailable) {
+          setStatus(
+            bootstrapStatus,
+            'Bootstrap is not available because a superadmin already exists.',
+            true,
+          );
           return;
         }
-        if (data.user && data.user.isAdmin === false) {
-          handleAuthFailure('Admin access required.');
+
+        const account = bootstrapAccountInput?.value.trim() || '';
+        const password = bootstrapPasswordInput?.value.trim() || '';
+        const merchantId = bootstrapMerchantIdInput?.value.trim() || '';
+
+        if (!account || !password || !merchantId) {
+          setStatus(
+            bootstrapStatus,
+            'Account, password, and merchant ID are required.',
+            true,
+          );
+          return;
+        }
+        if (merchantId !== bootstrapRequiredMerchantId) {
+          setStatus(
+            bootstrapStatus,
+            'First superadmin bootstrap must use merchantId=' +
+              bootstrapRequiredMerchantId,
+            true,
+          );
           return;
         }
 
-        token = data.accessToken;
-        localStorage.setItem(tokenKey, token);
-        saveAdminInfo(data.user || null);
-        setStatus(loginStatus, 'Login successful.');
-        setAuthState(true);
-        loadConfig().catch((error) =>
-          setStatus(configStatus, error.message || 'Failed to load config', true),
-        );
-        loadRtp().catch((error) =>
-          setStatus(rtpStatus, error.message || 'Failed to load RTP', true),
-        );
-        void loadAdminLoginRecords(0);
-        if (isSuperAdmin()) {
-          void loadAdminAccounts(0);
+        setStatus(bootstrapStatus, 'Creating first superadmin...');
+        let data;
+        try {
+          const response = await fetch('/admin/auth/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              account,
+              password,
+              merchantId,
+              isSuperadminCreate: true,
+            }),
+          });
+          if (!response.ok) {
+            throw new Error(await parseErrorMessage(response));
+          }
+          data = await response.json();
+        } catch (error) {
+          setStatus(bootstrapStatus, error.message || 'Bootstrap failed', true);
+          void refreshBootstrapStatus();
+          return;
         }
+
+        completeAuthSuccess(data, bootstrapStatus, 'Bootstrap successful. Logged in as superadmin.');
       });
 
       configReload.addEventListener('click', async () => {
@@ -2963,6 +3108,7 @@
 
       initDefaults();
       syncAdminAccountsWarning();
+      void refreshBootstrapStatus();
       const storedAdmin = loadStoredAdmin();
       if (storedAdmin) {
         saveAdminInfo(storedAdmin);

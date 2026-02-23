@@ -82,6 +82,15 @@ export class AdminAuthController {
     };
   }
 
+  @Get('bootstrap-status')
+  async bootstrapStatus() {
+    const hasSuperAdmin = await this.accountsService.hasSuperAdminAccount();
+    return {
+      canBootstrap: !hasSuperAdmin,
+      requiredMerchantId: 'hotcoregm',
+    };
+  }
+
   private async buildAuthResponse(admin: {
     id: string;
     account: string;
