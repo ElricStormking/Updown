@@ -86,15 +86,24 @@ const RESULT_BOX_TOTAL_DISPLAY_MS = 4500;
 const POST_PENDING_LIGHTNING_DELAY_MS = 3500;
 const RESULT_DIGIT_TEXT_DEPTH = 45;
 const COMPLETE_PHASE_DURATION_MS = 10000;
-const RESULT_OVERLAY_DELAY_MS = 5000;
+const RESULT_OVERLAY_DELAY_MS = 4500;
 const RESULT_OVERLAY_FADE_OUT_MS = 300;
 const LIGHTNING_BEAM_TEXTURE_KEY = 'lightball';
 const LIGHTNING_HIT_TEXTURE_KEY = 'lightball_hit';
 const LIGHTNING_BEAM_ANIMATION_KEY = 'winner-lightball-beam';
 const LIGHTNING_HIT_ANIMATION_KEY = 'winner-lightball-hit';
+const WIN_TITLE_TEXTURE_KEY = 'WIN_anim';
+const WIN_TITLE_ANIMATION_KEY = 'result-win-title-anim';
 const LIGHTNING_BEAM_FRAME_HEIGHT = 269;
 const BONUS_LIGHTNING_STAGGER_MS = 85;
 const BONUS_LIGHTNING_DURATION_MS = 240;
+const BONUS_ODDS_Y_OFFSET = 4;
+const BONUS_ODDS_COLOR = '#69f3ff';
+const BONUS_ODDS_STROKE_COLOR = '#123549';
+const BONUS_ODDS_SHADOW_COLOR = '#00d8ff';
+const BONUS_ODDS_PULSE_MIN_SCALE = 1.0;
+const BONUS_ODDS_PULSE_MAX_SCALE = 1.5;
+const BONUS_ODDS_PULSE_DURATION_MS = 560;
 const TOP_DIGIT_LIGHTNING_SOURCES: ReadonlyArray<{ x: number; y: number }> = [
   { x: 420, y: 220 },
   { x: 538, y: 220 },
@@ -159,6 +168,7 @@ export class HiLoScene extends Phaser.Scene {
   private baseOddsByKey = new Map<string, number>();
   private bonusOddsByKey = new Map<string, number>();
   private bonusTweens = new Map<string, Phaser.Tweens.Tween>();
+  private bonusOddsTextTweens = new Map<string, Phaser.Tweens.Tween>();
   private winnerTweens = new Map<string, Phaser.Tweens.Tween>();
   private winnerLightTweens = new Map<string, Phaser.Tweens.Tween>();
   private winnerLightSprites = new Map<string, Phaser.GameObjects.Sprite>();
@@ -183,6 +193,7 @@ export class HiLoScene extends Phaser.Scene {
 
   private resultOverlay?: Phaser.GameObjects.Container;
   private resultTitleText?: Phaser.GameObjects.Text;
+  private resultTitleWinSprite?: Phaser.GameObjects.Sprite;
   private resultPayoutText?: Phaser.GameObjects.Text;
   private resultWinnersText?: Phaser.GameObjects.Text;
   private resultPlayerWinsText?: Phaser.GameObjects.Text;
@@ -326,6 +337,11 @@ export class HiLoScene extends Phaser.Scene {
     this.load.spritesheet(LIGHTNING_HIT_TEXTURE_KEY, '../UI_sprites/lightball/lightball_hit.png', {
       frameWidth: 205,
       frameHeight: 107,
+    });
+
+    this.load.spritesheet(WIN_TITLE_TEXTURE_KEY, '../UI_sprites/WIN_anim/WIN_anim.png', {
+      frameWidth: 750,
+      frameHeight: 236,
     });
   }
 
@@ -1432,6 +1448,8 @@ export class HiLoScene extends Phaser.Scene {
         () => {
           if (!this.isLockedLayoutMode || this.isLockedLayoutPending) return;
           this.applyBonusHighlights();
+          // Re-apply text pulse after re-highlighting, otherwise text tweens stay stopped.
+          this.syncOddsText();
         },
         undefined,
         this,
@@ -1748,6 +1766,9 @@ export class HiLoScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
       .setAlpha(0.9);
+    text.setData('bonusYOffsetApplied', false);
+    text.setData('defaultScaleX', text.scaleX);
+    text.setData('defaultScaleY', text.scaleY);
     text.setDepth(6);
     this.oddsTextByKey.set(key, text);
   }
@@ -1931,16 +1952,24 @@ export class HiLoScene extends Phaser.Scene {
   }
 
   private updateBonusOddsFromRound(round?: RoundStatePayload) {
-    this.bonusOddsByKey.clear();
     const bonusEnabled = state.config?.bonusModeEnabled !== false;
     if (!round || !bonusEnabled || round.status !== 'RESULT_PENDING') {
+      const hadBonusState =
+        this.bonusOddsByKey.size > 0 ||
+        this.bonusTweens.size > 0 ||
+        this.bonusLightTweens.size > 0 ||
+        this.bonusOddsTextTweens.size > 0;
+      this.bonusOddsByKey.clear();
       this.bonusLightningRoundId = undefined;
       this.struckBonusKeys.clear();
-      this.clearBonusHighlights();
+      if (hadBonusState) {
+        this.clearBonusHighlights();
+      }
       this.syncOddsText();
       return;
     }
 
+    const nextBonusOdds = new Map<string, number>();
     round.digitBonus?.slots?.forEach((slot) => {
       if (
         typeof slot.bonusRatio !== 'number' ||
@@ -1949,11 +1978,33 @@ export class HiLoScene extends Phaser.Scene {
         return;
       }
       const key = this.buildDigitKey(slot.digitType, slot.selection ?? '');
-      this.bonusOddsByKey.set(key, slot.bonusRatio);
+      nextBonusOdds.set(key, slot.bonusRatio);
     });
-    this.applyBonusHighlights();
+
+    const bonusOddsChanged = !this.hasSameBonusOdds(nextBonusOdds);
+    if (bonusOddsChanged) {
+      this.bonusOddsByKey.clear();
+      nextBonusOdds.forEach((value, key) => {
+        this.bonusOddsByKey.set(key, value);
+      });
+      this.applyBonusHighlights();
+    }
+
     this.triggerBonusSlotLightning(round);
     this.syncOddsText();
+  }
+
+  private hasSameBonusOdds(nextBonusOdds: Map<string, number>) {
+    if (this.bonusOddsByKey.size !== nextBonusOdds.size) {
+      return false;
+    }
+    for (const [key, nextValue] of nextBonusOdds) {
+      const currentValue = this.bonusOddsByKey.get(key);
+      if (currentValue === undefined || currentValue !== nextValue) {
+        return false;
+      }
+    }
+    return true;
   }
 
   private triggerBonusSlotLightning(round: RoundStatePayload) {
@@ -2026,6 +2077,8 @@ export class HiLoScene extends Phaser.Scene {
   private clearBonusHighlights() {
     this.bonusTweens.forEach((tween) => tween.stop());
     this.bonusTweens.clear();
+    this.bonusOddsTextTweens.forEach((tween) => tween.stop());
+    this.bonusOddsTextTweens.clear();
     this.bonusLightTweens.forEach((tween) => tween.stop());
     this.bonusLightTweens.clear();
     this.bonusLightSprites.forEach((sprite) => sprite.destroy());
@@ -2115,6 +2168,25 @@ export class HiLoScene extends Phaser.Scene {
 
   private syncOddsText() {
     this.oddsTextByKey.forEach((text, key) => {
+      const layoutScale = this.getLockedLayoutScale();
+      const bonusYOffsetApplied = text.getData('bonusYOffsetApplied') as boolean | undefined;
+      const defaultScaleX = (text.getData('defaultScaleX') as number | undefined) ?? 1;
+      const defaultScaleY = (text.getData('defaultScaleY') as number | undefined) ?? 1;
+      const stopBonusTextPulseIfNeeded = () => {
+        const tween = this.bonusOddsTextTweens.get(key);
+        if (!tween) return;
+        tween.stop();
+        this.bonusOddsTextTweens.delete(key);
+        text.setData('bonusPulseLayoutScale', undefined);
+      };
+      const removeBonusOffsetIfNeeded = () => {
+        if (bonusYOffsetApplied) {
+          text.setY(text.y - BONUS_ODDS_Y_OFFSET);
+          text.setData('bonusYOffsetApplied', false);
+        }
+      };
+      const scaledBaseX = defaultScaleX * layoutScale;
+      const scaledBaseY = defaultScaleY * layoutScale;
       const bonusValue = this.bonusOddsByKey.get(key);
       const baseValue = this.baseOddsByKey.get(key);
       if (
@@ -2123,8 +2195,14 @@ export class HiLoScene extends Phaser.Scene {
           key.startsWith('DIGIT|SINGLE|')) &&
         bonusValue === undefined
       ) {
+        stopBonusTextPulseIfNeeded();
+        removeBonusOffsetIfNeeded();
         text.setText('');
         text.setColor('#f8fafc');
+        text.setStroke('#000000', 0);
+        text.setShadow(0, 0, '#000000', 0, false, false);
+        text.setScale(scaledBaseX, scaledBaseY);
+        text.setAlpha(0.9);
         return;
       }
       const value =
@@ -2133,9 +2211,49 @@ export class HiLoScene extends Phaser.Scene {
           : baseValue ?? 0;
       text.setText(value ? formatPayoutRatio(value) : '');
       if (bonusValue !== undefined) {
-        text.setColor('#ffd166');
+        if (!bonusYOffsetApplied) {
+          text.setY(text.y + BONUS_ODDS_Y_OFFSET);
+          text.setData('bonusYOffsetApplied', true);
+        }
+        text.setColor(BONUS_ODDS_COLOR);
+        text.setStroke(BONUS_ODDS_STROKE_COLOR, 2);
+        text.setShadow(0, 0, BONUS_ODDS_SHADOW_COLOR, 10, true, true);
+        const minScaleX = scaledBaseX * BONUS_ODDS_PULSE_MIN_SCALE;
+        const minScaleY = scaledBaseY * BONUS_ODDS_PULSE_MIN_SCALE;
+        const maxScaleX = scaledBaseX * BONUS_ODDS_PULSE_MAX_SCALE;
+        const maxScaleY = scaledBaseY * BONUS_ODDS_PULSE_MAX_SCALE;
+        let pulseTween = this.bonusOddsTextTweens.get(key);
+        const pulseLayoutScale = text.getData('bonusPulseLayoutScale') as number | undefined;
+        if (pulseTween && pulseLayoutScale !== layoutScale) {
+          pulseTween.stop();
+          this.bonusOddsTextTweens.delete(key);
+          pulseTween = undefined;
+        }
+        if (!pulseTween) {
+          text.setScale(minScaleX, minScaleY);
+          pulseTween = this.tweens.add({
+            targets: text,
+            scaleX: maxScaleX,
+            scaleY: maxScaleY,
+            duration: BONUS_ODDS_PULSE_DURATION_MS,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut',
+          });
+          this.bonusOddsTextTweens.set(key, pulseTween);
+          text.setData('bonusPulseLayoutScale', layoutScale);
+        } else if (pulseTween.isPaused()) {
+          pulseTween.resume();
+        }
+        text.setAlpha(1);
       } else {
+        stopBonusTextPulseIfNeeded();
+        removeBonusOffsetIfNeeded();
         text.setColor('#f8fafc');
+        text.setStroke('#000000', 0);
+        text.setShadow(0, 0, '#000000', 0, false, false);
+        text.setScale(scaledBaseX, scaledBaseY);
+        text.setAlpha(0.9);
       }
     });
   }
@@ -2688,7 +2806,7 @@ export class HiLoScene extends Phaser.Scene {
 
   setRoundOutcome(roundId: number, outcome: ResultOverlayOutcome) {
     this.pendingResultOutcome = { roundId, outcome };
-    if (!this.resultOverlay || this.resultRoundId !== roundId || !this.resultTitleText) return;
+    if (!this.resultOverlay || this.resultRoundId !== roundId) return;
 
     let titleStr = t(this.language, 'scene.roundResult');
     let color = '#b2bec3';
@@ -2706,7 +2824,29 @@ export class HiLoScene extends Phaser.Scene {
       color = '#b2bec3';
     }
 
-    this.resultTitleText.setText(titleStr).setColor(color);
+    const useWinSprite = outcome === 'WIN' && !!this.resultTitleWinSprite;
+
+    if (this.resultTitleText) {
+      if (useWinSprite) {
+        this.resultTitleText.setVisible(false);
+      } else {
+        this.resultTitleText.setVisible(true).setText(titleStr).setColor(color);
+      }
+    }
+
+    if (this.resultTitleWinSprite) {
+      if (useWinSprite) {
+        this.resultTitleWinSprite.setVisible(true);
+        if (this.anims.exists(WIN_TITLE_ANIMATION_KEY)) {
+          this.resultTitleWinSprite.play(WIN_TITLE_ANIMATION_KEY, true);
+        } else {
+          this.resultTitleWinSprite.setFrame(0);
+        }
+      } else {
+        this.resultTitleWinSprite.stop();
+        this.resultTitleWinSprite.setVisible(false);
+      }
+    }
   }
 
   setWinningBets(roundId: number, bets: SettledRoundBet[]) {
@@ -2905,6 +3045,16 @@ export class HiLoScene extends Phaser.Scene {
       key: 'money-spin',
       frames: this.anims.generateFrameNumbers('money_anim', { start: 0, end: 15 }),
       frameRate: 24,
+      repeat: -1,
+    });
+  }
+
+  private ensureWinTitleAnimation() {
+    if (this.anims.exists(WIN_TITLE_ANIMATION_KEY) || !this.textures.exists(WIN_TITLE_TEXTURE_KEY)) return;
+    this.anims.create({
+      key: WIN_TITLE_ANIMATION_KEY,
+      frames: this.anims.generateFrameNumbers(WIN_TITLE_TEXTURE_KEY, { start: 0, end: 39 }),
+      frameRate: 30,
       repeat: -1,
     });
   }
@@ -3580,7 +3730,7 @@ export class HiLoScene extends Phaser.Scene {
       titleStr = t(this.language, 'scene.push');
     }
 
-    const modal = this.add.container(width / 2, height / 2 - 485); // Move up 80px during result display
+    const modal = this.add.container(width / 2, height / 2 - 505); // Move up 90px during result display
 
     const cardBg = this.add.graphics();
     cardBg.fillStyle(0x1e272e, 1);
@@ -3597,6 +3747,23 @@ export class HiLoScene extends Phaser.Scene {
 
     if (outcome === 'WIN') this.resultTitleText.setColor('#00b894');
     else this.resultTitleText.setColor('#b2bec3');
+
+    if (this.textures.exists(WIN_TITLE_TEXTURE_KEY)) {
+      this.ensureWinTitleAnimation();
+      this.resultTitleWinSprite = this.add
+        .sprite(0, -88, WIN_TITLE_TEXTURE_KEY, 0)
+        .setOrigin(0.5)
+        .setScale(0.46)
+        .setVisible(outcome === 'WIN');
+      if (outcome === 'WIN') {
+        this.resultTitleText.setVisible(false);
+        if (this.anims.exists(WIN_TITLE_ANIMATION_KEY)) {
+          this.resultTitleWinSprite.play(WIN_TITLE_ANIMATION_KEY, true);
+        }
+      }
+    } else {
+      this.resultTitleWinSprite = undefined;
+    }
 
     const final = payload.finalPrice?.toFixed(2) ?? '--';
 
@@ -3645,7 +3812,12 @@ export class HiLoScene extends Phaser.Scene {
       color: '#fdcb6e',
     }).setOrigin(0.5);
 
-    modal.add([cardBg, this.resultTitleText, statsText]);
+    modal.add(cardBg);
+    modal.add(this.resultTitleText);
+    if (this.resultTitleWinSprite) {
+      modal.add(this.resultTitleWinSprite);
+    }
+    modal.add(statsText);
     if (this.resultWinnersText) {
       modal.add(this.resultWinnersText);
     }
@@ -3882,6 +4054,38 @@ export class HiLoScene extends Phaser.Scene {
         fill: true,
       },
     };
+    const sumCaptionGlowStyle: Phaser.Types.GameObjects.Text.TextStyle = {
+      fontFamily: "'Oxanium', 'Rajdhani', sans-serif",
+      fontSize: '26px',
+      color: '#b8f6ff',
+      fontStyle: '800',
+      stroke: '#00b9d6',
+      strokeThickness: 8,
+      shadow: {
+        offsetX: 0,
+        offsetY: 0,
+        color: 'rgba(0, 225, 255, 0.95)',
+        blur: 14,
+        fill: true,
+        stroke: true,
+      },
+    };
+    const sumCaptionCoreStyle: Phaser.Types.GameObjects.Text.TextStyle = {
+      fontFamily: "'Oxanium', 'Rajdhani', sans-serif",
+      fontSize: '24px',
+      color: '#e9fcff',
+      fontStyle: '800',
+      stroke: '#032f43',
+      strokeThickness: 4,
+      align: 'center',
+      shadow: {
+        offsetX: 0,
+        offsetY: 2,
+        color: 'rgba(0,0,0,0.7)',
+        blur: 3,
+        fill: true,
+      },
+    };
 
     const createFancyResultLabel = (
       x: number,
@@ -3931,6 +4135,27 @@ export class HiLoScene extends Phaser.Scene {
       320,
     );
 
+    const sumCaptionY = sumBox.y + 61;
+    const sumCaptionGlow = this.add
+      .text(sumBox.x, sumCaptionY, 'SUM', sumCaptionGlowStyle)
+      .setOrigin(0.5)
+      .setAlpha(0.82);
+    const sumCaptionCore = this.add
+      .text(sumBox.x, sumCaptionY, 'SUM', sumCaptionCoreStyle)
+      .setOrigin(0.5);
+    container.add(sumCaptionGlow);
+    container.add(sumCaptionCore);
+    this.tweens.add({
+      targets: [sumCaptionGlow, sumCaptionCore],
+      alpha: { from: 0.78, to: 1 },
+      scaleX: 1.06,
+      scaleY: 1.06,
+      duration: 360,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+
     this.boxTotalSprite = container;
     this.boxTotalDisplayTimer = this.time.delayedCall(
       RESULT_BOX_TOTAL_DISPLAY_MS,
@@ -3941,11 +4166,6 @@ export class HiLoScene extends Phaser.Scene {
           this.boxTotalSprite = undefined;
         }
         this.setTopDigitDisplayVisible(true);
-        // Never re-show SUM while the result overlay card is visible.
-        if (!this.resultOverlay && this.sumTriangleText && this.lastSumTriangleValue !== null) {
-          this.sumTriangleText.setText(this.lastSumTriangleValue);
-          this.sumTriangleText.setVisible(true);
-        }
       },
       undefined,
       this,
@@ -3956,6 +4176,7 @@ export class HiLoScene extends Phaser.Scene {
     this.resultOverlay?.destroy();
     this.resultOverlay = undefined;
     this.resultTitleText = undefined;
+    this.resultTitleWinSprite = undefined;
     this.resultPayoutText = undefined;
     this.resultWinnersText = undefined;
     this.resultPlayerWinsText = undefined;

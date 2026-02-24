@@ -710,7 +710,8 @@ export const initControls = (handlers: ControlHandlers) => {
     const isMobile = isMobileViewport();
     const isFullscreen = isFullscreenActive();
     const canEnterFullscreen = canFullscreen(target);
-    const shouldShowGamePrompt = isMobile && !isFullscreen && canEnterFullscreen;
+    const shouldShowGamePrompt =
+      isMobile && !fullscreenGatePassed && !isFullscreen && canEnterFullscreen;
     // Update game fullscreen prompt (shown inside game area)
     if (fullscreenPromptEl) {
       fullscreenPromptEl.classList.toggle('is-hidden', !shouldShowGamePrompt);
@@ -736,6 +737,13 @@ export const initControls = (handlers: ControlHandlers) => {
     if (!request) return;
     try {
       await request.call(target);
+      if (isMobileViewport() && typeof screen !== 'undefined' && screen.orientation?.lock) {
+        try {
+          await screen.orientation.lock('portrait');
+        } catch {
+          // Ignore orientation-lock failures (not supported on some browsers/devices).
+        }
+      }
     } catch {
       // Ignore errors
     }
@@ -750,17 +758,41 @@ export const initControls = (handlers: ControlHandlers) => {
     if (appShellEl) {
       appShellEl.classList.remove('is-hidden');
     }
+    updateFullscreenPrompt();
     window.dispatchEvent(new Event('app:layout:shown'));
   };
 
   // Fullscreen button in game area
   fullscreenBtnEl?.addEventListener('click', requestFullscreen);
+
+  const triggerMobileFullscreenFromTap = () => {
+    if (!isMobileViewport() || !state.token) return;
+    if (!fullscreenGatePassed) {
+      dismissFullscreenGate();
+    }
+    if (!isFullscreenActive()) {
+      void requestFullscreen();
+    }
+  };
   
   // Fullscreen gate button (shown after login, before game)
   fullscreenGateBtnEl?.addEventListener('click', () => {
     dismissFullscreenGate();
     void requestFullscreen();
   });
+
+  // Mobile: tapping anywhere in the fullscreen gate should enter game fullscreen.
+  fullscreenGateEl?.addEventListener('pointerdown', triggerMobileFullscreenFromTap);
+
+  // Mobile: when not fullscreen, any tap in game area should request fullscreen.
+  appShellEl?.addEventListener(
+    'pointerdown',
+    () => {
+      if (!isMobileViewport() || !state.token || isFullscreenActive()) return;
+      void requestFullscreen();
+    },
+    { passive: true },
+  );
 
   if (typeof document !== 'undefined') {
     document.addEventListener('fullscreenchange', updateFullscreenPrompt);

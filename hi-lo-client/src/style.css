@@ -176,8 +176,10 @@ html {
   inset: 0;
   background: radial-gradient(circle at top, #0b1b2a 0%, #040608 80%);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
+  padding: clamp(16vh, 28vh, 32vh) 1rem 1rem;
+  box-sizing: border-box;
   z-index: 100;
 }
 
@@ -2228,9 +2230,9 @@ li {
   }
 
   #game-container {
-    /* 9:16 letterboxed container */
-    width: 100vw !important;
-    height: calc(100vw * 16 / 9) !important;
+    /* Force portrait stage even when device/browser rotates to landscape. */
+    width: min(calc(100dvh * 9 / 16), 100vw) !important;
+    height: auto !important;
     max-height: 100dvh !important;
     aspect-ratio: 9 / 16;
     margin: 0 auto;
@@ -2248,8 +2250,8 @@ li {
 
   @supports not (height: 100dvh) {
     #game-container {
-      width: 100vw !important;
-      height: calc(100vw * 16 / 9) !important;
+      width: min(calc(100vh * 9 / 16), 100vw) !important;
+      height: auto !important;
       max-height: 100vh !important;
     }
   }
