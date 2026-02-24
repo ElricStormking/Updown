@@ -468,6 +468,44 @@
         font-weight: 600;
         color: #7dd3fc;
       }
+      .metric-value.bonus-rtp-exceeded {
+        color: #fbbf24;
+        text-shadow: 0 0 12px rgba(251, 191, 36, 0.28);
+      }
+      .save-warning-inline {
+        margin-top: 0;
+        margin-left: 0.5rem;
+        color: #fbbf24;
+        font-size: 0.82rem;
+        font-weight: 600;
+        letter-spacing: 0.01em;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+      }
+      .save-warning-inline::before {
+        content: "!";
+        width: 1rem;
+        height: 1rem;
+        border-radius: 999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.72rem;
+        font-weight: 700;
+        background: rgba(245, 158, 11, 0.18);
+        border: 1px solid rgba(245, 158, 11, 0.45);
+        color: #fbbf24;
+      }
+      .save-warning-inline.hidden {
+        display: none;
+      }
+      .save-action-group {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+      }
       .metric-input input {
         width: 84px;
       }
@@ -811,7 +849,12 @@
           <div style="margin-top: 1rem;">
             <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.5rem;">
               <h3 style="margin: 0;">Digit Bonus Ratios (Other Slots)</h3>
-              <button class="primary small" type="submit">Save</button>
+              <div class="save-action-group">
+                <button class="primary small" type="submit">Save</button>
+                <span class="save-warning-inline hidden" data-bonus-rtp-warning>
+                  Bonus RTP% exceeds RTP FP%.
+                </span>
+              </div>
             </div>
             <p class="formula-note">
               Payout Ratio is calculated as <code>1 + (baseRatio * baseCount + sum(bonusRatio_i * bonusWeight_i)) / (baseCount + sum(bonusWeight_i))</code>,
@@ -827,7 +870,7 @@
                     <th rowspan="2">Bet Slot</th>
                     <th rowspan="2" class="metric-col">Bonus %</th>
                     <th rowspan="2" class="metric-col">Suggest Win %</th>
-                    <th rowspan="2" class="metric-col">RTP %</th>
+                    <th rowspan="2" class="metric-col">BonusRTP %</th>
                     <th rowspan="2" class="metric-col">RTP FP %</th>
                     <th rowspan="2" class="payout-col">Payout Ratio</th>
                     <th colspan="5">Bonus Ratios</th>
@@ -855,12 +898,17 @@
           <div style="margin-top: 1.25rem;">
             <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.5rem;">
               <h3 style="margin: 0;">Single Digit Payout &amp; Bonus</h3>
-              <button class="primary small" type="submit">Save</button>
+              <div class="save-action-group">
+                <button class="primary small" type="submit">Save</button>
+                <span class="save-warning-inline hidden" data-bonus-rtp-warning>
+                  Bonus RTP% exceeds RTP FP%.
+                </span>
+              </div>
             </div>
             <p class="formula-note">
-              Single RTP uses all three suggest-win channels:
+              Single BonusRTP uses all three suggest-win channels:
               <code>
-                SuggestWin%x1*(1+baseRatio_x1) + SuggestWin%x2*(1+baseRatio_x2) + SuggestWin%x3*(1+baseRatio_x3)
+                SuggestWin%x1*(1+(baseRatio_x1*baseCount+sum(bonusRatio_i*bonusWeight_i))/(baseCount+sum(bonusWeight_i))) + SuggestWin%x2*(1+(baseRatio_x2*baseCount+sum(bonusRatio_i*bonusWeight_i))/(baseCount+sum(bonusWeight_i))) + SuggestWin%x3*(1+(baseRatio_x3*baseCount+sum(bonusRatio_i*bonusWeight_i))/(baseCount+sum(bonusWeight_i)))
               </code>,
               where <code>baseRatio_x1</code> is row payout ratio, and <code>baseRatio_x2/x3</code> are the single multipliers.
             </p>
@@ -886,7 +934,7 @@
                     <th rowspan="2">Bet Slot</th>
                     <th rowspan="2" class="metric-col">Bonus %</th>
                     <th colspan="3" class="metric-col">Suggest Win %</th>
-                    <th rowspan="2" class="metric-col">RTP %</th>
+                    <th rowspan="2" class="metric-col">BonusRTP %</th>
                     <th rowspan="2" class="metric-col">RTP FP %</th>
                     <th rowspan="2" class="payout-col">Payout Ratio</th>
                     <th colspan="5">Bonus Ratios</th>
@@ -917,7 +965,12 @@
           <div style="margin-top: 1.25rem;">
             <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.5rem;">
               <h3 style="margin: 0;">Digit Sum Payouts + Sum Bonus Ratios</h3>
-              <button class="primary small" type="submit">Save</button>
+              <div class="save-action-group">
+                <button class="primary small" type="submit">Save</button>
+                <span class="save-warning-inline hidden" data-bonus-rtp-warning>
+                  Bonus RTP% exceeds RTP FP%.
+                </span>
+              </div>
             </div>
             <div class="bonus-ratio-wrapper">
               <table class="bonus-ratio-table sum-bonus-table">
@@ -926,7 +979,7 @@
                     <th rowspan="2">Bet Slot</th>
                     <th rowspan="2" class="metric-col">Bonus %</th>
                     <th rowspan="2" class="metric-col">Suggest Win %</th>
-                    <th rowspan="2" class="metric-col">RTP %</th>
+                    <th rowspan="2" class="metric-col">BonusRTP %</th>
                     <th rowspan="2" class="metric-col">RTP FP %</th>
                     <th rowspan="2" class="sum-payout-col">Sum payout</th>
                     <th colspan="5">Bonus Ratios</th>
@@ -954,6 +1007,9 @@
           <div class="form-actions">
             <button type="button" id="config-reload">Reload</button>
             <button class="primary" type="submit">Save (applies next round)</button>
+            <span class="save-warning-inline hidden" data-bonus-rtp-warning>
+              Bonus RTP% exceeds RTP FP%.
+            </span>
           </div>
           <div class="status" id="config-status"></div>
         </form>
@@ -1248,6 +1304,9 @@
       const bonusRatioScrollbarInner = document.querySelector(
         '#bonus-ratio-scrollbar-top .bonus-ratio-scrollbar-inner',
       );
+      const bonusRtpWarningEls = Array.from(
+        document.querySelectorAll('[data-bonus-rtp-warning]'),
+      );
 
       const sumKeys = Array.from({ length: 27 }, (_, idx) => idx + 1);
       const sumInputs = new Map();
@@ -1316,6 +1375,35 @@
         } else {
           el.classList.remove('error');
         }
+      };
+
+      const buildBonusRtpExceededMessage = (count) => {
+        if (!Number.isFinite(count) || count <= 0) {
+          return '';
+        }
+        return (
+          'Warning: Bonus RTP% exceeds RTP FP% in ' +
+          String(count) +
+          ' row' +
+          (count === 1 ? '' : 's') +
+          '.'
+        );
+      };
+
+      const syncBonusRtpSaveWarnings = () => {
+        const exceededCount = Array.from(slotMetaInputs.values()).reduce(
+          (count, entry) => count + (entry.exceedsRtpFp ? 1 : 0),
+          0,
+        );
+        const hasExceeded = exceededCount > 0;
+        const message = hasExceeded
+          ? buildBonusRtpExceededMessage(exceededCount)
+          : 'Bonus RTP% exceeds RTP FP%.';
+        bonusRtpWarningEls.forEach((el) => {
+          el.textContent = message;
+          el.classList.toggle('hidden', !hasExceeded);
+        });
+        return exceededCount;
       };
 
       let toastStack = null;
@@ -2073,20 +2161,40 @@
         return weightSum <= 0 ? 0 : (weightSum / totalRoll) * 100;
       };
 
-      const computeRtpPercent = (entries, suggestWinPct, baseRatio, totalRoll) => {
-        if (!Number.isFinite(suggestWinPct)) return NaN;
-        if (!entries.length) return suggestWinPct;
+      const computeAverageRatioWithBonus = (entries, baseRatio, totalRoll) => {
+        const safeTotalRoll =
+          Number.isFinite(totalRoll) && totalRoll > 0 ? totalRoll : 0;
         const weightSum = entries.reduce((sum, entry) => sum + entry.weight, 0);
-        const baseCount = Number.isFinite(totalRoll) ? Math.max(totalRoll - weightSum, 0) : 0;
-        const totalCount = baseCount + weightSum;
-        if (totalCount <= 0) return suggestWinPct;
-        const ratioSum = entries.reduce((sum, entry) => sum + entry.ratio * entry.weight, 0);
-        const weightedSum = (Number.isFinite(baseRatio) ? baseRatio : 0) * baseCount + ratioSum;
-        const avgRatio = weightedSum / totalCount;
+        const baseCount = Math.max(safeTotalRoll - weightSum, 0);
+        const bonusWeightedRatio = entries.reduce(
+          (sum, entry) => sum + entry.ratio * entry.weight,
+          0,
+        );
+        const baseWeightedRatio =
+          (Number.isFinite(baseRatio) ? baseRatio : 0) * baseCount;
+        const denominator = safeTotalRoll > 0 ? safeTotalRoll : baseCount;
+        if (denominator <= 0) {
+          return Number.isFinite(baseRatio) ? baseRatio : 0;
+        }
+        return (baseWeightedRatio + bonusWeightedRatio) / denominator;
+      };
+
+      const computeBonusRtpPercent = (
+        entries,
+        suggestWinPct,
+        baseRatio,
+        totalRoll,
+      ) => {
+        if (!Number.isFinite(suggestWinPct)) return NaN;
+        const avgRatio = computeAverageRatioWithBonus(
+          entries,
+          baseRatio,
+          totalRoll,
+        );
         return suggestWinPct * (1 + avgRatio);
       };
 
-      const updateSlotMetrics = (key) => {
+      const updateSlotMetrics = (key, syncWarnings = true) => {
         const entry = bonusRatioInputs.get(key);
         const meta = slotMetaInputs.get(key);
         if (!entry || !meta) return;
@@ -2121,9 +2229,24 @@
           const ratio2 = Number.isFinite(baseRatioDouble) ? baseRatioDouble : 0;
           const ratio3 = Number.isFinite(baseRatioTriple) ? baseRatioTriple : 0;
 
-          const rtpSingle = sw1 * (1 + ratio1);
-          const rtpDouble = sw2 * (1 + ratio2);
-          const rtpTriple = sw3 * (1 + ratio3);
+          const rtpSingle = computeBonusRtpPercent(
+            entries,
+            sw1,
+            ratio1,
+            totalRoll,
+          );
+          const rtpDouble = computeBonusRtpPercent(
+            entries,
+            sw2,
+            ratio2,
+            totalRoll,
+          );
+          const rtpTriple = computeBonusRtpPercent(
+            entries,
+            sw3,
+            ratio3,
+            totalRoll,
+          );
 
           rtpPct = rtpSingle + rtpDouble + rtpTriple;
         } else {
@@ -2131,21 +2254,39 @@
             digitType === 'SUM'
               ? Number(sumInputs.get(Number(selectionRaw))?.value)
               : Number(slotPayoutInputs.get(key)?.value);
-          rtpPct = computeRtpPercent(entries, suggestWinPct, baseRatio, totalRoll);
+          rtpPct = computeBonusRtpPercent(
+            entries,
+            suggestWinPct,
+            baseRatio,
+            totalRoll,
+          );
         }
 
         const rtpCap = Number(meta.rtpFoolProofInput.value);
-        const cappedRtpPct =
-          Number.isFinite(rtpCap) && rtpCap > 0 ? Math.min(rtpPct, rtpCap) : rtpPct;
+        const hasRtpCap = Number.isFinite(rtpCap) && rtpCap > 0;
+        const exceedsRtpFp =
+          hasRtpCap && Number.isFinite(rtpPct) && rtpPct > rtpCap;
+        meta.exceedsRtpFp = exceedsRtpFp;
         meta.bonusEl.textContent = formatPercent(bonusPct);
-        meta.rtpEl.textContent = formatPercent(cappedRtpPct);
+        meta.rtpEl.textContent = formatPercent(rtpPct);
+        meta.rtpEl.classList.toggle('bonus-rtp-exceeded', exceedsRtpFp);
+        meta.rtpEl.title = exceedsRtpFp
+          ? 'Bonus RTP ' +
+            formatPercent(rtpPct) +
+            ' exceeds RTP FP ' +
+            formatPercent(rtpCap)
+          : '';
         if (meta.totalCountsEl) {
           meta.totalCountsEl.textContent = formatCount(totalCounts);
+        }
+        if (syncWarnings) {
+          syncBonusRtpSaveWarnings();
         }
       };
 
       const updateAllSlotMetrics = () => {
-        slotMetaInputs.forEach((_, key) => updateSlotMetrics(key));
+        slotMetaInputs.forEach((_, key) => updateSlotMetrics(key, false));
+        syncBonusRtpSaveWarnings();
       };
 
       const syncSingleSlotPayoutInputs = (value, sourceKey) => {
@@ -2438,6 +2579,7 @@
               baseWeightInput,
               totalCountsEl: totalCountsValueEl,
               label: slot.label,
+              exceedsRtpFp: false,
             });
             payoutInput.addEventListener('input', () => updateSlotMetrics(key));
             suggestInput.addEventListener('input', () => updateSlotMetrics(key));
@@ -2540,6 +2682,7 @@
               baseWeightInput,
               totalCountsEl: totalCountsValueEl,
               label: slot.label,
+              exceedsRtpFp: false,
             });
             suggestInput.addEventListener('input', () => updateSlotMetrics(key));
             suggestDoubleInput?.addEventListener('input', () =>
@@ -3036,6 +3179,12 @@
         try {
           setStatus(configStatus, 'Saving...');
           const payload = buildConfigPayload();
+          const exceededCount = syncBonusRtpSaveWarnings();
+          if (exceededCount > 0) {
+            const warningMessage = buildBonusRtpExceededMessage(exceededCount);
+            window.alert(warningMessage);
+            showToast(warningMessage, true);
+          }
           const expectedSum27 = Number(payload?.digitPayouts?.sum?.[27]);
           await apiFetch('/config/game', {
             method: 'PUT',

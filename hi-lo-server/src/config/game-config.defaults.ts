@@ -256,7 +256,7 @@ export const buildDefaultDigitBonusRatios = (): DigitBonusRatios => {
   );
   setDefaults(
     byType(DigitBetType.SINGLE),
-    [50, 68, 88, 100, 128],
+    [25, 38, 50, 68, 88],
     [100, 100, 100, 100, 50],
   );
 

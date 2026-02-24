@@ -73,6 +73,9 @@ type SlotPayoutMetaEntry = {
   totalCounts: number;
 };
 
+const LEGACY_SINGLE_BONUS_RATIOS = [50, 68, 88, 100, 128] as const;
+const UPDATED_SINGLE_BONUS_RATIOS = [25, 38, 50, 68, 88] as const;
+
 @Injectable()
 export class GameConfigService {
   private cache: CacheEntry | null = null;
@@ -939,7 +942,9 @@ export class GameConfigService {
     fallback: DigitBonusRatios,
   ): DigitBonusRatios {
     if (!isRecord(raw)) {
-      return this.cloneDigitBonusRatios(fallback);
+      return this.normalizeLegacySingleBonusRatios(
+        this.cloneDigitBonusRatios(fallback),
+      );
     }
 
     const result: DigitBonusRatios = {};
@@ -947,7 +952,7 @@ export class GameConfigService {
       const rawEntry = raw[key];
       result[key] = this.normalizeBonusRatioEntry(rawEntry, entry);
     }
-    return result;
+    return this.normalizeLegacySingleBonusRatios(result);
   }
 
   private normalizeBonusRatioEntry(
@@ -986,6 +991,26 @@ export class GameConfigService {
       };
     }
     return result;
+  }
+
+  private normalizeLegacySingleBonusRatios(
+    source: DigitBonusRatios,
+  ): DigitBonusRatios {
+    for (const [key, entry] of Object.entries(source)) {
+      if (!key.startsWith('SINGLE|')) continue;
+      if (!this.isLegacySingleBonusRatioPattern(entry.ratios)) continue;
+      entry.ratios = UPDATED_SINGLE_BONUS_RATIOS.slice();
+    }
+    return source;
+  }
+
+  private isLegacySingleBonusRatioPattern(ratios: number[]): boolean {
+    if (ratios.length !== LEGACY_SINGLE_BONUS_RATIOS.length) {
+      return false;
+    }
+    return ratios.every(
+      (value, index) => value === LEGACY_SINGLE_BONUS_RATIOS[index],
+    );
   }
 
   private fromRecord(record: {
