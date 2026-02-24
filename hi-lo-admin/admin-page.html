@@ -1159,7 +1159,7 @@
               <button type="button" id="merchants-new" class="secondary limited-hide">+ New</button>
             </form>
             <div class="status" id="merchants-status"></div>
-            <div class="table-wrapper"><table><thead><tr><th>ID</th><th>Merchant ID</th><th>Name</th><th>Hash Key</th><th>IP Whitelist</th><th>Active</th><th>Created</th><th class="limited-hide">Actions</th></tr></thead><tbody id="merchants-table-body"></tbody></table></div>
+            <div class="table-wrapper"><table><thead><tr><th>ID</th><th>Merchant ID</th><th>Name</th><th>Currency</th><th>Hash Key</th><th>IP Whitelist</th><th>Active</th><th>Created</th><th class="limited-hide">Actions</th></tr></thead><tbody id="merchants-table-body"></tbody></table></div>
             <div class="pagination" id="merchants-pagination"></div>
           </section>
         </div>
@@ -1171,7 +1171,7 @@
             <form id="transfers-form" class="filters">
               <label>Merchant<input id="transfers-merchant" type="text" /></label>
               <label>Account<input id="transfers-account" type="text" /></label>
-              <label>Type<select id="transfers-type"><option value="">All</option><option value="1">In</option><option value="2">Out</option></select></label>
+              <label>Type<select id="transfers-type"><option value="">All</option><option value="0">In</option><option value="1">Out</option></select></label>
               <label>Start<input id="transfers-start" type="date" /></label>
               <label>End<input id="transfers-end" type="date" /></label>
               <button class="primary" type="submit">Search</button>
@@ -1210,6 +1210,16 @@
           <div class="grid">
             <label>Merchant ID<input id="merchant-admin-merchant-id" type="text" required /></label>
             <label>Merchant Name<input id="merchant-admin-merchant-name" type="text" required /></label>
+            <label>Currency<input id="merchant-admin-currency" type="text" placeholder="e.g. USDT" value="USDT" required /></label>
+            <label>
+              Callback Enabled
+              <select id="merchant-admin-callback-enabled">
+                <option value="false">Disabled</option>
+                <option value="true">Enabled</option>
+              </select>
+            </label>
+            <label>LoginPlayer Callback URL<input id="merchant-admin-login-callback-url" type="url" placeholder="https://merchant.example.com/login-player" /></label>
+            <label>UpdateBalance Callback URL<input id="merchant-admin-update-callback-url" type="url" placeholder="https://merchant.example.com/update-balance" /></label>
             <label>Merchant Hash Key<input id="merchant-admin-hash-key" type="text" minlength="8" required /></label>
             <label>Integration Whitelist IPs (comma separated)<input id="merchant-admin-integration-ips" type="text" placeholder="e.g. 203.0.113.10,203.0.113.11" required /></label>
             <label>Admin Account<input id="merchant-admin-account" type="text" required /></label>
@@ -1232,6 +1242,16 @@
           <div class="grid">
             <label>Merchant ID<input id="merchant-edit-merchant-id" type="text" readonly /></label>
             <label>Merchant Name<input id="merchant-edit-merchant-name" type="text" required /></label>
+            <label>Currency<input id="merchant-edit-currency" type="text" placeholder="e.g. USDT" required /></label>
+            <label>
+              Callback Enabled
+              <select id="merchant-edit-callback-enabled">
+                <option value="false">Disabled</option>
+                <option value="true">Enabled</option>
+              </select>
+            </label>
+            <label>LoginPlayer Callback URL<input id="merchant-edit-login-callback-url" type="url" placeholder="https://merchant.example.com/login-player" /></label>
+            <label>UpdateBalance Callback URL<input id="merchant-edit-update-callback-url" type="url" placeholder="https://merchant.example.com/update-balance" /></label>
             <label>Merchant Hash Key (leave blank to keep current)<input id="merchant-edit-hash-key" type="text" minlength="8" /></label>
             <label>Integration Whitelist IPs (comma separated)<input id="merchant-edit-integration-ips" type="text" placeholder="e.g. 203.0.113.10,203.0.113.11" required /></label>
             <label>Active<select id="merchant-edit-active"><option value="true">Active</option><option value="false">Inactive</option></select></label>
@@ -1319,6 +1339,10 @@
       const merchantAdminCancel = $('#merchant-admin-cancel');
       const merchantAdminMerchantIdInput = $('#merchant-admin-merchant-id');
       const merchantAdminMerchantNameInput = $('#merchant-admin-merchant-name');
+      const merchantAdminCurrencyInput = $('#merchant-admin-currency');
+      const merchantAdminCallbackEnabledInput = $('#merchant-admin-callback-enabled');
+      const merchantAdminLoginCallbackUrlInput = $('#merchant-admin-login-callback-url');
+      const merchantAdminUpdateCallbackUrlInput = $('#merchant-admin-update-callback-url');
       const merchantAdminHashKeyInput = $('#merchant-admin-hash-key');
       const merchantAdminIntegrationIpsInput = $('#merchant-admin-integration-ips');
       const merchantAdminAccountInput = $('#merchant-admin-account');
@@ -1330,6 +1354,10 @@
       const merchantEditIdInput = $('#merchant-edit-id');
       const merchantEditMerchantIdInput = $('#merchant-edit-merchant-id');
       const merchantEditMerchantNameInput = $('#merchant-edit-merchant-name');
+      const merchantEditCurrencyInput = $('#merchant-edit-currency');
+      const merchantEditCallbackEnabledInput = $('#merchant-edit-callback-enabled');
+      const merchantEditLoginCallbackUrlInput = $('#merchant-edit-login-callback-url');
+      const merchantEditUpdateCallbackUrlInput = $('#merchant-edit-update-callback-url');
       const merchantEditHashKeyInput = $('#merchant-edit-hash-key');
       const merchantEditIntegrationIpsInput = $('#merchant-edit-integration-ips');
       const merchantEditActiveInput = $('#merchant-edit-active');
@@ -1490,11 +1518,47 @@
         }, 2400);
       };
 
+      const isValidHttpUrl = (value) => {
+        try {
+          const parsed = new URL(value);
+          return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+        } catch {
+          return false;
+        }
+      };
+
+      const syncMerchantAdminCallbackFields = () => {
+        const enabled = merchantAdminCallbackEnabledInput?.value === 'true';
+        if (merchantAdminLoginCallbackUrlInput) {
+          merchantAdminLoginCallbackUrlInput.required = enabled;
+        }
+        if (merchantAdminUpdateCallbackUrlInput) {
+          merchantAdminUpdateCallbackUrlInput.required = enabled;
+        }
+      };
+
+      const syncMerchantEditCallbackFields = () => {
+        const enabled = merchantEditCallbackEnabledInput?.value === 'true';
+        if (merchantEditLoginCallbackUrlInput) {
+          merchantEditLoginCallbackUrlInput.required = enabled;
+        }
+        if (merchantEditUpdateCallbackUrlInput) {
+          merchantEditUpdateCallbackUrlInput.required = enabled;
+        }
+      };
+
       const closeMerchantAdminModal = () => {
         if (!merchantAdminModal) return;
         merchantAdminModal.classList.add('hidden');
         setStatus(merchantAdminStatus, '');
         merchantAdminForm?.reset();
+        if (merchantAdminCurrencyInput) {
+          merchantAdminCurrencyInput.value = 'USDT';
+        }
+        if (merchantAdminCallbackEnabledInput) {
+          merchantAdminCallbackEnabledInput.value = 'false';
+        }
+        syncMerchantAdminCallbackFields();
       };
 
       const openMerchantAdminModal = () => {
@@ -1502,6 +1566,13 @@
         merchantAdminModal.classList.remove('hidden');
         setStatus(merchantAdminStatus, '');
         merchantAdminForm?.reset();
+        if (merchantAdminCurrencyInput) {
+          merchantAdminCurrencyInput.value = 'USDT';
+        }
+        if (merchantAdminCallbackEnabledInput) {
+          merchantAdminCallbackEnabledInput.value = 'false';
+        }
+        syncMerchantAdminCallbackFields();
         merchantAdminMerchantIdInput?.focus();
       };
 
@@ -1528,6 +1599,23 @@
         if (merchantEditMerchantNameInput) {
           merchantEditMerchantNameInput.value = merchant.name || '';
         }
+        if (merchantEditCurrencyInput) {
+          merchantEditCurrencyInput.value = merchant.currency || 'USDT';
+        }
+        if (merchantEditCallbackEnabledInput) {
+          merchantEditCallbackEnabledInput.value = merchant.callbackEnabled
+            ? 'true'
+            : 'false';
+        }
+        if (merchantEditLoginCallbackUrlInput) {
+          merchantEditLoginCallbackUrlInput.value =
+            merchant.loginPlayerCallbackUrl || '';
+        }
+        if (merchantEditUpdateCallbackUrlInput) {
+          merchantEditUpdateCallbackUrlInput.value =
+            merchant.updateBalanceCallbackUrl || '';
+        }
+        syncMerchantEditCallbackFields();
         if (merchantEditHashKeyInput) {
           merchantEditHashKeyInput.value = '';
         }
@@ -1662,6 +1750,14 @@
           closeMerchantEditModal();
         }
       });
+      merchantAdminCallbackEnabledInput?.addEventListener(
+        'change',
+        syncMerchantAdminCallbackFields,
+      );
+      merchantEditCallbackEnabledInput?.addEventListener(
+        'change',
+        syncMerchantEditCallbackFields,
+      );
       adminAccountEditCancel?.addEventListener('click', () => {
         closeAdminAccountEditModal();
       });
@@ -1682,6 +1778,8 @@
           closeAdminAccountEditModal();
         }
       });
+      syncMerchantAdminCallbackFields();
+      syncMerchantEditCallbackFields();
 
       // Pagination state
       const pageState = {
@@ -2022,6 +2120,7 @@
                     `<td title="${m.id}">${m.id.slice(0, 8)}...</td>` +
                     `<td>${m.merchantId}</td>` +
                     `<td>${m.name}</td>` +
+                    `<td>${m.currency || 'USDT'}</td>` +
                     `<td>${m.hashKeyMasked}</td>` +
                     `<td title="${whitelist}">${whitelist}</td>` +
                     `<td><span class="badge ${m.isActive ? 'success' : 'error'}">${m.isActive ? 'Active' : 'Inactive'}</span></td>` +
@@ -2031,7 +2130,7 @@
                   );
                 })
                 .join('')
-            : `<tr><td colspan="${canEditMerchants ? 8 : 7}">No data</td></tr>`;
+            : `<tr><td colspan="${canEditMerchants ? 9 : 8}">No data</td></tr>`;
           renderPagination('merchants', data, loadMerchants);
           setStatus(statusEl, '');
         } catch (err) { setStatus(statusEl, err.message, true); }
@@ -2052,17 +2151,53 @@
         }
         const merchantId = merchantAdminMerchantIdInput?.value.trim() || '';
         const name = merchantAdminMerchantNameInput?.value.trim() || '';
+        const currency = merchantAdminCurrencyInput?.value.trim() || '';
+        const callbackEnabled = merchantAdminCallbackEnabledInput?.value === 'true';
+        const loginPlayerCallbackUrl =
+          merchantAdminLoginCallbackUrlInput?.value.trim() || '';
+        const updateBalanceCallbackUrl =
+          merchantAdminUpdateCallbackUrlInput?.value.trim() || '';
         const hashKey = merchantAdminHashKeyInput?.value.trim() || '';
         const integrationIpsRaw = merchantAdminIntegrationIpsInput?.value.trim() || '';
         const account = merchantAdminAccountInput?.value.trim() || '';
         const password = merchantAdminPasswordInput?.value.trim() || '';
 
-        if (!merchantId || !name || !hashKey || !integrationIpsRaw || !account || !password) {
+        if (!merchantId || !name || !currency || !hashKey || !integrationIpsRaw || !account || !password) {
           setStatus(merchantAdminStatus, 'Please fill all fields.', true);
           return;
         }
         if (hashKey.length < 8) {
           setStatus(merchantAdminStatus, 'Merchant hash key must be at least 8 characters.', true);
+          return;
+        }
+        if (
+          callbackEnabled &&
+          (!loginPlayerCallbackUrl || !updateBalanceCallbackUrl)
+        ) {
+          setStatus(
+            merchantAdminStatus,
+            'Callback-enabled merchant requires both callback URLs.',
+            true,
+          );
+          return;
+        }
+        if (loginPlayerCallbackUrl && !isValidHttpUrl(loginPlayerCallbackUrl)) {
+          setStatus(
+            merchantAdminStatus,
+            'LoginPlayer callback URL must be a valid http(s) URL.',
+            true,
+          );
+          return;
+        }
+        if (
+          updateBalanceCallbackUrl &&
+          !isValidHttpUrl(updateBalanceCallbackUrl)
+        ) {
+          setStatus(
+            merchantAdminStatus,
+            'UpdateBalance callback URL must be a valid http(s) URL.',
+            true,
+          );
           return;
         }
         const integrationAllowedIps = integrationIpsRaw
@@ -2081,7 +2216,15 @@
             body: JSON.stringify({
               merchantId,
               name,
+              currency,
               hashKey,
+              callbackEnabled,
+              ...(loginPlayerCallbackUrl
+                ? { loginPlayerCallbackUrl }
+                : {}),
+              ...(updateBalanceCallbackUrl
+                ? { updateBalanceCallbackUrl }
+                : {}),
               integrationAllowedIps,
             }),
           });
@@ -2119,6 +2262,12 @@
         const id = merchantEditIdInput?.value.trim() || '';
         const merchantId = merchantEditMerchantIdInput?.value.trim() || '';
         const name = merchantEditMerchantNameInput?.value.trim() || '';
+        const currency = merchantEditCurrencyInput?.value.trim() || '';
+        const callbackEnabled = merchantEditCallbackEnabledInput?.value === 'true';
+        const loginPlayerCallbackUrl =
+          merchantEditLoginCallbackUrlInput?.value.trim() || '';
+        const updateBalanceCallbackUrl =
+          merchantEditUpdateCallbackUrlInput?.value.trim() || '';
         const hashKey = merchantEditHashKeyInput?.value.trim() || '';
         const integrationIpsRaw = merchantEditIntegrationIpsInput?.value.trim() || '';
         const isActive = merchantEditActiveInput?.value === 'true';
@@ -2129,6 +2278,40 @@
         }
         if (!name) {
           setStatus(merchantEditStatus, 'Merchant name is required.', true);
+          return;
+        }
+        if (!currency) {
+          setStatus(merchantEditStatus, 'Currency is required.', true);
+          return;
+        }
+        if (
+          callbackEnabled &&
+          (!loginPlayerCallbackUrl || !updateBalanceCallbackUrl)
+        ) {
+          setStatus(
+            merchantEditStatus,
+            'Callback-enabled merchant requires both callback URLs.',
+            true,
+          );
+          return;
+        }
+        if (loginPlayerCallbackUrl && !isValidHttpUrl(loginPlayerCallbackUrl)) {
+          setStatus(
+            merchantEditStatus,
+            'LoginPlayer callback URL must be a valid http(s) URL.',
+            true,
+          );
+          return;
+        }
+        if (
+          updateBalanceCallbackUrl &&
+          !isValidHttpUrl(updateBalanceCallbackUrl)
+        ) {
+          setStatus(
+            merchantEditStatus,
+            'UpdateBalance callback URL must be a valid http(s) URL.',
+            true,
+          );
           return;
         }
         if (!integrationIpsRaw) {
@@ -2151,6 +2334,10 @@
 
         const updates = {
           name,
+          currency,
+          callbackEnabled,
+          ...(loginPlayerCallbackUrl ? { loginPlayerCallbackUrl } : {}),
+          ...(updateBalanceCallbackUrl ? { updateBalanceCallbackUrl } : {}),
           integrationAllowedIps,
           isActive,
         };
@@ -2239,7 +2426,7 @@
           if (merchant) params.set('merchantId', merchant); if (account) params.set('account', account); if (type) params.set('type', type);
           if (start) params.set('start', start); if (end) params.set('end', end);
           const data = await apiFetch('/admin/transfers?' + params);
-          $('#transfers-table-body').innerHTML = data.items.length ? data.items.map(t => '<tr><td title="'+t.visibleId+'">'+t.visibleId.slice(0,8)+'...</td><td>'+t.merchantId+'</td><td>'+(t.playerAccount||t.playerId)+'</td><td>'+t.orderNo+'</td><td><span class="badge '+(t.type===1?'success':'warning')+'">'+(t.type===1?'IN':'OUT')+'</span></td><td>'+formatNum(t.amount)+'</td><td>'+formatNum(t.balanceAfter)+'</td><td>'+formatDate(t.createdAt)+'</td></tr>').join('') : '<tr><td colspan="8">No data</td></tr>';
+          $('#transfers-table-body').innerHTML = data.items.length ? data.items.map(t => '<tr><td title="'+t.visibleId+'">'+t.visibleId.slice(0,8)+'...</td><td>'+t.merchantId+'</td><td>'+(t.playerAccount||t.playerId)+'</td><td>'+t.orderNo+'</td><td><span class="badge '+(t.type===0?'success':'warning')+'">'+(t.type===0?'IN':'OUT')+'</span></td><td>'+formatNum(t.amount)+'</td><td>'+formatNum(t.balanceAfter)+'</td><td>'+formatDate(t.createdAt)+'</td></tr>').join('') : '<tr><td colspan="8">No data</td></tr>';
           renderPagination('transfers', data, loadTransfers);
           setStatus(statusEl, '');
         } catch (err) { setStatus(statusEl, err.message, true); }

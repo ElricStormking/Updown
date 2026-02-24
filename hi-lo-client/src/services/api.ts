@@ -10,11 +10,35 @@ import type {
   WalletResponse,
 } from '../types';
 
-const GAME_API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:4001';
-const INTEGRATION_API_URL =
-  import.meta.env.VITE_INTEGRATION_API_URL ??
+const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1']);
+const hasWindow = typeof window !== 'undefined';
+
+const trimTrailingSlash = (value: string) => value.replace(/\/+$/, '');
+
+const isLocalBrowserHost = () => {
+  if (!hasWindow) return true;
+  return LOCAL_HOSTNAMES.has(window.location.hostname);
+};
+
+const resolveGatewayOrigin = () => {
+  if (!hasWindow) return 'http://localhost:4000';
+  const { protocol, hostname } = window.location;
+  return `${protocol}//${hostname}:4000`;
+};
+
+const gatewayOrigin = trimTrailingSlash(
+  import.meta.env.VITE_GATEWAY_URL ?? resolveGatewayOrigin(),
+);
+
+const GAME_API_URL = trimTrailingSlash(
   import.meta.env.VITE_API_URL ??
-  'http://localhost:4003';
+    (isLocalBrowserHost() ? 'http://localhost:4001' : gatewayOrigin),
+);
+const INTEGRATION_API_URL = trimTrailingSlash(
+  import.meta.env.VITE_INTEGRATION_API_URL ??
+    import.meta.env.VITE_API_URL ??
+    (isLocalBrowserHost() ? 'http://localhost:4003' : gatewayOrigin),
+);
 
 const gameClient = axios.create({
   baseURL: GAME_API_URL,

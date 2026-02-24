@@ -7,7 +7,28 @@ import type {
   RoundStatePayload,
 } from '../types';
 
-const WS_URL = import.meta.env.VITE_WS_URL ?? 'http://localhost:4001';
+const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1']);
+const hasWindow = typeof window !== 'undefined';
+
+const trimTrailingSlash = (value: string) => value.replace(/\/+$/, '');
+
+const isLocalBrowserHost = () => {
+  if (!hasWindow) return true;
+  return LOCAL_HOSTNAMES.has(window.location.hostname);
+};
+
+const resolveGatewayOrigin = () => {
+  if (!hasWindow) return 'http://localhost:4000';
+  const { protocol, hostname } = window.location;
+  return `${protocol}//${hostname}:4000`;
+};
+
+const WS_URL = trimTrailingSlash(
+  import.meta.env.VITE_WS_URL ??
+    import.meta.env.VITE_API_URL ??
+    import.meta.env.VITE_GATEWAY_URL ??
+    (isLocalBrowserHost() ? 'http://localhost:4001' : resolveGatewayOrigin()),
+);
 
 export interface GameSocketCallbacks {
   onPrice(update: PriceUpdate): void;
