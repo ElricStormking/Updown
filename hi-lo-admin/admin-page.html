@@ -744,7 +744,6 @@
           </div>
           <div class="status" id="login-status"></div>
         </form>
-        <div class="divider">Or</div>
         <div id="bootstrap-section" class="hidden">
           <h3 style="margin: 0 0 0.75rem 0; font-size: 1rem; font-family: 'Fraunces', 'Times New Roman', serif;">
             Bootstrap first superadmin
@@ -1225,6 +1224,48 @@
       </section>
     </div>
 
+    <div id="merchant-edit-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="merchant-edit-modal-title">
+      <section class="modal-panel">
+        <h3 id="merchant-edit-modal-title">Edit Merchant</h3>
+        <form id="merchant-edit-form">
+          <input id="merchant-edit-id" type="hidden" />
+          <div class="grid">
+            <label>Merchant ID<input id="merchant-edit-merchant-id" type="text" readonly /></label>
+            <label>Merchant Name<input id="merchant-edit-merchant-name" type="text" required /></label>
+            <label>Merchant Hash Key (leave blank to keep current)<input id="merchant-edit-hash-key" type="text" minlength="8" /></label>
+            <label>Integration Whitelist IPs (comma separated)<input id="merchant-edit-integration-ips" type="text" placeholder="e.g. 203.0.113.10,203.0.113.11" required /></label>
+            <label>Active<select id="merchant-edit-active"><option value="true">Active</option><option value="false">Inactive</option></select></label>
+          </div>
+          <div class="form-actions">
+            <button id="merchant-edit-cancel" class="secondary" type="button">Cancel</button>
+            <button class="primary" type="submit">Save</button>
+          </div>
+          <div class="status" id="merchant-edit-status"></div>
+        </form>
+      </section>
+    </div>
+
+    <div id="admin-account-edit-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="admin-account-edit-modal-title">
+      <section class="modal-panel">
+        <h3 id="admin-account-edit-modal-title">Edit Admin Account</h3>
+        <form id="admin-account-edit-form">
+          <input id="admin-account-edit-id" type="hidden" />
+          <div class="grid">
+            <label>Account<input id="admin-account-edit-account" type="text" required /></label>
+            <label>Merchant ID<input id="admin-account-edit-merchant-id" type="text" required /></label>
+            <label>Status<select id="admin-account-edit-status"><option value="ENABLED">ENABLED</option><option value="LOCKED">LOCKED</option><option value="DISABLED">DISABLED</option></select></label>
+            <label>New Password (leave blank to keep current)<input id="admin-account-edit-password" type="password" minlength="6" /></label>
+          </div>
+          <p class="formula-note">Use merchant ID <code>hotcoregm</code> for superadmin role.</p>
+          <div class="form-actions">
+            <button id="admin-account-edit-cancel" class="secondary" type="button">Cancel</button>
+            <button class="primary" type="submit">Save</button>
+          </div>
+          <div class="status" id="admin-account-edit-status-msg"></div>
+        </form>
+      </section>
+    </div>
+
     <script>
       const tokenKey = 'adminToken';
       const adminInfoKey = 'adminInfo';
@@ -1255,6 +1296,15 @@
       const adminAccountsFilterStatusInput = $('#admin-accounts-filter-status');
       const adminAccountsStatus = $('#admin-accounts-status');
       const adminAccountsTableBody = $('#admin-accounts-table-body');
+      const adminAccountEditModal = $('#admin-account-edit-modal');
+      const adminAccountEditForm = $('#admin-account-edit-form');
+      const adminAccountEditStatusMsg = $('#admin-account-edit-status-msg');
+      const adminAccountEditCancel = $('#admin-account-edit-cancel');
+      const adminAccountEditIdInput = $('#admin-account-edit-id');
+      const adminAccountEditAccountInput = $('#admin-account-edit-account');
+      const adminAccountEditMerchantInput = $('#admin-account-edit-merchant-id');
+      const adminAccountEditStatusInput = $('#admin-account-edit-status');
+      const adminAccountEditPasswordInput = $('#admin-account-edit-password');
       const adminLoginRecordsForm = $('#admin-login-records-form');
       const adminLoginRecordsAccountInput = $('#admin-login-records-account');
       const adminLoginRecordsResultInput = $('#admin-login-records-result');
@@ -1273,6 +1323,16 @@
       const merchantAdminIntegrationIpsInput = $('#merchant-admin-integration-ips');
       const merchantAdminAccountInput = $('#merchant-admin-account');
       const merchantAdminPasswordInput = $('#merchant-admin-password');
+      const merchantEditModal = $('#merchant-edit-modal');
+      const merchantEditForm = $('#merchant-edit-form');
+      const merchantEditStatus = $('#merchant-edit-status');
+      const merchantEditCancel = $('#merchant-edit-cancel');
+      const merchantEditIdInput = $('#merchant-edit-id');
+      const merchantEditMerchantIdInput = $('#merchant-edit-merchant-id');
+      const merchantEditMerchantNameInput = $('#merchant-edit-merchant-name');
+      const merchantEditHashKeyInput = $('#merchant-edit-hash-key');
+      const merchantEditIntegrationIpsInput = $('#merchant-edit-integration-ips');
+      const merchantEditActiveInput = $('#merchant-edit-active');
       const logoutBtn = $('#logout-btn');
       const adminIdentity = $('#admin-identity');
       const adminIdentityAccount = $('#admin-identity-account');
@@ -1445,6 +1505,76 @@
         merchantAdminMerchantIdInput?.focus();
       };
 
+      const closeMerchantEditModal = () => {
+        if (!merchantEditModal) return;
+        merchantEditModal.classList.add('hidden');
+        setStatus(merchantEditStatus, '');
+        merchantEditForm?.reset();
+        if (merchantEditIdInput) {
+          merchantEditIdInput.value = '';
+        }
+      };
+
+      const openMerchantEditModal = (merchant) => {
+        if (!merchantEditModal || !merchant) return;
+        merchantEditModal.classList.remove('hidden');
+        setStatus(merchantEditStatus, '');
+        if (merchantEditIdInput) {
+          merchantEditIdInput.value = merchant.id || '';
+        }
+        if (merchantEditMerchantIdInput) {
+          merchantEditMerchantIdInput.value = merchant.merchantId || '';
+        }
+        if (merchantEditMerchantNameInput) {
+          merchantEditMerchantNameInput.value = merchant.name || '';
+        }
+        if (merchantEditHashKeyInput) {
+          merchantEditHashKeyInput.value = '';
+        }
+        if (merchantEditIntegrationIpsInput) {
+          const ips = Array.isArray(merchant.integrationAllowedIps)
+            ? merchant.integrationAllowedIps.join(',')
+            : '';
+          merchantEditIntegrationIpsInput.value = ips;
+        }
+        if (merchantEditActiveInput) {
+          merchantEditActiveInput.value = merchant.isActive ? 'true' : 'false';
+        }
+        merchantEditMerchantNameInput?.focus();
+      };
+
+      const closeAdminAccountEditModal = () => {
+        if (!adminAccountEditModal) return;
+        adminAccountEditModal.classList.add('hidden');
+        setStatus(adminAccountEditStatusMsg, '');
+        adminAccountEditForm?.reset();
+        if (adminAccountEditIdInput) {
+          adminAccountEditIdInput.value = '';
+        }
+      };
+
+      const openAdminAccountEditModal = (account) => {
+        if (!adminAccountEditModal || !account) return;
+        adminAccountEditModal.classList.remove('hidden');
+        setStatus(adminAccountEditStatusMsg, '');
+        if (adminAccountEditIdInput) {
+          adminAccountEditIdInput.value = account.id || '';
+        }
+        if (adminAccountEditAccountInput) {
+          adminAccountEditAccountInput.value = account.account || '';
+        }
+        if (adminAccountEditMerchantInput) {
+          adminAccountEditMerchantInput.value = account.merchantId || '';
+        }
+        if (adminAccountEditStatusInput) {
+          adminAccountEditStatusInput.value = account.status || 'ENABLED';
+        }
+        if (adminAccountEditPasswordInput) {
+          adminAccountEditPasswordInput.value = '';
+        }
+        adminAccountEditAccountInput?.focus();
+      };
+
       const applyBootstrapStatus = (status) => {
         bootstrapAvailable = Boolean(status?.canBootstrap);
         const requiredIdRaw =
@@ -1500,6 +1630,8 @@
         } else {
           document.body.classList.remove('admin-limited');
           closeMerchantAdminModal();
+          closeMerchantEditModal();
+          closeAdminAccountEditModal();
           void refreshBootstrapStatus();
         }
       };
@@ -1522,9 +1654,32 @@
           closeMerchantAdminModal();
         }
       });
+      merchantEditCancel?.addEventListener('click', () => {
+        closeMerchantEditModal();
+      });
+      merchantEditModal?.addEventListener('click', (event) => {
+        if (event.target === merchantEditModal) {
+          closeMerchantEditModal();
+        }
+      });
+      adminAccountEditCancel?.addEventListener('click', () => {
+        closeAdminAccountEditModal();
+      });
+      adminAccountEditModal?.addEventListener('click', (event) => {
+        if (event.target === adminAccountEditModal) {
+          closeAdminAccountEditModal();
+        }
+      });
       document.addEventListener('keydown', (event) => {
-        if (event.key === 'Escape' && merchantAdminModal && !merchantAdminModal.classList.contains('hidden')) {
+        if (event.key !== 'Escape') return;
+        if (merchantAdminModal && !merchantAdminModal.classList.contains('hidden')) {
           closeMerchantAdminModal();
+        }
+        if (merchantEditModal && !merchantEditModal.classList.contains('hidden')) {
+          closeMerchantEditModal();
+        }
+        if (adminAccountEditModal && !adminAccountEditModal.classList.contains('hidden')) {
+          closeAdminAccountEditModal();
         }
       });
 
@@ -1541,6 +1696,7 @@
       };
       const pageLimit = 20;
       const merchantItemsById = new Map();
+      const adminAccountItemsById = new Map();
       const formatDate = (iso) => iso ? new Date(iso).toLocaleString() : '--';
       const formatNum = (v) => Number.isFinite(v) ? v.toLocaleString('en-US', { maximumFractionDigits: 2 }) : '--';
 
@@ -1641,6 +1797,11 @@
           if (account) params.set('account', account);
           if (status) params.set('status', status);
           const data = await apiFetch('/admin/accounts?' + params.toString());
+          const canEditAdminAccounts = isSuperAdmin();
+          adminAccountItemsById.clear();
+          (data.items || []).forEach((item) => {
+            adminAccountItemsById.set(item.id, item);
+          });
           adminAccountsTableBody.innerHTML = data.items.length
             ? data.items.map((item) => {
                 const isSuper = item.merchantId === 'hotcoregm';
@@ -1652,9 +1813,22 @@
                     : item.status === 'LOCKED'
                       ? 'warning'
                       : 'error';
-                const actionHtml = isSuper
-                  ? '--'
-                  : '<button class="small danger" onclick="deleteAdminAccount(\'' + item.id + '\')">Delete</button>';
+                let actionHtml = '--';
+                if (canEditAdminAccounts) {
+                  const actions = [
+                    '<button class="small secondary" onclick="editAdminAccount(\'' +
+                      item.id +
+                      '\')">Edit</button>',
+                  ];
+                  if (!isSuper) {
+                    actions.push(
+                      '<button class="small danger" onclick="deleteAdminAccount(\'' +
+                        item.id +
+                        '\')">Delete</button>',
+                    );
+                  }
+                  actionHtml = '<div class="action-buttons">' + actions.join('') + '</div>';
+                }
                 return '<tr>' +
                   '<td title="' + item.id + '">' + item.id.slice(0, 8) + '...</td>' +
                   '<td>' + item.account + '</td>' +
@@ -1727,6 +1901,55 @@
           await loadAdminAccounts(0);
         } catch (err) {
           setStatus(adminAccountsCreateStatus, err.message || 'Failed to create admin account.', true);
+        }
+      });
+
+      adminAccountEditForm?.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (!isSuperAdmin()) {
+          setStatus(adminAccountEditStatusMsg, 'Only superadmin can edit admin accounts.', true);
+          return;
+        }
+
+        const id = adminAccountEditIdInput?.value.trim() || '';
+        const account = adminAccountEditAccountInput?.value.trim() || '';
+        const merchantId = adminAccountEditMerchantInput?.value.trim() || '';
+        const status = adminAccountEditStatusInput?.value.trim() || '';
+        const password = adminAccountEditPasswordInput?.value || '';
+
+        if (!id) {
+          setStatus(adminAccountEditStatusMsg, 'Admin account id is missing.', true);
+          return;
+        }
+        if (!account || !merchantId || !status) {
+          setStatus(adminAccountEditStatusMsg, 'Account, merchant ID, and status are required.', true);
+          return;
+        }
+        if (password && password.length < 6) {
+          setStatus(adminAccountEditStatusMsg, 'Password must be at least 6 characters.', true);
+          return;
+        }
+
+        const payload = { account, merchantId, status };
+        if (password) {
+          payload.password = password;
+        }
+
+        setStatus(adminAccountEditStatusMsg, 'Saving admin account...');
+        try {
+          await apiFetch('/admin/accounts/' + id, {
+            method: 'PUT',
+            body: JSON.stringify(payload),
+          });
+          await loadAdminAccounts(pageState.adminAccounts);
+          closeAdminAccountEditModal();
+          showToast('Admin account ' + account + ' updated.', false);
+        } catch (error) {
+          setStatus(
+            adminAccountEditStatusMsg,
+            error.message || 'Failed to update admin account.',
+            true,
+          );
         }
       });
 
@@ -1887,40 +2110,83 @@
           );
         }
       });
+      merchantEditForm?.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (!isSuperAdmin()) {
+          setStatus(merchantEditStatus, 'Only superadmin can edit merchant information.', true);
+          return;
+        }
+        const id = merchantEditIdInput?.value.trim() || '';
+        const merchantId = merchantEditMerchantIdInput?.value.trim() || '';
+        const name = merchantEditMerchantNameInput?.value.trim() || '';
+        const hashKey = merchantEditHashKeyInput?.value.trim() || '';
+        const integrationIpsRaw = merchantEditIntegrationIpsInput?.value.trim() || '';
+        const isActive = merchantEditActiveInput?.value === 'true';
+
+        if (!id) {
+          setStatus(merchantEditStatus, 'Merchant id is missing.', true);
+          return;
+        }
+        if (!name) {
+          setStatus(merchantEditStatus, 'Merchant name is required.', true);
+          return;
+        }
+        if (!integrationIpsRaw) {
+          setStatus(merchantEditStatus, 'Integration whitelist IPs are required.', true);
+          return;
+        }
+        if (hashKey && hashKey.length < 8) {
+          setStatus(merchantEditStatus, 'Merchant hash key must be at least 8 characters.', true);
+          return;
+        }
+
+        const integrationAllowedIps = integrationIpsRaw
+          .split(',')
+          .map((ip) => ip.trim())
+          .filter(Boolean);
+        if (!integrationAllowedIps.length) {
+          setStatus(merchantEditStatus, 'At least one whitelist IP is required.', true);
+          return;
+        }
+
+        const updates = {
+          name,
+          integrationAllowedIps,
+          isActive,
+        };
+        if (hashKey) {
+          updates.hashKey = hashKey;
+        }
+
+        setStatus(merchantEditStatus, 'Saving merchant...');
+        try {
+          await apiFetch('/admin/merchants/' + id, {
+            method: 'PUT',
+            body: JSON.stringify(updates),
+          });
+          await loadMerchants(pageState.merchants);
+          closeMerchantEditModal();
+          showToast('Merchant ' + merchantId + ' updated.', false);
+        } catch (error) {
+          setStatus(
+            merchantEditStatus,
+            error.message || 'Failed to update merchant.',
+            true,
+          );
+        }
+      });
+
       window.editMerchant = async (id) => {
         if (!isSuperAdmin()) {
           alert('Only superadmin can edit merchant information.');
           return;
         }
-        const current = merchantItemsById.get(id) || null;
-        const currentWhitelist = Array.isArray(current?.integrationAllowedIps)
-          ? current.integrationAllowedIps.join(',')
-          : '';
-        const name = prompt('New name (empty to skip):');
-        const hashKey = prompt('New hash key (empty to skip):');
-        const whitelistStr = prompt(
-          'Whitelist IPs (comma separated, empty to skip):',
-          currentWhitelist,
-        );
-        const activeStr = prompt('Active? (true/false, empty to skip):');
-        const updates = {};
-        if (name) updates.name = name;
-        if (hashKey) updates.hashKey = hashKey;
-        if (whitelistStr !== null) {
-          const ips = whitelistStr
-            .split(',')
-            .map((ip) => ip.trim())
-            .filter(Boolean);
-          if (!ips.length) {
-            alert('Whitelist must contain at least one IP.');
-            return;
-          }
-          updates.integrationAllowedIps = ips;
+        const current = merchantItemsById.get(id);
+        if (!current) {
+          alert('Merchant not found.');
+          return;
         }
-        if (activeStr === 'true') updates.isActive = true;
-        if (activeStr === 'false') updates.isActive = false;
-        if (!Object.keys(updates).length) return;
-        try { await apiFetch('/admin/merchants/' + id, { method: 'PUT', body: JSON.stringify(updates) }); loadMerchants(pageState.merchants); } catch (err) { alert(err.message); }
+        openMerchantEditModal(current);
       };
       window.deleteMerchant = async (id) => {
         if (!isSuperAdmin()) {
@@ -1934,6 +2200,18 @@
         } catch (err) {
           alert(err.message);
         }
+      };
+      window.editAdminAccount = async (id) => {
+        if (!isSuperAdmin()) {
+          alert('Only superadmin can edit admin accounts.');
+          return;
+        }
+        const current = adminAccountItemsById.get(id);
+        if (!current) {
+          alert('Admin account not found.');
+          return;
+        }
+        openAdminAccountEditModal(current);
       };
       window.deleteAdminAccount = async (id) => {
         if (!isSuperAdmin()) {
@@ -2879,6 +3157,7 @@
         }
         if (limited) {
           closeMerchantAdminModal();
+          closeAdminAccountEditModal();
         }
         if (adminLoginRecordsScopeNote) {
           adminLoginRecordsScopeNote.textContent = limited

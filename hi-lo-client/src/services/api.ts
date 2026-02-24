@@ -10,10 +10,19 @@ import type {
   WalletResponse,
 } from '../types';
 
-const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:4001';
+const GAME_API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:4001';
+const INTEGRATION_API_URL =
+  import.meta.env.VITE_INTEGRATION_API_URL ??
+  import.meta.env.VITE_API_URL ??
+  'http://localhost:4003';
 
-const client = axios.create({
-  baseURL: API_URL,
+const gameClient = axios.create({
+  baseURL: GAME_API_URL,
+  withCredentials: true,
+});
+
+const integrationClient = axios.create({
+  baseURL: INTEGRATION_API_URL,
   withCredentials: true,
 });
 
@@ -25,20 +34,20 @@ const authHeader = (token: string) => ({
 
 export const api = {
   login: (account: string, password: string) =>
-    client.post<AuthResponse>('/auth/login', { account, password }),
+    gameClient.post<AuthResponse>('/auth/login', { account, password }),
 
   startLaunchSession: (token: string) =>
-    client.post<LaunchSessionStartResponse>(
+    integrationClient.post<LaunchSessionStartResponse>(
       '/integration/launch/session/start',
       {},
       authHeader(token),
     ),
 
   fetchWallet: (token: string) =>
-    client.get<WalletResponse>('/wallet', authHeader(token)),
+    gameClient.get<WalletResponse>('/wallet', authHeader(token)),
 
   fetchGameConfig: (token: string, merchantId?: string) =>
-    client.get<GameConfig>('/config/game', {
+    gameClient.get<GameConfig>('/config/game', {
       headers: {
         Authorization: `Bearer ${token}`,
         'Cache-Control': 'no-cache',
@@ -51,7 +60,7 @@ export const api = {
     }),
 
   fetchPlayerHistory: (token: string, limit?: number) =>
-    client.get<BetHistoryItem[]>(
+    gameClient.get<BetHistoryItem[]>(
       '/history/bets',
       Object.assign(authHeader(token), {
         params: { limit },
@@ -59,7 +68,7 @@ export const api = {
     ),
 
   fetchPlayerHistoryPaged: (token: string, page: number, limit?: number) =>
-    client.get<BetHistoryPageResponse>(
+    gameClient.get<BetHistoryPageResponse>(
       '/history/bets/paged',
       Object.assign(authHeader(token), {
         params: { page, limit },
@@ -67,13 +76,13 @@ export const api = {
     ),
 
   fetchPlayerBetsForRound: (token: string, roundId: number) =>
-    client.get<BetHistoryItem[]>(
+    gameClient.get<BetHistoryItem[]>(
       `/history/bets/round/${roundId}`,
       authHeader(token),
     ),
 
   fetchRoundHistory: (limit?: number) =>
-    client.get<RoundHistoryItem[]>('/history/rounds', {
+    gameClient.get<RoundHistoryItem[]>('/history/rounds', {
       params: { limit },
     }),
 
@@ -87,8 +96,11 @@ export const api = {
       digitType?: string;
       selection?: string;
     },
-  ) => client.post('/bets', payload, authHeader(token)),
+  ) => gameClient.post('/bets', payload, authHeader(token)),
 
   clearRoundBets: (token: string, roundId: number) =>
-    client.delete<ClearRoundBetsResponse>(`/bets/round/${roundId}`, authHeader(token)),
+    gameClient.delete<ClearRoundBetsResponse>(
+      `/bets/round/${roundId}`,
+      authHeader(token),
+    ),
 };

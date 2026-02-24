@@ -43,6 +43,16 @@ export class CreateAdminAccountDto {
 export class UpdateAdminAccountDto {
   @IsOptional()
   @IsString()
+  @MinLength(3)
+  account?: string;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(3)
+  merchantId?: string;
+
+  @IsOptional()
+  @IsString()
   @MinLength(6)
   password?: string;
 

@@ -157,7 +157,46 @@ export class AdminAccountsService {
     if (scope && !scope.isSuperAdmin && id !== scope.adminId) {
       throw new ForbiddenException('Cannot update other admin accounts');
     }
+    if (scope && !scope.isSuperAdmin) {
+      if (dto.account !== undefined || dto.merchantId !== undefined) {
+        throw new ForbiddenException(
+          'Merchant admin cannot change account or merchant ID',
+        );
+      }
+    }
     const data: Prisma.AdminAccountUpdateInput = {};
+    if (dto.account !== undefined) {
+      const nextAccount = dto.account.trim();
+      if (!nextAccount) {
+        throw new BadRequestException('Account is required');
+      }
+      if (nextAccount !== existing.account) {
+        const conflict = await this.prisma.adminAccount.findUnique({
+          where: { account: nextAccount },
+        });
+        if (conflict && conflict.id !== existing.id) {
+          throw new BadRequestException('Account already exists');
+        }
+        data.account = nextAccount;
+      }
+    }
+    if (dto.merchantId !== undefined) {
+      const nextMerchantId = dto.merchantId.trim();
+      if (!nextMerchantId) {
+        throw new BadRequestException('Merchant ID is required');
+      }
+      if (nextMerchantId !== 'hotcoregm') {
+        const merchant = await this.prisma.merchant.findUnique({
+          where: { merchantId: nextMerchantId },
+        });
+        if (!merchant) {
+          throw new BadRequestException('Merchant ID not found');
+        }
+      }
+      if (nextMerchantId !== existing.merchantId) {
+        data.merchantId = nextMerchantId;
+      }
+    }
     if (dto.password !== undefined) {
       data.password = await bcrypt.hash(dto.password, this.saltRounds);
     }
@@ -167,6 +206,33 @@ export class AdminAccountsService {
       }
       data.status = dto.status;
     }
+
+    const isSuperadminAccount = existing.merchantId === 'hotcoregm';
+    if (isSuperadminAccount) {
+      const nextMerchantId =
+        dto.merchantId !== undefined
+          ? dto.merchantId.trim()
+          : existing.merchantId;
+      const nextStatus =
+        dto.status !== undefined ? dto.status : existing.status;
+      const keepsEnabledSuperadmin =
+        nextMerchantId === 'hotcoregm' &&
+        nextStatus === AdminAccountStatus.ENABLED;
+      if (!keepsEnabledSuperadmin) {
+        const enabledSuperadminCount = await this.prisma.adminAccount.count({
+          where: {
+            merchantId: 'hotcoregm',
+            status: AdminAccountStatus.ENABLED,
+          },
+        });
+        if (enabledSuperadminCount <= 1) {
+          throw new BadRequestException(
+            'Cannot disable or demote the last enabled superadmin account',
+          );
+        }
+      }
+    }
+
     if (!Object.keys(data).length) {
       throw new BadRequestException('No fields to update');
     }
