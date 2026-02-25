@@ -298,6 +298,19 @@ export const initControls = (handlers: ControlHandlers) => {
         <div id="game-container">
           <div id="tradingview-chart">
             <div id="tradingview-chart-inner"></div>
+            <div id="tradingview-phase-indicator" aria-live="polite"></div>
+            <div id="tradingview-phase-countdown" aria-live="polite"></div>
+          </div>
+          <div id="tradingview-odds-strip" aria-hidden="true">
+            <div class="tradingview-odds-segment tradingview-odds-segment--left">
+              <span id="tradingview-odds-left"></span>
+            </div>
+            <div class="tradingview-odds-segment tradingview-odds-segment--center">
+              <span id="tradingview-odds-center"></span>
+            </div>
+            <div class="tradingview-odds-segment tradingview-odds-segment--right">
+              <span id="tradingview-odds-right"></span>
+            </div>
           </div>
           <div class="stats-dock" id="stats-dock">
             <button

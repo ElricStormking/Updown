@@ -17,23 +17,11 @@
             "id": "cfc20f27-4e59-4517-ad83-04fbfab0f175",
             "label": "bg",
             "texture": {
-                "key": "bg"
+                "key": "bg2"
             },
             "x": 534,
             "y": 1343,
             "scaleX": 1.1,
-            "scaleY": 1.5
-        },
-        {
-            "type": "Image",
-            "id": "f1416e72-6075-4e81-83ba-0dfb91e7ba24",
-            "label": "bg_light2",
-            "texture": {
-                "key": "bg_light2"
-            },
-            "x": 558,
-            "y": 567,
-            "scaleX": 0.9,
             "scaleY": 1.5
         },
         {
@@ -103,7 +91,7 @@
             "texture": {
                 "key": "title_bigbox_yellow"
             },
-            "x": 538,
+            "x": 540,
             "y": 1007,
             "scaleX": 0.73,
             "scaleY": 0.73
@@ -127,7 +115,7 @@
             "texture": {
                 "key": "number_11"
             },
-            "x": 263,
+            "x": 245,
             "y": 925,
             "scaleX": 0.73,
             "scaleY": 0.73
@@ -139,7 +127,7 @@
             "texture": {
                 "key": "number_22"
             },
-            "x": 457,
+            "x": 442,
             "y": 925,
             "scaleX": 0.73,
             "scaleY": 0.73
@@ -151,7 +139,7 @@
             "texture": {
                 "key": "number_33"
             },
-            "x": 653,
+            "x": 637,
             "y": 925,
             "scaleX": 0.73,
             "scaleY": 0.73
@@ -163,7 +151,7 @@
             "texture": {
                 "key": "number_44"
             },
-            "x": 849,
+            "x": 835,
             "y": 925,
             "scaleX": 0.73,
             "scaleY": 0.73
@@ -175,7 +163,7 @@
             "texture": {
                 "key": "number_55"
             },
-            "x": 260,
+            "x": 245,
             "y": 986,
             "scaleX": 0.73,
             "scaleY": 0.73
@@ -187,7 +175,7 @@
             "texture": {
                 "key": "number_66"
             },
-            "x": 452,
+            "x": 442,
             "y": 986,
             "scaleX": 0.73,
             "scaleY": 0.73
@@ -199,7 +187,7 @@
             "texture": {
                 "key": "number_77"
             },
-            "x": 648,
+            "x": 637,
             "y": 986,
             "scaleX": 0.73,
             "scaleY": 0.73
@@ -211,7 +199,7 @@
             "texture": {
                 "key": "number_88"
             },
-            "x": 845,
+            "x": 835,
             "y": 986,
             "scaleX": 0.73,
             "scaleY": 0.73
@@ -223,7 +211,7 @@
             "texture": {
                 "key": "title_bigbox_yellow"
             },
-            "x": 538,
+            "x": 540,
             "y": 1186,
             "scaleX": 0.73,
             "scaleY": 0.73
@@ -247,7 +235,7 @@
             "texture": {
                 "key": "number_111"
             },
-            "x": 265,
+            "x": 244,
             "y": 1104,
             "scaleX": 0.73,
             "scaleY": 0.73
@@ -259,7 +247,7 @@
             "texture": {
                 "key": "number_222"
             },
-            "x": 460,
+            "x": 439,
             "y": 1104,
             "scaleX": 0.73,
             "scaleY": 0.73
@@ -271,7 +259,7 @@
             "texture": {
                 "key": "number_333"
             },
-            "x": 658,
+            "x": 637,
             "y": 1104,
             "scaleX": 0.73,
             "scaleY": 0.73
@@ -283,7 +271,7 @@
             "texture": {
                 "key": "number_444"
             },
-            "x": 856,
+            "x": 835,
             "y": 1104,
             "scaleX": 0.73,
             "scaleY": 0.73
@@ -295,7 +283,7 @@
             "texture": {
                 "key": "number_555"
             },
-            "x": 268,
+            "x": 244,
             "y": 1169,
             "scaleX": 0.73,
             "scaleY": 0.73
@@ -307,7 +295,7 @@
             "texture": {
                 "key": "number_666"
             },
-            "x": 461,
+            "x": 439,
             "y": 1169,
             "scaleX": 0.73,
             "scaleY": 0.73
@@ -319,8 +307,8 @@
             "texture": {
                 "key": "number_777"
             },
-            "x": 658,
-            "y": 1168,
+            "x": 637,
+            "y": 1169,
             "scaleX": 0.73,
             "scaleY": 0.73
         },
@@ -331,7 +319,7 @@
             "texture": {
                 "key": "number_888"
             },
-            "x": 855,
+            "x": 835,
             "y": 1169,
             "scaleX": 0.73,
             "scaleY": 0.73
@@ -343,7 +331,7 @@
             "texture": {
                 "key": "title_bigbox_purple"
             },
-            "x": 539,
+            "x": 540,
             "y": 1363,
             "scaleX": 0.73,
             "scaleY": 0.73
@@ -667,7 +655,7 @@
             "texture": {
                 "key": "title_bigbox_yellow"
             },
-            "x": 538,
+            "x": 540,
             "y": 1731,
             "scaleX": 0.73,
             "scaleY": 0.73

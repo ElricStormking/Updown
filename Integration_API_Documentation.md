@@ -1,25 +1,26 @@
 # Platform Integration API Documentation
 
-**Version:** 1.1  
-**Last Updated:** February 21, 2026  
+**Version:** 1.2  
+**Last Updated:** February 25, 2026  
 
-**Change Highlights (Platform Spec Sync on February 21, 2026):**
-- Added callback-mode `Launch Game` fields: `playerId`, `accessToken`, and `betLimits`.
-- Added `All Transfer Out` integration endpoint.
-- Added merchant-side callback APIs: `LoginPlayer` and `UpdateBalance`.
-- Added login callback sequence flow from `image1.png`.
+**Change Highlights (Platform Spec + Runtime Sync on February 25, 2026):**
+- Synced onboarding requirements from `Integration_API_Updated_0225.md` (merchant-provided inputs, provider-returned info).
+- Added security/runtime constraints used by implementation: IP whitelist enforcement and callback launch-session gate.
+- Clarified integration request/response details to match implemented APIs (including `transferId`/`orderNo` alias and launch URL payload).
+- Added missing integration error codes used by implementation (`1005`, `2003`, `6001`-`6006`).
 
 ---
 
 ## Table of Contents
 
-1. [Overview](#overview)
-2. [Authentication](#authentication)
-3. [Signature Generation](#signature-generation)
-4. [Base URL](#base-url)
-5. [Common Response Format](#common-response-format)
-6. [Error Codes](#error-codes)
-7. [API Endpoints](#api-endpoints)
+1. [Integration Application & Activation](#integration-application--activation)
+2. [Overview](#overview)
+3. [Authentication](#authentication)
+4. [Signature Generation](#signature-generation)
+5. [Base URL](#base-url)
+6. [Common Response Format](#common-response-format)
+7. [Error Codes](#error-codes)
+8. [API Endpoints](#api-endpoints)
    - [Create Account](#1-create-account)
    - [Transfer](#2-transfer)
    - [Get Bet History](#3-get-bet-history)
@@ -32,8 +33,30 @@
    - [Set Bet Limit](#10-set-bet-limit)
    - [Get Token Values](#11-get-token-values)
    - [Set Token Values](#12-set-token-values)
-8. [Data Types](#data-types)
-9. [Code Examples](#code-examples)
+   - [Launch Session Start (Platform Runtime)](#13-launch-session-start-platform-runtime)
+9. [Data Types](#data-types)
+10. [Code Examples](#code-examples)
+
+---
+
+## Integration Application & Activation
+
+### Information Required from Merchant Before Account Creation
+
+- `currency` code for this merchant.
+- Default bet-limit settings:
+  - Global: `maxBetLimit`, `minBetLimit`.
+  - Per rule: `bigSmall`, `oddEven`, `eachDouble`, `eachTripple`, `sum`, `single`, `anyTripple` with `maxBetLimit` and `minBetLimit`.
+- Callback URLs:
+  - `LoginPlayer` callback URL.
+  - `UpdateBalance` callback URL.
+- Integration source IP whitelist (all IPs that will call integration APIs).
+
+### Information Returned by Game Provider After Account Creation
+
+- Merchant ID (`merchantId`).
+- Merchant hash key (`hashKey`).
+- Provider callback source IP whitelist for merchant callback endpoints.
 
 ---
 
@@ -56,16 +79,21 @@ All API endpoints use **HTTP POST** method and accept/return **JSON** payloads.
 
 ## Authentication
 
-Every API request requires authentication through:
+Every **merchant-signed integration request** requires authentication through:
 
 1. **Merchant ID** (`merchantId`): Your unique merchant identifier provided during onboarding
 2. **Timestamp** (`timestamp`): Current Unix timestamp in seconds (10 digits)
 3. **Signature** (`hash`): SHA256 hash of request parameters combined with your secret key
+4. **IP whitelist**: caller IP must exist in merchant `integrationAllowedIps`
+
+`POST /integration/launch/session/start` is a runtime endpoint and uses Bearer launch JWT auth instead of merchant signature fields.
 
 ### Timestamp Validation
 
-- The timestamp must be within **5-10 seconds** of the server's current time
-- Timestamps outside this window will be rejected with error code `1002`
+- Runtime validation uses `now - timestamp` and requires `0 <= diff <= toleranceSec`.
+- Default tolerance is **10 seconds** (`INTEGRATION_TIMESTAMP_TOLERANCE_SEC`).
+- Future timestamps are rejected.
+- Timestamps outside this window are rejected with error code `1002`.
 
 ---
 
@@ -178,6 +206,8 @@ All API responses follow this structure:
 | `errorMessage` | string | Empty on success, error description on failure |
 | `data` | object/null | Response data on success, `null` on failure |
 
+> Integration APIs return HTTP `200` for both success and business errors; use `success` / `errorCode` for result handling.
+
 ---
 
 ## Error Codes
@@ -186,11 +216,13 @@ All API responses follow this structure:
 |------|------|-------------|
 | `0` | SUCCESS | Request completed successfully |
 | `1001` | INVALID_SIGNATURE | Signature verification failed |
-| `1002` | TIMESTAMP_EXPIRED | Timestamp is outside valid window (5-10 seconds) |
+| `1002` | TIMESTAMP_EXPIRED | Timestamp is outside valid window (default: <=10 seconds and not future) |
 | `1003` | MERCHANT_NOT_FOUND | Merchant ID not found in system |
 | `1004` | MERCHANT_INACTIVE | Merchant account is deactivated |
+| `1005` | IP_NOT_ALLOWED | Client IP is not in merchant integration whitelist |
 | `2001` | ACCOUNT_ALREADY_EXISTS | Player account already exists |
 | `2002` | ACCOUNT_NOT_FOUND | Player account not found |
+| `2003` | ACCOUNT_DISABLED | Player account is disabled |
 | `3001` | INSUFFICIENT_BALANCE | Insufficient balance for withdrawal |
 | `3002` | DUPLICATE_ORDER_NUMBER | Transfer ID already used |
 | `3003` | INVALID_TRANSFER_TYPE | Invalid transfer type (must be 0 or 1) |
@@ -198,22 +230,29 @@ All API responses follow this structure:
 | `4002` | INVALID_PAGE_NUMBER | Page number must be >= 1 |
 | `5001` | INVALID_BET_AMOUNT_LIMIT | Invalid bet amount limit |
 | `5002` | INVALID_TOKEN_VALUES | Invalid token values |
+| `6001` | CALLBACK_FIELDS_REQUIRED | Callback mode requires `playerId` and `accessToken` |
+| `6002` | CALLBACK_MERCHANT_NOT_CONFIGURED | Merchant callback mode is not configured |
+| `6003` | LAUNCH_SESSION_NOT_FOUND | Launch session not found |
+| `6004` | LAUNCH_SESSION_NOT_ACTIVE | Launch session is not active |
+| `6005` | LOGIN_PLAYER_CALLBACK_FAILED | LoginPlayer callback failed |
+| `6006` | UPDATE_BALANCE_CALLBACK_FAILED | UpdateBalance callback failed |
 | `9999` | INTERNAL_ERROR | Internal server error |
 
 ---
 
 ## API Endpoints
 
-### Operation Name Mapping (Platform Spec 2026-02-21)
+### Operation Name Mapping (Platform Spec + Runtime 2026-02-25)
 
-| Public Spec Operation | This Document |
-|-----------------------|---------------|
+| Public Spec / Runtime Operation | This Document |
+|---------------------------------|---------------|
 | `AccountCreate` | `POST /integration/account/create` |
 | `Transfer` | `POST /integration/transfer` |
 | `GetBetHistory` | `POST /integration/bets` |
 | `GetTransferHistory` | `POST /integration/transfers` |
 | `LaunchGame` | `POST /integration/launch` |
 | `AllTransferOut` | `POST /integration/all-transfer-out` (or partner-provided route) |
+| `LaunchSessionStart` (runtime gate) | `POST /integration/launch/session/start` (Bearer launch JWT) |
 | `GetBetLimit` | `POST /integration/config/bet-limit/get` |
 | `SetBetLimit` | `POST /integration/config/bet-limit` |
 | `GetTokens` | `POST /integration/config/token-values/get` |
@@ -288,9 +327,10 @@ Transfer funds into or out of a player's game wallet.
 |-----------|------|----------|-------------|
 | `merchantId` | string | Yes | Your merchant ID |
 | `account` | string | Yes | Player account identifier |
-| `transferId` | string | Yes | Unique transfer ID (for idempotency) |
+| `transferId` | string | Conditional | Unique transfer ID (for idempotency). Required if `orderNo` is not provided. |
+| `orderNo` | string | Conditional | Legacy alias of `transferId`. Required if `transferId` is not provided. |
 | `type` | integer | Yes | `0` = Deposit (into game), `1` = Withdrawal (out to merchant) |
-| `amount` | number | Yes | Transfer amount (must be > 0) |
+| `amount` | number | Yes | Transfer amount (runtime currently accepts `>= 0`; use `> 0` in normal flows) |
 | `timestamp` | integer | Yes | Unix timestamp in seconds |
 | `hash` | string | Yes | Request signature |
 
@@ -298,6 +338,8 @@ Transfer funds into or out of a player's game wallet.
 ```
 hash = SHA256(merchantId + "&" + account + "&" + type + "&" + amount + "&" + timestamp + "&" + hashKey)
 ```
+
+`transferId` / `orderNo` are **not included** in the signature payload.
 
 #### Request Example (Deposit)
 
@@ -550,7 +592,7 @@ Generate an authenticated game URL for a player.
 | `account` | string | Yes | Player account identifier |
 | `playerId` | string | No (Yes for callback mode) | Merchant-side player ID used by callback APIs for merchant verification |
 | `accessToken` | string | No (Yes for callback mode) | Merchant-side access token used by callback APIs for merchant verification |
-| `betLimits` | object | No | Per-game-type limit object from latest platform spec. See [Launch betLimits Object](#launch-betlimits-object-platform-2026-02-21) |
+| `betLimits` | object | No | Per-game-type limit object from latest platform spec. See [Launch betLimits Object](#launch-betlimits-object-platform-2026-02-25) |
 | `minBetAmount` | number | No | Legacy global minimum bet amount override before URL generation |
 | `maxBetAmount` | number | No | Legacy global maximum bet amount override before URL generation |
 | `digitBetAmountLimits` | object | No | Legacy per-rule min/max override. See [Digit Bet Amount Limits](#digit-bet-amount-limits) |
@@ -584,6 +626,11 @@ Where:
   `smallBig:min,max|oddEven:min,max|double:min,max|triple:min,max|sum:min,max|single:min,max|anyTriple:min,max`
   (empty string if `digitBetAmountLimits` is omitted).
 - If `minBetAmount`/`maxBetAmount` are provided but `digitBetAmountLimits` is omitted, all 7 digit-rule limits are aligned to the provided global min/max.
+
+Runtime notes:
+- If merchant callback mode is enabled, `playerId` and `accessToken` are required and merchant callback URLs must be configured.
+- In callback mode, the game client must call `POST /integration/launch/session/start` with the launch JWT before entering game socket flow.
+- `betLimits` updates per-rule `maxBetAmount` values (mapped by rule key) and persists into merchant config for subsequent rounds.
 
 #### Request Example (Callback Mode with Platform Identity Fields)
 
@@ -637,7 +684,7 @@ Where:
   "errorCode": 0,
   "errorMessage": "",
   "data": {
-    "url": "https://game.example.com?accessToken=eyJhbGciOiJIUzI1NiIs..."
+    "url": "https://game.example.com?accessToken=eyJhbGciOiJIUzI1NiIs...&merchantId=MERCHANT001"
   }
 }
 ```
@@ -656,9 +703,10 @@ Open the returned URL in a browser or iframe to launch the game for the player. 
 
 1. Merchant server calls `POST /integration/launch` to obtain game URL.
 2. Merchant redirects player to the returned game URL.
-3. After game open, platform backend calls merchant `LoginPlayer` callback.
-4. Merchant verifies callback payload and calls `POST /integration/transfer` (`type=0`) to transfer player balance into game.
-5. Platform returns success/fail result page to player based on callback + transfer result.
+3. Game client calls `POST /integration/launch/session/start` with launch JWT.
+4. Platform backend calls merchant `LoginPlayer` callback.
+5. Merchant verifies callback payload and calls `POST /integration/transfer` (`type=0`) to transfer player balance into game.
+6. Platform allows game entry only when callback result is successful.
 
 ---
 
@@ -684,6 +732,8 @@ Transfer all remaining game balance for a player back to merchant side.
 ```
 hash = SHA256(merchantId + "&" + account + "&" + timestamp + "&" + hashKey)
 ```
+
+`transferId` is required for idempotency, but is **not included** in signature payload.
 
 #### Request Example
 
@@ -727,6 +777,8 @@ Merchant must implement this callback endpoint for platform-initiated login veri
 - Platform calls this endpoint when a player opens the game.
 - Merchant verifies player identity (`playerId`, `account`, `accessToken`) and currency.
 - Merchant then transfers balance into game (typically via `POST /integration/transfer`, `type=0`) and returns success/failure.
+- Platform runtime retries callback on failure (`retryCount + 1` total attempts; default `3`) with per-attempt timeout (default `5000ms`).
+- Merchant callback must return HTTP 2xx and JSON with `success=true`; otherwise launch stays blocked.
 
 #### Request
 
@@ -768,6 +820,7 @@ Merchant must implement this callback endpoint for platform-initiated offline se
 - Platform calls this endpoint after player offline detection.
 - Merchant verifies callback payload and triggers balance settlement back to merchant side.
 - Merchant should call either `AllTransferOut` (preferred) or `Transfer` (`type=1`) based on platform contract, then return callback status.
+- Callback is sent after offline grace period (default `30000ms`) and retried on failure (`retryCount + 1` total attempts; default `3`).
 
 #### Request
 
@@ -1042,9 +1095,46 @@ Where `tokenValuesCSV` is the comma-joined string of the 7 values in the request
 
 ---
 
+### 13. Launch Session Start (Platform Runtime)
+
+Start callback-mode launch verification using the launch JWT from `Launch Game`.
+
+**Endpoint:** `POST /integration/launch/session/start`
+
+> This is a platform runtime endpoint used by the game client after redirect. It is not signed with merchant `hash`.
+
+#### Request
+
+| Parameter | Location | Required | Description |
+|-----------|----------|----------|-------------|
+| `Authorization` | Header | Yes | `Bearer <launch-access-token-from-LaunchGame-url>` |
+| Request body | Body | No | Use empty JSON object `{}` |
+
+#### Response
+
+```json
+{
+  "ready": true,
+  "mode": "callback",
+  "code": 0,
+  "message": ""
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `ready` | boolean | `true` when launch may proceed; `false` when blocked |
+| `mode` | string | `"legacy"` or `"callback"` |
+| `code` | integer | Integration code (`0` on success; callback/session errors on failure) |
+| `message` | string | Failure reason for blocked launch |
+
+Failure codes commonly returned in callback flow: `6002`, `6003`, `6004`, `6005`.
+
+---
+
 ## Data Types
 
-### Launch betLimits Object (Platform 2026-02-21)
+### Launch betLimits Object (Platform 2026-02-25)
 
 `betLimits` in `Launch Game` uses per-game-type max amount keys from the latest public platform spec:
 

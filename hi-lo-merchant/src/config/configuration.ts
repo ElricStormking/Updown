@@ -24,6 +24,7 @@ export const configuration = () => ({
     callbackRetryCount: Number(
       process.env.INTEGRATION_CALLBACK_RETRY_COUNT ?? 2,
     ),
+    offlineGraceMs: Number(process.env.INTEGRATION_OFFLINE_GRACE_MS ?? 30000),
     launchSessionTtlSec: Number(
       process.env.INTEGRATION_LAUNCH_SESSION_TTL_SEC ?? 3600,
     ),

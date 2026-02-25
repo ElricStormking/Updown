@@ -74,9 +74,6 @@ const DEFAULT_SUM_PAYOUTS: Record<number, number> = {
   26: 130,
 };
 
-const HIDDEN_DOUBLE_SELECTIONS = new Set(['00', '99']);
-const HIDDEN_TRIPLE_SELECTIONS = new Set(['000', '999']);
-
 const RESULT_BOX_TOTAL_TEXTURE_KEY = '3N_box_light';
 const RESULT_BOX_TOTAL_ANIMATION_KEY = '3N-box-light-anim';
 const RESULT_BOX_ARROW_TEXTURE_KEY = '3N_box_arrow';
@@ -139,12 +136,21 @@ export class HiLoScene extends Phaser.Scene {
   private lastBigCountdownSec = -1;
   private roundText?: Phaser.GameObjects.Text;
   private statusText?: Phaser.GameObjects.Text;
+  private phaseIndicatorEl?: HTMLElement;
+  private phaseCountdownEl?: HTMLElement;
+  private oddsStripEl?: HTMLElement;
+  private oddsLeftEl?: HTMLElement;
+  private oddsCenterEl?: HTMLElement;
+  private oddsRightEl?: HTMLElement;
   private balanceText?: Phaser.GameObjects.Text;
   private balanceTextBaseScaleX = 1;
   private balanceTextBaseScaleY = 1;
   private oddsLeftText?: Phaser.GameObjects.Text;
   private oddsCenterText?: Phaser.GameObjects.Text;
   private oddsRightText?: Phaser.GameObjects.Text;
+  private oddsBoxLeft?: Phaser.GameObjects.Image;
+  private oddsBoxMid?: Phaser.GameObjects.Image;
+  private oddsBoxRight?: Phaser.GameObjects.Image;
   private bgLightOverlay?: Phaser.GameObjects.Image;
   private doublePayoutText?: Phaser.GameObjects.Text;
   private triplePayoutText?: Phaser.GameObjects.Text;
@@ -263,6 +269,7 @@ export class HiLoScene extends Phaser.Scene {
 
     [
       'bg',
+      'bg2',
       'bg_light',
       'bg_line_left',
       'bg_line_right',
@@ -351,6 +358,9 @@ export class HiLoScene extends Phaser.Scene {
     this.fitCameraZoom();
     this.enableVerticalScroll();
     this.startBackgroundMusic();
+    this.cachePhaseIndicatorElement();
+    this.cachePhaseCountdownElement();
+    this.cacheOddsStripElements();
 
     this.uiReady = true;
     this.setLanguage(this.language);
@@ -379,8 +389,7 @@ export class HiLoScene extends Phaser.Scene {
         const detail = (event as CustomEvent<{ message: string; isError?: boolean }>)
           .detail;
         if (!detail) return;
-        this.statusText?.setText(detail.message);
-        this.statusText?.setColor(detail.isError ? '#ff7675' : '#00ffb2');
+        this.setPhaseIndicatorText(detail.message, detail.isError ? '#ff7675' : '#00ffb2');
       };
       window.addEventListener('app:status', this.statusListener);
 
@@ -400,6 +409,9 @@ export class HiLoScene extends Phaser.Scene {
       if (this.audioSettingsListener && typeof window !== 'undefined') {
         window.removeEventListener('app:audio-settings', this.audioSettingsListener);
       }
+      this.clearPhaseIndicatorText();
+      this.clearPhaseCountdownText();
+      this.clearOddsStripText();
     });
   }
 
@@ -466,12 +478,12 @@ export class HiLoScene extends Phaser.Scene {
       scaleY = scaleX,
     ) => this.add.image(x, y, key).setScale(scaleX, scaleY);
 
-    const bg = addImage(this.scale.width / 2, this.scale.height * 1.1, 'bg', 1.1, 1.5);
+    const bg = addImage(this.scale.width / 2, this.scale.height * 1.1, 'bg2', 1.1, 1.5);
     bg.setDepth(-100);
     this.lockedBackground = addImage(
       this.scale.width / 2,
       this.scale.height * 1.1,
-      'bg_lockedphase',
+      'bg2',
       1.1,
       1.5,
     );
@@ -485,24 +497,30 @@ export class HiLoScene extends Phaser.Scene {
 
     const BET_SLOTS_OFFSET_Y = 18;
     const ROW_GAP_Y = 82;
+    const DOUBLE_TRIPLE_CONTENT_NUDGE_Y = 0;
     const DOUBLE_TITLE_Y = 1014 + BET_SLOTS_OFFSET_Y;
-    const DOUBLE_FRAME_Y = DOUBLE_TITLE_Y + 141;
+    const DOUBLE_FRAME_Y = DOUBLE_TITLE_Y + 165;
     const DOUBLE_ROW1_Y = DOUBLE_TITLE_Y + 74;
     const DOUBLE_ROW2_Y = DOUBLE_ROW1_Y + ROW_GAP_Y;
     const TRIPLE_TITLE_Y = DOUBLE_ROW2_Y + 86;
-    const TRIPLE_FRAME_Y = TRIPLE_TITLE_Y + 141;
+    const TRIPLE_FRAME_Y = TRIPLE_TITLE_Y + 165;
     const TRIPLE_ROW1_Y = TRIPLE_TITLE_Y + 84;
     const TRIPLE_ROW2_Y = TRIPLE_ROW1_Y + ROW_GAP_Y;
     const SUM_TITLE_Y = TRIPLE_ROW2_Y + 86;
-    const SUM_FRAME_Y = SUM_TITLE_Y + 141;
+    const SUM_FRAME_Y = SUM_TITLE_Y + 171;
     const SUM_ROW1_Y = SUM_TITLE_Y + 80;
     const SUM_ROW_GAP_Y = ROW_GAP_Y;
     const SINGLE_TITLE_Y = SUM_ROW1_Y + SUM_ROW_GAP_Y * 4 + 76;
     const SINGLE_ROW1_Y = SINGLE_TITLE_Y + 78;
     const SINGLE_ROW2_Y = SINGLE_ROW1_Y + ROW_GAP_Y;
 
-    addImage(529, DOUBLE_FRAME_Y, 'title_bigbox_yellow', 0.75);
-    const titleOnDouble = addImage(535, DOUBLE_TITLE_Y, 'title_on_double', 0.75);
+    addImage(540, DOUBLE_FRAME_Y, 'title_bigbox_yellow', 0.75);
+    const titleOnDouble = addImage(
+      535,
+      DOUBLE_TITLE_Y + DOUBLE_TRIPLE_CONTENT_NUDGE_Y,
+      'title_on_double',
+      0.75,
+    );
     const titleDoubleInset = titleOnDouble.displayWidth * 0.37;
     this.doublePayoutText = this.add
       .text(
@@ -518,8 +536,13 @@ export class HiLoScene extends Phaser.Scene {
       )
       .setOrigin(1, 0.5)
       .setDepth(6);
-    addImage(530, TRIPLE_FRAME_Y, 'title_bigbox_yellow', 0.75);
-    const titleOnTriple = addImage(532, TRIPLE_TITLE_Y, 'title_on_triple', 0.75);
+    addImage(540, TRIPLE_FRAME_Y, 'title_bigbox_yellow', 0.75);
+    const titleOnTriple = addImage(
+      532,
+      TRIPLE_TITLE_Y + DOUBLE_TRIPLE_CONTENT_NUDGE_Y,
+      'title_on_triple',
+      0.75,
+    );
     const titleTripleInset = titleOnTriple.displayWidth * 0.39;
     this.triplePayoutText = this.add
       .text(
@@ -535,7 +558,7 @@ export class HiLoScene extends Phaser.Scene {
       )
       .setOrigin(1, 0.5)
       .setDepth(6);
-    addImage(531, SUM_FRAME_Y, 'title_bigbox_purple', 0.75);
+    addImage(540, SUM_FRAME_Y, 'title_bigbox_purple', 0.75);
     addImage(536, SUM_TITLE_Y, 'title_sum', 0.75);
     const titleOnSingle = addImage(535, SINGLE_TITLE_Y, 'title_on_single', 0.75);
     const singleTitleSectionWidth = titleOnSingle.displayWidth / 3;
@@ -586,37 +609,31 @@ export class HiLoScene extends Phaser.Scene {
       .setDepth(6);
 
     const doubleDigits: Array<[string, number, number]> = [
-      ['00', 141, DOUBLE_ROW1_Y],
-      ['11', 335, DOUBLE_ROW1_Y],
-      ['22', 529, DOUBLE_ROW1_Y],
-      ['33', 725, DOUBLE_ROW1_Y],
-      ['44', 921, DOUBLE_ROW1_Y],
-      ['55', 139, DOUBLE_ROW2_Y],
-      ['66', 331, DOUBLE_ROW2_Y],
-      ['77', 527, DOUBLE_ROW2_Y],
-      ['88', 724, DOUBLE_ROW2_Y],
-      ['99', 920, DOUBLE_ROW2_Y],
+      ['11', 245, DOUBLE_ROW1_Y + DOUBLE_TRIPLE_CONTENT_NUDGE_Y],
+      ['22', 442, DOUBLE_ROW1_Y + DOUBLE_TRIPLE_CONTENT_NUDGE_Y],
+      ['33', 637, DOUBLE_ROW1_Y + DOUBLE_TRIPLE_CONTENT_NUDGE_Y],
+      ['44', 835, DOUBLE_ROW1_Y + DOUBLE_TRIPLE_CONTENT_NUDGE_Y],
+      ['55', 245, DOUBLE_ROW2_Y + DOUBLE_TRIPLE_CONTENT_NUDGE_Y],
+      ['66', 442, DOUBLE_ROW2_Y + DOUBLE_TRIPLE_CONTENT_NUDGE_Y],
+      ['77', 637, DOUBLE_ROW2_Y + DOUBLE_TRIPLE_CONTENT_NUDGE_Y],
+      ['88', 835, DOUBLE_ROW2_Y + DOUBLE_TRIPLE_CONTENT_NUDGE_Y],
     ];
     doubleDigits.forEach(([value, x, y]) => {
-      if (HIDDEN_DOUBLE_SELECTIONS.has(value)) return;
       const image = addImage(Number(x), Number(y), `number_${value}`, 0.75);
       this.registerDigitCell(image, 'DOUBLE', value);
     });
 
     const tripleDigits: Array<[string, number, number]> = [
-      ['000', 138, TRIPLE_ROW1_Y],
-      ['111', 331, TRIPLE_ROW1_Y],
-      ['222', 526, TRIPLE_ROW1_Y],
-      ['333', 724, TRIPLE_ROW1_Y],
-      ['444', 922, TRIPLE_ROW1_Y],
-      ['555', 138, TRIPLE_ROW2_Y],
-      ['666', 331, TRIPLE_ROW2_Y],
-      ['777', 528, TRIPLE_ROW2_Y],
-      ['888', 725, TRIPLE_ROW2_Y],
-      ['999', 921, TRIPLE_ROW2_Y],
+      ['111', 244, TRIPLE_ROW1_Y + DOUBLE_TRIPLE_CONTENT_NUDGE_Y],
+      ['222', 439, TRIPLE_ROW1_Y + DOUBLE_TRIPLE_CONTENT_NUDGE_Y],
+      ['333', 637, TRIPLE_ROW1_Y + DOUBLE_TRIPLE_CONTENT_NUDGE_Y],
+      ['444', 835, TRIPLE_ROW1_Y + DOUBLE_TRIPLE_CONTENT_NUDGE_Y],
+      ['555', 244, TRIPLE_ROW2_Y + DOUBLE_TRIPLE_CONTENT_NUDGE_Y],
+      ['666', 439, TRIPLE_ROW2_Y + DOUBLE_TRIPLE_CONTENT_NUDGE_Y],
+      ['777', 637, TRIPLE_ROW2_Y + DOUBLE_TRIPLE_CONTENT_NUDGE_Y],
+      ['888', 835, TRIPLE_ROW2_Y + DOUBLE_TRIPLE_CONTENT_NUDGE_Y],
     ];
     tripleDigits.forEach(([value, x, y]) => {
-      if (HIDDEN_TRIPLE_SELECTIONS.has(value)) return;
       const image = addImage(Number(x), Number(y), `number_${value}`, 0.75);
       this.registerDigitCell(image, 'TRIPLE', value);
     });
@@ -713,12 +730,12 @@ export class HiLoScene extends Phaser.Scene {
     addImage(130, 199, 'box_round', 0.7);
     addImage(894, 200, 'box_amount', 0.7);
 
-    addImage(543, 743, 'odd_box_mid', 0.7);
-    addImage(277, 742, 'odd_box_left', 0.7);
-    addImage(808, 742, 'odd_box_right', 0.7);
+    this.oddsBoxMid = addImage(543, 723, 'odd_box_mid', 0.7);
+    this.oddsBoxLeft = addImage(277, 722, 'odd_box_left', 0.7);
+    this.oddsBoxRight = addImage(808, 722, 'odd_box_right', 0.7);
 
     this.oddsLeftText = this.add
-      .text(134, 740, '', {
+      .text(134, 720, '', {
         fontFamily: 'Rajdhani',
         fontSize: '22px',
         color: '#f8fafc',
@@ -727,7 +744,7 @@ export class HiLoScene extends Phaser.Scene {
       .setScale(1.3)
       .setOrigin(0, 0.5);
     this.oddsRightText = this.add
-      .text(659, 740, '', {
+      .text(659, 720, '', {
         fontFamily: 'Rajdhani',
         fontSize: '22px',
         color: '#f8fafc',
@@ -736,7 +753,7 @@ export class HiLoScene extends Phaser.Scene {
       .setScale(1.3)
       .setOrigin(0, 0.5);
     this.oddsCenterText = this.add
-      .text(540, 740, '', {
+      .text(540, 720, '', {
         fontFamily: 'Rajdhani',
         fontSize: '24px',
         color: '#ffd166',
@@ -994,6 +1011,7 @@ export class HiLoScene extends Phaser.Scene {
         excludeBg &&
         item instanceof Phaser.GameObjects.Image &&
         (item.texture?.key === 'bg' ||
+          item.texture?.key === 'bg2' ||
           item.texture?.key === 'bg_light' ||
           item.texture?.key === 'bg_lockedphase')
       ) {
@@ -1072,6 +1090,7 @@ export class HiLoScene extends Phaser.Scene {
       if (
         item instanceof Phaser.GameObjects.Image &&
         (item.texture?.key === 'bg' ||
+          item.texture?.key === 'bg2' ||
           item.texture?.key === 'bg_light' ||
           item.texture?.key === 'bg_lockedphase')
       ) {
@@ -1139,6 +1158,7 @@ export class HiLoScene extends Phaser.Scene {
       if (
         item instanceof Phaser.GameObjects.Image &&
         (item.texture?.key === 'bg' ||
+          item.texture?.key === 'bg2' ||
           item.texture?.key === 'bg_light' ||
           item.texture?.key === 'bg_lockedphase')
       ) {
@@ -1304,6 +1324,7 @@ export class HiLoScene extends Phaser.Scene {
       if (
         child instanceof Phaser.GameObjects.Image &&
         (child.texture?.key === 'bg' ||
+          child.texture?.key === 'bg2' ||
           child.texture?.key === 'bg_light' ||
           child.texture?.key === 'bg_lockedphase')
       ) {
@@ -1343,6 +1364,7 @@ export class HiLoScene extends Phaser.Scene {
       if (
         child instanceof Phaser.GameObjects.Image &&
         (child.texture?.key === 'bg' ||
+          child.texture?.key === 'bg2' ||
           child.texture?.key === 'bg_light' ||
           child.texture?.key === 'bg_lockedphase')
       ) {
@@ -1403,6 +1425,8 @@ export class HiLoScene extends Phaser.Scene {
         ease: 'Sine.easeOut',
       });
     });
+
+    this.setLockedOddsStripLayout(minSlotY, bottomTop, targetScale);
 
     // Pause bonus tweens and explicitly scale bonus slot images
     this.bonusTweens.forEach((tween, key) => {
@@ -1470,6 +1494,7 @@ export class HiLoScene extends Phaser.Scene {
     // Remove CSS class from game container
     const container = document.getElementById('game-container');
     container?.classList.remove('locked-layout');
+    this.resetOddsStripLayout();
 
     if (!wasLocked || wasPending) {
       return;
@@ -1813,6 +1838,146 @@ export class HiLoScene extends Phaser.Scene {
     }
   }
 
+  private cachePhaseIndicatorElement() {
+    if (this.phaseIndicatorEl || typeof document === 'undefined') return;
+    this.phaseIndicatorEl = document.getElementById('tradingview-phase-indicator') ?? undefined;
+  }
+
+  private setPhaseIndicatorText(message: string, color: string) {
+    this.cachePhaseIndicatorElement();
+    if (this.phaseIndicatorEl) {
+      this.phaseIndicatorEl.textContent = message;
+      this.phaseIndicatorEl.style.color = color;
+      this.statusText?.setVisible(false);
+      return;
+    }
+
+    this.statusText?.setVisible(true);
+    this.statusText?.setText(message);
+    this.statusText?.setColor(color);
+  }
+
+  private clearPhaseIndicatorText() {
+    if (this.phaseIndicatorEl) {
+      this.phaseIndicatorEl.textContent = '';
+    }
+    this.statusText?.setVisible(false);
+    this.phaseIndicatorEl = undefined;
+  }
+
+  private cachePhaseCountdownElement() {
+    if (this.phaseCountdownEl || typeof document === 'undefined') return;
+    this.phaseCountdownEl = document.getElementById('tradingview-phase-countdown') ?? undefined;
+  }
+
+  private setPhaseCountdownText(seconds: number, color: string, shadow: string) {
+    this.cachePhaseCountdownElement();
+    if (!this.phaseCountdownEl) return false;
+    const text = `${seconds}`;
+    const isChanged = this.phaseCountdownEl.textContent !== text;
+    this.phaseCountdownEl.textContent = text;
+    this.phaseCountdownEl.style.color = color;
+    this.phaseCountdownEl.style.textShadow = `0 0 20px rgba(0, 0, 0, 0.9), 0 0 36px ${shadow}`;
+    this.phaseCountdownEl.classList.add('is-visible');
+    if (isChanged) {
+      this.phaseCountdownEl.classList.remove('is-pop');
+      // Force reflow so animation restarts when the digit changes.
+      void this.phaseCountdownEl.offsetWidth;
+      this.phaseCountdownEl.classList.add('is-pop');
+    }
+    return true;
+  }
+
+  private clearPhaseCountdownText() {
+    if (this.phaseCountdownEl) {
+      this.phaseCountdownEl.textContent = '';
+      this.phaseCountdownEl.classList.remove('is-visible');
+      this.phaseCountdownEl.classList.remove('is-pop');
+    }
+    this.phaseCountdownEl = undefined;
+  }
+
+  private cacheOddsStripElements() {
+    if (typeof document === 'undefined') return;
+    if (!this.oddsStripEl) {
+      this.oddsStripEl = document.getElementById('tradingview-odds-strip') ?? undefined;
+    }
+    if (!this.oddsLeftEl) {
+      this.oddsLeftEl = document.getElementById('tradingview-odds-left') ?? undefined;
+    }
+    if (!this.oddsCenterEl) {
+      this.oddsCenterEl = document.getElementById('tradingview-odds-center') ?? undefined;
+    }
+    if (!this.oddsRightEl) {
+      this.oddsRightEl = document.getElementById('tradingview-odds-right') ?? undefined;
+    }
+  }
+
+  private setCanvasOddsStripVisible(visible: boolean) {
+    this.oddsBoxLeft?.setVisible(visible);
+    this.oddsBoxMid?.setVisible(visible);
+    this.oddsBoxRight?.setVisible(visible);
+    this.oddsLeftText?.setVisible(visible);
+    this.oddsCenterText?.setVisible(visible);
+    this.oddsRightText?.setVisible(visible);
+  }
+
+  private setOddsStripText(left: string, center: string, right: string) {
+    this.cacheOddsStripElements();
+    if (this.oddsStripEl && this.oddsLeftEl && this.oddsCenterEl && this.oddsRightEl) {
+      this.oddsLeftEl.textContent = left;
+      this.oddsCenterEl.textContent = center;
+      this.oddsRightEl.textContent = right;
+      this.setCanvasOddsStripVisible(false);
+      return;
+    }
+
+    this.setCanvasOddsStripVisible(true);
+    this.oddsLeftText?.setText(left);
+    this.oddsCenterText?.setText(center);
+    this.oddsRightText?.setText(right);
+  }
+
+  private setLockedOddsStripLayout(
+    minSlotY: number,
+    bottomTop: number,
+    targetScale: number,
+  ) {
+    this.cacheOddsStripElements();
+    if (!this.oddsStripEl) return;
+
+    const cameraScrollY = this.cameras.main.scrollY;
+    const baseY =
+      (this.oddsBoxMid?.getData('originalY') as number | undefined) ??
+      this.oddsBoxMid?.y;
+    if (!Number.isFinite(baseY)) return;
+
+    const lockedY = bottomTop + ((baseY as number) - minSlotY) * targetScale;
+    const screenY = lockedY - cameraScrollY;
+    const topPercent = Phaser.Math.Clamp((screenY / this.scale.height) * 100, 0, 100);
+
+    this.oddsStripEl.style.setProperty('--odds-strip-top', `${topPercent}%`);
+    this.oddsStripEl.style.setProperty('--odds-strip-scale', `${targetScale}`);
+  }
+
+  private resetOddsStripLayout() {
+    this.cacheOddsStripElements();
+    if (!this.oddsStripEl) return;
+    this.oddsStripEl.style.removeProperty('--odds-strip-top');
+    this.oddsStripEl.style.removeProperty('--odds-strip-scale');
+  }
+
+  private clearOddsStripText() {
+    this.resetOddsStripLayout();
+    if (this.oddsLeftEl) this.oddsLeftEl.textContent = '';
+    if (this.oddsCenterEl) this.oddsCenterEl.textContent = '';
+    if (this.oddsRightEl) this.oddsRightEl.textContent = '';
+    this.oddsStripEl = undefined;
+    this.oddsLeftEl = undefined;
+    this.oddsCenterEl = undefined;
+    this.oddsRightEl = undefined;
+  }
+
   private handlePlaceDigitBet(digitType: DigitBetType, selection?: string) {
     if (!this.handlers?.onPlaceDigitBet) return;
     this.playBetChipSound();
@@ -1861,9 +2026,7 @@ export class HiLoScene extends Phaser.Scene {
     const smallBigOdds = config?.digitPayouts?.smallBigOddEven ?? 1;
     const anyTripleOdds = config?.digitPayouts?.anyTriple ?? 30;
     const commonText = `${formatPayoutRatio(smallBigOdds)} LOSE IF ANY TRIPLE`;
-    this.oddsLeftText?.setText(commonText);
-    this.oddsRightText?.setText(commonText);
-    this.oddsCenterText?.setText(formatPayoutRatio(anyTripleOdds));
+    this.setOddsStripText(commonText, formatPayoutRatio(anyTripleOdds), commonText);
     this.updateBaseOdds(config);
     this.updateBonusOddsFromRound(this.round);
   }
@@ -2386,7 +2549,10 @@ export class HiLoScene extends Phaser.Scene {
   }
 
   private updateTimerText() {
-    if (!this.round || !this.timerText) return;
+    if (!this.round || !this.timerText) {
+      this.clearPhaseCountdownText();
+      return;
+    }
     const now = Date.now();
     const isBetting = this.round.status === 'BETTING';
     const targetTime = isBetting
@@ -2436,28 +2602,38 @@ export class HiLoScene extends Phaser.Scene {
     }
 
     // Big countdown overlay
-    if (showBigCountdown && this.bigCountdownText) {
+    const urgencyColors: Record<number, string> = {
+      5: '#ffd166',
+      4: '#ff9f43',
+      3: '#ff6b6b',
+      2: '#ff4757',
+      1: '#ff1744',
+    };
+    const shadowColors: Record<number, string> = {
+      5: 'rgba(255,209,102,0.55)',
+      4: 'rgba(255,159,67,0.55)',
+      3: 'rgba(255,107,107,0.55)',
+      2: 'rgba(255,71,87,0.55)',
+      1: 'rgba(255,23,68,0.7)',
+    };
+    const col = urgencyColors[seconds] ?? '#ff4757';
+    const shd = shadowColors[seconds] ?? 'rgba(255,71,87,0.55)';
+    const usingDomCountdown = showBigCountdown && this.setPhaseCountdownText(seconds, col, shd);
+
+    if (usingDomCountdown) {
+      if (this.bigCountdownTween) {
+        this.bigCountdownTween.stop();
+        this.bigCountdownTween = undefined;
+      }
+      if (this.bigCountdownText) {
+        this.bigCountdownText.setVisible(false);
+        this.bigCountdownText.setAlpha(0);
+      }
+      this.lastBigCountdownSec = seconds;
+    } else if (showBigCountdown && this.bigCountdownText) {
       this.bigCountdownText.setVisible(true);
 
       if (this.lastBigCountdownSec !== seconds) {
-        // Color gradient: 5 yellow, 4 orange, 3 red-orange, 2 red, 1 bright red
-        const urgencyColors: Record<number, string> = {
-          5: '#ffd166',
-          4: '#ff9f43',
-          3: '#ff6b6b',
-          2: '#ff4757',
-          1: '#ff1744',
-        };
-        const shadowColors: Record<number, string> = {
-          5: 'rgba(255,209,102,0.55)',
-          4: 'rgba(255,159,67,0.55)',
-          3: 'rgba(255,107,107,0.55)',
-          2: 'rgba(255,71,87,0.55)',
-          1: 'rgba(255,23,68,0.7)',
-        };
-        const col = urgencyColors[seconds] ?? '#ff4757';
-        const shd = shadowColors[seconds] ?? 'rgba(255,71,87,0.55)';
-
         this.bigCountdownText.setText(`${seconds}`);
         this.bigCountdownText.setColor(col);
         this.bigCountdownText.setShadow(0, 0, shd, 24, true, true);
@@ -2478,14 +2654,17 @@ export class HiLoScene extends Phaser.Scene {
 
         this.lastBigCountdownSec = seconds;
       }
-    } else if (this.bigCountdownText && this.bigCountdownText.visible) {
-      // Hide big countdown
-      if (this.bigCountdownTween) {
-        this.bigCountdownTween.stop();
-        this.bigCountdownTween = undefined;
+    } else {
+      this.clearPhaseCountdownText();
+      if (this.bigCountdownText && this.bigCountdownText.visible) {
+        // Hide big countdown
+        if (this.bigCountdownTween) {
+          this.bigCountdownTween.stop();
+          this.bigCountdownTween = undefined;
+        }
+        this.bigCountdownText.setVisible(false);
+        this.bigCountdownText.setAlpha(0);
       }
-      this.bigCountdownText.setVisible(false);
-      this.bigCountdownText.setAlpha(0);
       this.lastBigCountdownSec = -1;
     }
 
@@ -2501,13 +2680,15 @@ export class HiLoScene extends Phaser.Scene {
     if (this.round) {
       this.roundText?.setText(`${this.round.id}`);
       if (this.round.status === 'BETTING') {
-        this.statusText?.setText(t(this.language, 'scene.betsOpen'));
+        this.setPhaseIndicatorText(t(this.language, 'scene.betsOpen'), '#00ffb2');
       } else if (this.round.status === 'RESULT_PENDING') {
-        this.statusText?.setText(t(this.language, 'scene.locked'));
+        this.setPhaseIndicatorText(t(this.language, 'scene.locked'), '#ffd166');
+      } else {
+        this.setPhaseIndicatorText(t(this.language, 'scene.roundResult'), '#b2bec3');
       }
     } else {
       this.roundText?.setText(`--`);
-      this.statusText?.setText(t(this.language, 'scene.connecting'));
+      this.setPhaseIndicatorText(t(this.language, 'scene.connecting'), '#b2bec3');
     }
   }
 
@@ -2674,8 +2855,7 @@ export class HiLoScene extends Phaser.Scene {
       this.sumTriangleTimer = undefined;
       this.winnerHighlightTimer?.remove(false);
       this.winnerHighlightTimer = undefined;
-      this.statusText?.setText(t(this.language, 'scene.betsOpen'));
-      this.statusText?.setColor('#00ffb2');
+      this.setPhaseIndicatorText(t(this.language, 'scene.betsOpen'), '#00ffb2');
 
       // Show "Round Start!" banner once per new round
       if (this.lastSeenRoundId !== state.id) {
@@ -2688,18 +2868,15 @@ export class HiLoScene extends Phaser.Scene {
       }
       this.enterLockedLayout();
       this.sumTriangleText?.setVisible(false);
-      this.statusText?.setText(t(this.language, 'scene.locked'));
-      this.statusText?.setColor('#ffd166');
+      this.setPhaseIndicatorText(t(this.language, 'scene.locked'), '#ffd166');
     } else if (state.status === 'COMPLETED') {
       // Restore open layout during result display phase
       this.exitLockedLayout();
       this.sumTriangleText?.setVisible(false);
-      this.statusText?.setText(t(this.language, 'scene.roundResult'));
-      this.statusText?.setColor('#b2bec3');
+      this.setPhaseIndicatorText(t(this.language, 'scene.roundResult'), '#b2bec3');
     } else {
       this.sumTriangleText?.setVisible(false);
-      this.statusText?.setText(t(this.language, 'scene.roundResult'));
-      this.statusText?.setColor('#b2bec3');
+      this.setPhaseIndicatorText(t(this.language, 'scene.roundResult'), '#b2bec3');
     }
     
     // Update bonus odds after layout mode is set

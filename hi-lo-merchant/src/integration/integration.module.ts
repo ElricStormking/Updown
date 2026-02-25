@@ -10,6 +10,7 @@ import { WalletModule } from '../wallet/wallet.module';
 import { GameConfigModule } from '../config/game-config.module';
 import { LaunchSessionService } from './launch-session.service';
 import { MerchantCallbackService } from './merchant-callback.service';
+import { LaunchSessionOfflineService } from './launch-session-offline.service';
 
 @Module({
   imports: [
@@ -34,7 +35,13 @@ import { MerchantCallbackService } from './merchant-callback.service';
     MerchantAuthGuard,
     LaunchSessionService,
     MerchantCallbackService,
+    LaunchSessionOfflineService,
   ],
-  exports: [IntegrationService, LaunchSessionService, MerchantCallbackService],
+  exports: [
+    IntegrationService,
+    LaunchSessionService,
+    MerchantCallbackService,
+    LaunchSessionOfflineService,
+  ],
 })
 export class IntegrationModule {}

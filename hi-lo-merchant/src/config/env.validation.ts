@@ -13,6 +13,7 @@ const envSchema = z.object({
   INTEGRATION_GAME_URL: z.string().url().default('https://game.example.com'),
   INTEGRATION_CALLBACK_TIMEOUT_MS: z.coerce.number().min(1000).default(5000),
   INTEGRATION_CALLBACK_RETRY_COUNT: z.coerce.number().min(0).max(10).default(2),
+  INTEGRATION_OFFLINE_GRACE_MS: z.coerce.number().min(1000).default(30000),
   INTEGRATION_LAUNCH_SESSION_TTL_SEC: z.coerce.number().min(60).default(3600),
 });
 

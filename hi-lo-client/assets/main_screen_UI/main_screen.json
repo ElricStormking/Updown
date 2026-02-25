@@ -52,6 +52,11 @@
                 "key": "bg_line_right"
             },
             {
+                "url": "assets/main_screen_UI/bg2.png",
+                "type": "image",
+                "key": "bg2"
+            },
+            {
                 "url": "assets/main_screen_UI/box_amount.png",
                 "type": "image",
                 "key": "box_amount"

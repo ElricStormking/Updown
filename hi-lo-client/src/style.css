@@ -290,10 +290,156 @@ html {
   pointer-events: none;
 }
 
+#tradingview-phase-indicator {
+  position: absolute;
+  left: 50%;
+  top: 12%;
+  transform: translateX(-50%);
+  z-index: 20;
+  pointer-events: none;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: clamp(18px, 2vw, 27px);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  color: #00ffb2;
+  text-shadow:
+    0 1px 0 rgba(0, 0, 0, 0.65),
+    0 0 8px rgba(0, 0, 0, 0.9),
+    0 0 14px rgba(0, 255, 178, 0.35);
+  white-space: nowrap;
+}
+
+#tradingview-phase-countdown {
+  position: absolute;
+  left: 20%;
+  top: 41%;
+  transform: translate(-50%, -50%);
+  z-index: 21;
+  pointer-events: none;
+  display: none;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: clamp(56px, 9vw, 120px);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  color: #ff4757;
+  text-shadow:
+    0 0 20px rgba(0, 0, 0, 0.9),
+    0 0 36px rgba(255, 71, 87, 0.5);
+}
+
+#tradingview-phase-countdown.is-visible {
+  display: block;
+}
+
+#tradingview-phase-countdown.is-pop {
+  animation: phaseCountdownPop 300ms cubic-bezier(0.2, 0.9, 0.2, 1);
+}
+
+@keyframes phaseCountdownPop {
+  0% {
+    transform: translate(-50%, -50%) scale(2.2);
+    opacity: 0.2;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+}
+
+#tradingview-odds-strip {
+  position: absolute;
+  left: 50%;
+  top: var(--odds-strip-top, calc(30.1% + 20px));
+  transform: translate(-50%, -50%) scale(var(--odds-strip-scale, 1));
+  transform-origin: center center;
+  width: 85.2%;
+  aspect-ratio: 1313 / 80;
+  display: grid;
+  grid-template-columns: 531fr 251fr 531fr;
+  z-index: 12;
+  pointer-events: none;
+  transition: top 0.4s ease-out, transform 0.4s ease-out;
+}
+
+.tradingview-odds-segment {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 100% 100%;
+}
+
+.tradingview-odds-segment--left {
+  background-image: url('/main_screen_UI/odd_box_left.png');
+}
+
+.tradingview-odds-segment--center {
+  background-image: url('/main_screen_UI/odd_box_mid.png');
+}
+
+.tradingview-odds-segment--right {
+  background-image: url('/main_screen_UI/odd_box_right.png');
+}
+
+#tradingview-odds-left,
+#tradingview-odds-right {
+  position: absolute;
+  left: 10.8%;
+  top: 50%;
+  transform: translateY(-50%);
+  font-family: 'Oxanium', 'Rajdhani', sans-serif;
+  font-size: clamp(8px, 1.55vw, 12px);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: #f8fafc;
+  line-height: 1;
+  white-space: nowrap;
+  text-shadow:
+    0 1px 0 rgba(0, 0, 0, 0.72),
+    0 0 6px rgba(0, 0, 0, 0.78);
+}
+
+#tradingview-odds-center {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-family: 'Oxanium', 'Rajdhani', sans-serif;
+  font-size: clamp(12px, 2.4vw, 20px);
+  font-weight: 700;
+  letter-spacing: 0.015em;
+  color: #ffd166;
+  line-height: 1;
+  white-space: nowrap;
+  text-shadow:
+    0 1px 0 rgba(0, 0, 0, 0.76),
+    0 0 6px rgba(0, 0, 0, 0.8);
+}
+
 /* Open betting phase: show framed chart art */
 #game-container:not(.locked-layout):not(.result-layout):not(.pending-layout) #tradingview-chart {
   background: url('/main_screen_UI/Line_chart_box1.png') no-repeat center / 100% 100%;
   border: none;
+}
+
+/* Open betting phase: increase dark overlay behind the TradingView line chart. */
+#game-container:not(.locked-layout):not(.result-layout):not(.pending-layout) #tradingview-chart-inner {
+  background: linear-gradient(
+    to bottom,
+    rgba(3, 8, 12, 0.66) 0%,
+    rgba(3, 8, 12, 0.66) 7%,
+    rgba(3, 8, 12, 0.16) 7%,
+    rgba(3, 8, 12, 0.16) 21%,
+    rgba(3, 8, 12, 0.66) 21%,
+    rgba(3, 8, 12, 0.66) 46%,
+    rgba(3, 8, 12, 0.08) 46%,
+    rgba(3, 8, 12, 0.08) 70%,
+    rgba(3, 8, 12, 0.66) 70%,
+    rgba(3, 8, 12, 0.66) 100%
+  );
 }
 
 /* Locked layout mode (post-bonus in RESULT_PENDING): use alternate frame art */
