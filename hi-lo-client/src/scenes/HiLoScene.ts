@@ -529,7 +529,7 @@ export class HiLoScene extends Phaser.Scene {
         '',
         {
           fontFamily: 'Rajdhani',
-          fontSize: '22px',
+          fontSize: '33px',
           color: '#f8fafc',
           fontStyle: 'bold',
         },
@@ -551,7 +551,7 @@ export class HiLoScene extends Phaser.Scene {
         '',
         {
           fontFamily: 'Rajdhani',
-          fontSize: '22px',
+          fontSize: '33px',
           color: '#f8fafc',
           fontStyle: 'bold',
         },
@@ -571,7 +571,7 @@ export class HiLoScene extends Phaser.Scene {
         '',
         {
           fontFamily: 'Rajdhani',
-          fontSize: '22px',
+          fontSize: '33px',
           color: '#f8fafc',
           fontStyle: 'bold',
         },
@@ -586,7 +586,7 @@ export class HiLoScene extends Phaser.Scene {
         '',
         {
           fontFamily: 'Rajdhani',
-          fontSize: '22px',
+          fontSize: '33px',
           color: '#ffd166',
           fontStyle: 'bold',
         },
@@ -600,7 +600,7 @@ export class HiLoScene extends Phaser.Scene {
         '',
         {
           fontFamily: 'Rajdhani',
-          fontSize: '22px',
+          fontSize: '33px',
           color: '#ffd166',
           fontStyle: 'bold',
         },
@@ -763,9 +763,9 @@ export class HiLoScene extends Phaser.Scene {
       .setOrigin(0.5, 0.5);
 
     this.roundText = this.add
-      .text(180, 199, `--`, {
+      .text(190, 199, `--`, {
         fontFamily: 'Rajdhani',
-        fontSize: '20px',
+        fontSize: '28px',
         color: '#f8fafc',
         fontStyle: 'bold',
       })
@@ -813,9 +813,9 @@ export class HiLoScene extends Phaser.Scene {
       .setVisible(false);
 
     this.balanceText = this.add
-      .text(974, 200, '0.00 USDT', {
+      .text(954, 200, '0.00', {
         fontFamily: 'Roboto Mono',
-        fontSize: '20px',
+        fontSize: '25px',
         color: '#00ffb2',
         fontStyle: 'bold',
       })
@@ -953,33 +953,39 @@ export class HiLoScene extends Phaser.Scene {
     // Create three separate digit text objects for each frame
     this.roundDigitsLeftText = this.add
       .text(420, 181, '0', {
-        fontFamily: 'Roboto Mono',
-        fontSize: '40px',
-        color: '#f8fafc',
+        fontFamily: "'Orbitron', 'Oxanium', 'Rajdhani', sans-serif",
+        fontSize: '52px',
+        color: '#ffffff',
         fontStyle: 'bold',
         align: 'center',
+        stroke: '#ffd700',
+        strokeThickness: 5,
       })
       .setOrigin(0.5, 0.5)
       .setDepth(RESULT_DIGIT_TEXT_DEPTH);
 
     this.roundDigitsCenterText = this.add
       .text(538, 181, '0', {
-        fontFamily: 'Roboto Mono',
-        fontSize: '40px',
-        color: '#f8fafc',
+        fontFamily: "'Orbitron', 'Oxanium', 'Rajdhani', sans-serif",
+        fontSize: '52px',
+        color: '#ffffff',
         fontStyle: 'bold',
         align: 'center',
+        stroke: '#ffd700',
+        strokeThickness: 5,
       })
       .setOrigin(0.5, 0.5)
       .setDepth(RESULT_DIGIT_TEXT_DEPTH);
 
     this.roundDigitsRightText = this.add
       .text(655, 181, '0', {
-        fontFamily: 'Roboto Mono',
-        fontSize: '40px',
-        color: '#f8fafc',
+        fontFamily: "'Orbitron', 'Oxanium', 'Rajdhani', sans-serif",
+        fontSize: '52px',
+        color: '#ffffff',
         fontStyle: 'bold',
         align: 'center',
+        stroke: '#ffd700',
+        strokeThickness: 5,
       })
       .setOrigin(0.5, 0.5)
       .setDepth(RESULT_DIGIT_TEXT_DEPTH);
@@ -2541,7 +2547,7 @@ export class HiLoScene extends Phaser.Scene {
 
   private syncBalance(balance: number) {
     if (!this.balanceText) return;
-    this.balanceText.setText(`${balance.toFixed(2)} USDT`);
+    this.balanceText.setText(`${balance.toFixed(2)}`);
   }
 
   update() {
@@ -3810,7 +3816,7 @@ export class HiLoScene extends Phaser.Scene {
       lockedDuration,
       () => {
         this.lockedBannerTimers = this.lockedBannerTimers.filter((item) => item !== timer);
-        this.showLockedBanner('Bonus Slots', '#00d2ff', bonusDuration);
+        this.showLockedBanner('FLASH BONUS', '#00d2ff', bonusDuration);
         // Re-apply as the bonus banner appears so pending-phase highlights are immediate.
         this.updateBonusOddsFromRound(this.round);
       },
@@ -4139,13 +4145,14 @@ export class HiLoScene extends Phaser.Scene {
     const container = this.add.container(x, y);
     container.setDepth(RESULT_BOX_TOTAL_SPRITE_DEPTH);
 
+    const resultBoxScaleMultiplier = 1.7;
     const boxPositions = [
-      { x: -96, y: -40 },
-      { x: 0, y: -40 },
-      { x: 96, y: -40 },
-      { x: 0, y: 80 },
+      { x: -96 * resultBoxScaleMultiplier, y: -40 * resultBoxScaleMultiplier },
+      { x: 0, y: -40 * resultBoxScaleMultiplier },
+      { x: 96 * resultBoxScaleMultiplier, y: -40 * resultBoxScaleMultiplier },
+      { x: 0, y: 80 * resultBoxScaleMultiplier },
     ];
-    const boxScale = 0.6;
+    const boxScale = 0.6 * resultBoxScaleMultiplier;
     boxPositions.forEach(({ x: boxX, y: boxY }) => {
       const box = this.add.sprite(boxX, boxY, RESULT_BOX_TOTAL_TEXTURE_KEY, 0);
       box.setScale(boxScale);
@@ -4155,7 +4162,7 @@ export class HiLoScene extends Phaser.Scene {
 
     if (this.textures.exists(RESULT_BOX_ARROW_TEXTURE_KEY)) {
       const arrow = this.add.sprite(0, 18, RESULT_BOX_ARROW_TEXTURE_KEY, 0);
-      arrow.setScale(0.6);
+      arrow.setScale(0.6 * resultBoxScaleMultiplier);
       if (this.anims.exists(RESULT_BOX_ARROW_ANIMATION_KEY)) {
         arrow.play(RESULT_BOX_ARROW_ANIMATION_KEY);
       }
@@ -4171,7 +4178,7 @@ export class HiLoScene extends Phaser.Scene {
 
     const topGlowStyle: Phaser.Types.GameObjects.Text.TextStyle = {
       fontFamily: "'Orbitron', 'Rajdhani', sans-serif",
-      fontSize: '42px',
+      fontSize: `${42 * resultBoxScaleMultiplier}px`,
       color: '#ffe8a6',
       fontStyle: '900',
       stroke: '#ff9f1a',
@@ -4187,7 +4194,7 @@ export class HiLoScene extends Phaser.Scene {
     };
     const topCoreStyle: Phaser.Types.GameObjects.Text.TextStyle = {
       fontFamily: "'Orbitron', 'Rajdhani', sans-serif",
-      fontSize: '42px',
+      fontSize: `${42 * resultBoxScaleMultiplier}px`,
       color: '#fff7d1',
       fontStyle: '900',
       stroke: '#3a1500',
@@ -4202,7 +4209,7 @@ export class HiLoScene extends Phaser.Scene {
     };
     const sumGlowStyle: Phaser.Types.GameObjects.Text.TextStyle = {
       fontFamily: "'Orbitron', 'Rajdhani', sans-serif",
-      fontSize: '50px',
+      fontSize: `${50 * resultBoxScaleMultiplier}px`,
       color: '#fff2a8',
       fontStyle: '900',
       stroke: '#ff8f00',
@@ -4218,7 +4225,7 @@ export class HiLoScene extends Phaser.Scene {
     };
     const sumCoreStyle: Phaser.Types.GameObjects.Text.TextStyle = {
       fontFamily: "'Orbitron', 'Rajdhani', sans-serif",
-      fontSize: '50px',
+      fontSize: `${50 * resultBoxScaleMultiplier}px`,
       color: '#ffe27a',
       fontStyle: '900',
       stroke: '#381200',
@@ -4233,7 +4240,7 @@ export class HiLoScene extends Phaser.Scene {
     };
     const sumCaptionGlowStyle: Phaser.Types.GameObjects.Text.TextStyle = {
       fontFamily: "'Oxanium', 'Rajdhani', sans-serif",
-      fontSize: '26px',
+      fontSize: `${26 * resultBoxScaleMultiplier}px`,
       color: '#b8f6ff',
       fontStyle: '800',
       stroke: '#00b9d6',
@@ -4249,7 +4256,7 @@ export class HiLoScene extends Phaser.Scene {
     };
     const sumCaptionCoreStyle: Phaser.Types.GameObjects.Text.TextStyle = {
       fontFamily: "'Oxanium', 'Rajdhani', sans-serif",
-      fontSize: '24px',
+      fontSize: `${24 * resultBoxScaleMultiplier}px`,
       color: '#e9fcff',
       fontStyle: '800',
       stroke: '#032f43',
@@ -4312,7 +4319,7 @@ export class HiLoScene extends Phaser.Scene {
       320,
     );
 
-    const sumCaptionY = sumBox.y + 61;
+    const sumCaptionY = sumBox.y + 61 * resultBoxScaleMultiplier;
     const sumCaptionGlow = this.add
       .text(sumBox.x, sumCaptionY, 'SUM', sumCaptionGlowStyle)
       .setOrigin(0.5)
