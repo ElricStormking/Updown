@@ -491,15 +491,12 @@ export class HiLoScene extends Phaser.Scene {
       scaleY = scaleX,
     ) => this.add.image(x, y, key).setScale(scaleX, scaleY);
 
-    const bg = addImage(this.scale.width / 2, this.scale.height * 1.1, 'bg2', 1.1, 1.5);
+    const bg = addImage(this.scale.width / 2, this.scale.height / 2, 'bg2');
+    bg.setDisplaySize(this.scale.width, this.scale.height);
+    bg.setScrollFactor(0);
     bg.setDepth(-100);
-    this.lockedBackground = addImage(
-      this.scale.width / 2,
-      this.scale.height * 1.1,
-      'bg2',
-      1.1,
-      1.5,
-    );
+    this.lockedBackground = addImage(this.scale.width / 2, this.scale.height / 2, 'bg2');
+    this.lockedBackground.setDisplaySize(this.scale.width, this.scale.height);
     this.lockedBackground.setDepth(-95).setVisible(false).setScrollFactor(0);
 
     const buttonAnyTriple = addImage(543, 868, 'button_any triple', 0.75);
@@ -1094,6 +1091,15 @@ export class HiLoScene extends Phaser.Scene {
   private compressBodyLayout(pivotY: number, scale: number) {
     this.children.each((child) => {
       const node = child as Phaser.GameObjects.GameObject & { y?: number };
+      if (
+        child instanceof Phaser.GameObjects.Image &&
+        (child.texture?.key === 'bg' ||
+          child.texture?.key === 'bg2' ||
+          child.texture?.key === 'bg_light' ||
+          child.texture?.key === 'bg_lockedphase')
+      ) {
+        return;
+      }
       if (typeof node.y !== 'number') return;
       if (node.y < pivotY) return;
       node.y = pivotY + (node.y - pivotY) * scale;
@@ -1140,6 +1146,15 @@ export class HiLoScene extends Phaser.Scene {
   private shiftLayoutY(delta: number) {
     this.children.each((child) => {
       if (child === this.resultOverlay) return;
+      if (
+        child instanceof Phaser.GameObjects.Image &&
+        (child.texture?.key === 'bg' ||
+          child.texture?.key === 'bg2' ||
+          child.texture?.key === 'bg_light' ||
+          child.texture?.key === 'bg_lockedphase')
+      ) {
+        return;
+      }
       const node = child as Phaser.GameObjects.GameObject & { y?: number };
       if (typeof node.y !== 'number') return;
       node.y += delta;
