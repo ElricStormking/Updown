@@ -1,0 +1,27 @@
+{
+    "section1": {
+        "files": [
+            {
+                "url": "assets/anim/number_box_light_rainbow/number_box_light_rainbow.png",
+                "frameConfig": {
+                    "frameWidth": 474,
+                    "frameHeight": 226,
+                    "startFrame": 0,
+                    "endFrame": -1,
+                    "spacing": 0,
+                    "margin": 0
+                },
+                "type": "spritesheet",
+                "key": "number_box_light_rainbow"
+            }
+        ]
+    },
+    "meta": {
+        "app": "Phaser Editor 2D - Asset Pack Editor",
+        "contentType": "phasereditor2d.pack.core.AssetContentType",
+        "url": "https://phasereditor2d.com",
+        "version": 2,
+        "showAllFilesInBlocks": false,
+        "visible": true
+    }
+}

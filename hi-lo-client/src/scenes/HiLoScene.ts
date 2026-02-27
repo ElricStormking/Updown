@@ -9,7 +9,7 @@ import type {
 } from '../types';
 import { getInitialLanguage, t, type LanguageCode } from '../i18n';
 import { setStatus } from '../ui/domControls';
-import { state, subscribe } from '../state/gameState';
+import { state, subscribe, type TokenPlacement } from '../state/gameState';
 import { setSonarUrgent } from '../ui/tradingViewWidget';
 
 type BetHandlers = {
@@ -2439,7 +2439,7 @@ export class HiLoScene extends Phaser.Scene {
   }
 
   private syncTokenPlacements(
-    placements: Record<string, { value: number; count: number }>,
+    placements: Record<string, TokenPlacement>,
   ) {
     const activeKeys = new Set(Object.keys(placements ?? {}));
     this.tokenSprites.forEach((sprite, key) => {
@@ -2452,9 +2452,9 @@ export class HiLoScene extends Phaser.Scene {
     Object.entries(placements ?? {}).forEach(([key, placement]) => {
       const target = this.betTargets.get(key);
       if (!target) return;
-      const total = placement.value * placement.count;
+      const total = placement.total;
       let container = this.tokenSprites.get(key);
-      const styleValue = this.getTokenStyleValue(placement.value);
+      const styleValue = this.getTokenStyleValue(placement.chipValue);
       if (!container) {
         const chip = this.add.image(0, 0, `chip_${styleValue}`);
         chip.setScale(0.78); // 50% larger than previous 0.52

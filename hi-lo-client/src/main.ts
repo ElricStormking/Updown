@@ -6,7 +6,7 @@ import { initControls, setAuthFormLocked, setStatus } from './ui/domControls';
 import type { BetSide, DigitBetType } from './types';
 import { api } from './services/api';
 import { authenticateGameSocket, createGameSocket } from './services/socket';
-import { state, updateState } from './state/gameState';
+import { state, updateState, type TokenPlacement } from './state/gameState';
 import {
   initTradingViewWidget,
   pushPriceUpdate,
@@ -346,17 +346,16 @@ const buildDigitBetKey = (digitType: DigitBetType, selection?: string) =>
 const addTokenPlacement = (key: string, tokenValue: number) => {
   const nextPlacements = { ...(state.tokenPlacements ?? {}) };
   const existing = nextPlacements[key];
-  const nextPlacement =
-    existing && existing.value === tokenValue
-      ? { value: existing.value, count: existing.count + 1 }
-      : { value: tokenValue, count: 1 };
+  const nextPlacement: TokenPlacement = {
+    total: (existing?.total ?? 0) + tokenValue,
+    chipValue: tokenValue,
+  };
   nextPlacements[key] = nextPlacement;
   updateState({ tokenPlacements: nextPlacements });
   return nextPlacement;
 };
 
-const getPlacementTotal = (placement?: { value: number; count: number }) =>
-  placement ? placement.value * placement.count : 0;
+const getPlacementTotal = (placement?: TokenPlacement) => placement?.total ?? 0;
 
 const getTotalPlacedStake = () =>
   Object.values(state.tokenPlacements ?? {}).reduce(

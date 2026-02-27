@@ -16,8 +16,8 @@ export interface DigitSelection {
 }
 
 export interface TokenPlacement {
-  value: number;
-  count: number;
+  total: number;
+  chipValue: number;
 }
 
 export interface GameState {

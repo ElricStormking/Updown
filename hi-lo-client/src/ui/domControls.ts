@@ -1,4 +1,4 @@
-import { state, subscribe, updateState } from '../state/gameState';
+import { state, subscribe, updateState, type TokenPlacement } from '../state/gameState';
 import type { BetSide, DigitBetType } from '../types';
 import { ensureCandlestickTradingViewWidget } from './candlestickTradingView';
 import { LANGUAGES, setLanguage, t, type LanguageCode } from '../i18n';
@@ -1800,16 +1800,16 @@ const renderTokenPlacements = (nextState: typeof state) => {
 
 const renderTokenStack = (
   stackEl: HTMLElement,
-  placement?: { value: number; count: number },
+  placement?: TokenPlacement,
 ) => {
   if (!placement) {
     stackEl.innerHTML = '';
     stackEl.classList.remove('has-tokens');
     return;
   }
-  const totalAmount = placement.value * placement.count;
+  const totalAmount = placement.total;
   const amountLabel = String(totalAmount);
-  const styleValue = getTokenStyleValue(placement.value);
+  const styleValue = getTokenStyleValue(placement.chipValue);
   const compactClass = amountLabel.length >= 4 ? ' token-chip--compact' : '';
   stackEl.innerHTML = `
     <span class="token-chip token-chip--${styleValue}${compactClass}">
