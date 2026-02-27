@@ -89,6 +89,14 @@ const LIGHTNING_BEAM_TEXTURE_KEY = 'lightball';
 const LIGHTNING_HIT_TEXTURE_KEY = 'lightball_hit';
 const LIGHTNING_BEAM_ANIMATION_KEY = 'winner-lightball-beam';
 const LIGHTNING_HIT_ANIMATION_KEY = 'winner-lightball-hit';
+const WINNER_LIGHT_TEXTURE_KEY = 'number_box_light_rainbow';
+const WINNER_LIGHT_ANIMATION_KEY = 'winner-number-box-light-rainbow';
+const WINNER_LIGHT_FRAME_WIDTH = 474;
+const WINNER_LIGHT_FRAME_HEIGHT = 226;
+// Rainbow sheet has larger padded frames than the old winner FX; use effective
+// dimensions aligned to the prior winner-light envelope so glow sits on frame edges.
+const WINNER_LIGHT_EFFECTIVE_WIDTH = 270;
+const WINNER_LIGHT_EFFECTIVE_HEIGHT = 109;
 const WIN_TITLE_TEXTURE_KEY = 'WIN_anim';
 const WIN_TITLE_ANIMATION_KEY = 'result-win-title-anim';
 const LIGHTNING_BEAM_FRAME_HEIGHT = 269;
@@ -328,6 +336,11 @@ export class HiLoScene extends Phaser.Scene {
       'number_light_box_2',
       '../UI_sprites/number_light_box_2/number_light_box2.png',
       { frameWidth: 270, frameHeight: 109 },
+    );
+    this.load.spritesheet(
+      WINNER_LIGHT_TEXTURE_KEY,
+      '../UI_sprites/number_box_light_rainbow/number_box_light_rainbow.png',
+      { frameWidth: WINNER_LIGHT_FRAME_WIDTH, frameHeight: WINNER_LIGHT_FRAME_HEIGHT },
     );
 
     this.load.spritesheet(
@@ -3130,7 +3143,7 @@ export class HiLoScene extends Phaser.Scene {
 
   private applyWinnerHighlights(winKeys: Set<string>) {
     this.clearWinnerHighlights();
-    this.ensureNumberLightAnimation();
+    this.ensureWinnerLightAnimation();
     winKeys.forEach((key) => {
       const image = this.betTargets.get(key);
       if (!image) return;
@@ -3169,18 +3182,16 @@ export class HiLoScene extends Phaser.Scene {
 
       const light =
         this.winnerLightSprites.get(key) ??
-        this.add.sprite(image.x, image.y, 'number_light_box_2', 0);
-      const frameWidth = 270;
-      const frameHeight = 109;
-      const scaleX = (image.displayWidth / frameWidth) * 1.1;
-      const scaleY = (image.displayHeight / frameHeight) * 1.1;
+        this.add.sprite(image.x, image.y, WINNER_LIGHT_TEXTURE_KEY, 0);
+      const scaleX = (image.displayWidth / WINNER_LIGHT_EFFECTIVE_WIDTH) * 1.1;
+      const scaleY = (image.displayHeight / WINNER_LIGHT_EFFECTIVE_HEIGHT) * 1.1;
       light.setPosition(image.x, baseY);
       light.setScale(scaleX, scaleY);
       light.setAlpha(0.9);
       light.setDepth(26);
       light.setBlendMode(Phaser.BlendModes.ADD);
       if (!light.anims.isPlaying) {
-        light.play('number-light-box');
+        light.play(WINNER_LIGHT_ANIMATION_KEY);
       }
       this.winnerLightSprites.set(key, light);
 
@@ -4123,6 +4134,24 @@ export class HiLoScene extends Phaser.Scene {
     this.anims.create({
       key: 'number-light-box',
       frames: this.anims.generateFrameNumbers('number_light_box_2', {
+        start: 0,
+        end: 21,
+      }),
+      frameRate: 18,
+      repeat: -1,
+    });
+  }
+
+  private ensureWinnerLightAnimation() {
+    if (
+      this.anims.exists(WINNER_LIGHT_ANIMATION_KEY) ||
+      !this.textures.exists(WINNER_LIGHT_TEXTURE_KEY)
+    ) {
+      return;
+    }
+    this.anims.create({
+      key: WINNER_LIGHT_ANIMATION_KEY,
+      frames: this.anims.generateFrameNumbers(WINNER_LIGHT_TEXTURE_KEY, {
         start: 0,
         end: 21,
       }),
