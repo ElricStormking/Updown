@@ -517,7 +517,7 @@ html {
 
 .token-bar-floating {
   position: absolute;
-  bottom: 16px;
+  bottom: 1px;
   left: 50%;
   transform: translateX(-50%);
   width: min(900px, 96%);
@@ -2426,7 +2426,7 @@ li {
 
   .token-bar-floating {
     width: min(520px, 94%);
-    bottom: clamp(10px, 1.6vh, 16px); /* Keep clear of bet slots */
+    bottom: clamp(-5px, calc(1.6vh - 15px), 1px); /* Shifted 20px down */
     transform: translateX(-50%) scale(1); /* Preserve original scale */
     transform-origin: center bottom;
   }

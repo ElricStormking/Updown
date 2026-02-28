@@ -505,23 +505,24 @@ export class HiLoScene extends Phaser.Scene {
     const buttonOdd = addImage(347, 868, 'button_odd', 0.75);
     const buttonSmall = addImage(135, 868, 'button_small', 0.75);
 
-    const BET_SLOTS_OFFSET_Y = 18;
-    const ROW_GAP_Y = 82;
+    const BET_SLOTS_OFFSET_Y = 30;
+    const ROW_GAP_Y = 90;
+    const SECTION_GAP_Y = 91;
     const DOUBLE_TRIPLE_CONTENT_NUDGE_Y = 0;
     const DOUBLE_TITLE_Y = 1014 + BET_SLOTS_OFFSET_Y;
     const DOUBLE_FRAME_Y = DOUBLE_TITLE_Y + 165;
     const DOUBLE_ROW1_Y = DOUBLE_TITLE_Y + 74;
     const DOUBLE_ROW2_Y = DOUBLE_ROW1_Y + ROW_GAP_Y;
-    const TRIPLE_TITLE_Y = DOUBLE_ROW2_Y + 86;
+    const TRIPLE_TITLE_Y = DOUBLE_ROW2_Y + SECTION_GAP_Y;
     const TRIPLE_FRAME_Y = TRIPLE_TITLE_Y + 165;
     const TRIPLE_ROW1_Y = TRIPLE_TITLE_Y + 84;
     const TRIPLE_ROW2_Y = TRIPLE_ROW1_Y + ROW_GAP_Y;
-    const SUM_TITLE_Y = TRIPLE_ROW2_Y + 86;
+    const SUM_TITLE_Y = TRIPLE_ROW2_Y + SECTION_GAP_Y;
     const SUM_FRAME_Y = SUM_TITLE_Y + 171;
     const SUM_ROW1_Y = SUM_TITLE_Y + 80;
     const SUM_ROW_GAP_Y = ROW_GAP_Y;
-    const SINGLE_TITLE_Y = SUM_ROW1_Y + SUM_ROW_GAP_Y * 4 + 76;
-    const SINGLE_ROW1_Y = SINGLE_TITLE_Y + 78;
+    const SINGLE_TITLE_Y = SUM_ROW1_Y + SUM_ROW_GAP_Y * 4 + SECTION_GAP_Y - 10;
+    const SINGLE_ROW1_Y = SINGLE_TITLE_Y + 82;
     const SINGLE_ROW2_Y = SINGLE_ROW1_Y + ROW_GAP_Y;
 
     addImage(540, DOUBLE_FRAME_Y, 'title_bigbox_yellow', 0.75);
@@ -678,7 +679,7 @@ export class HiLoScene extends Phaser.Scene {
     sumDigits.forEach(([value, x, y]) => {
       const selection = String(Number(value));
       const image = addImage(Number(x), Number(y), `number_sum_${value}`, 0.75);
-      this.registerDigitCell(image, 'SUM', selection, 17, 16.5);
+      this.registerDigitCell(image, 'SUM', selection, 17, 18.9);
     });
 
     const singleDigits: Array<[string, number, number]> = [
@@ -1343,7 +1344,7 @@ export class HiLoScene extends Phaser.Scene {
     const viewWidth = this.scale.width;
     const centerX = viewWidth / 2;
     const bottomTop = viewHeight * 0.45 + this.LOCKED_BET_SLOTS_OFFSET_Y;
-    const bottomHeight = viewHeight * 0.55;
+    const bottomHeight = viewHeight - bottomTop +10;
 
     let minSlotY = Number.POSITIVE_INFINITY;
     let maxSlotY = Number.NEGATIVE_INFINITY;
