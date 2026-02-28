@@ -284,7 +284,7 @@ html {
 
 #tradingview-chart-inner {
   position: absolute;
-  inset: var(--hud-chart-inset, 22px 20px 8px);
+  inset: var(--hud-chart-inset, 24px 20px 15px);
   border-radius: 10px;
   overflow: hidden;
   pointer-events: none;
@@ -351,7 +351,7 @@ html {
 #tradingview-odds-strip {
   position: absolute;
   left: 50%;
-  top: var(--odds-strip-top, calc(30.1% + 20px));
+  top: var(--odds-strip-top, calc(30.1% + 30px));
   transform: translate(-50%, -50%) scale(var(--odds-strip-scale, 1));
   transform-origin: center center;
   width: 85.2%;
@@ -517,7 +517,7 @@ html {
 
 .token-bar-floating {
   position: absolute;
-  bottom: 1px;
+  bottom: -7px;
   left: 50%;
   transform: translateX(-50%);
   width: min(900px, 96%);
@@ -2426,7 +2426,7 @@ li {
 
   .token-bar-floating {
     width: min(520px, 94%);
-    bottom: clamp(-5px, calc(1.6vh - 15px), 1px); /* Shifted 20px down */
+    bottom: clamp(-13px, calc(1.6vh - 23px), -7px); /* Shifted 20px down */
     transform: translateX(-50%) scale(1); /* Preserve original scale */
     transform-origin: center bottom;
   }

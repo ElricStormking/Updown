@@ -250,7 +250,7 @@ export class HiLoScene extends Phaser.Scene {
   private isLockedLayoutPending = false;
   private lockedLayoutDelayTimer?: Phaser.Time.TimerEvent;
   private readonly LOCKED_LAYOUT_DELAY_MS = 3500;
-  private readonly LOCKED_BET_SLOTS_OFFSET_Y = 85;
+  private readonly LOCKED_BET_SLOTS_OFFSET_Y = 75;
   private lockedLayoutTween?: Phaser.Tweens.Tween;
   private lockedLayoutScale = 1;
   private betSlotsContainer?: Phaser.GameObjects.Container;
@@ -499,13 +499,14 @@ export class HiLoScene extends Phaser.Scene {
     this.lockedBackground.setDisplaySize(this.scale.width, this.scale.height);
     this.lockedBackground.setDepth(-95).setVisible(false).setScrollFactor(0);
 
-    const buttonAnyTriple = addImage(543, 868, 'button_any triple', 0.75);
-    const buttonBig = addImage(950, 868, 'button_big', 0.75);
-    const buttonEven = addImage(739, 868, 'button_even', 0.75);
-    const buttonOdd = addImage(347, 868, 'button_odd', 0.75);
-    const buttonSmall = addImage(135, 868, 'button_small', 0.75);
+    const TOP_BET_ROW_OFFSET_Y = 35;
+    const buttonAnyTriple = addImage(543, 868 + TOP_BET_ROW_OFFSET_Y, 'button_any triple', 0.75);
+    const buttonBig = addImage(950, 868 + TOP_BET_ROW_OFFSET_Y, 'button_big', 0.75);
+    const buttonEven = addImage(739, 868 + TOP_BET_ROW_OFFSET_Y, 'button_even', 0.75);
+    const buttonOdd = addImage(347, 868 + TOP_BET_ROW_OFFSET_Y, 'button_odd', 0.75);
+    const buttonSmall = addImage(135, 868 + TOP_BET_ROW_OFFSET_Y, 'button_small', 0.75);
 
-    const BET_SLOTS_OFFSET_Y = 30;
+    const BET_SLOTS_OFFSET_Y = 65;
     const ROW_GAP_Y = 90;
     const SECTION_GAP_Y = 91;
     const DOUBLE_TRIPLE_CONTENT_NUDGE_Y = 0;
@@ -741,12 +742,12 @@ export class HiLoScene extends Phaser.Scene {
     addImage(130, 199, 'box_round', 0.7);
     addImage(894, 200, 'box_amount', 0.7);
 
-    this.oddsBoxMid = addImage(543, 723, 'odd_box_mid', 0.7);
-    this.oddsBoxLeft = addImage(277, 722, 'odd_box_left', 0.7);
-    this.oddsBoxRight = addImage(808, 722, 'odd_box_right', 0.7);
+    this.oddsBoxMid = addImage(543, 723 + TOP_BET_ROW_OFFSET_Y, 'odd_box_mid', 0.7);
+    this.oddsBoxLeft = addImage(277, 722 + TOP_BET_ROW_OFFSET_Y, 'odd_box_left', 0.7);
+    this.oddsBoxRight = addImage(808, 722 + TOP_BET_ROW_OFFSET_Y, 'odd_box_right', 0.7);
 
     this.oddsLeftText = this.add
-      .text(134, 720, '', {
+      .text(134, 720 + TOP_BET_ROW_OFFSET_Y, '', {
         fontFamily: 'Rajdhani',
         fontSize: '22px',
         color: '#f8fafc',
@@ -755,7 +756,7 @@ export class HiLoScene extends Phaser.Scene {
       .setScale(1.3)
       .setOrigin(0, 0.5);
     this.oddsRightText = this.add
-      .text(659, 720, '', {
+      .text(659, 720 + TOP_BET_ROW_OFFSET_Y, '', {
         fontFamily: 'Rajdhani',
         fontSize: '22px',
         color: '#f8fafc',
@@ -764,7 +765,7 @@ export class HiLoScene extends Phaser.Scene {
       .setScale(1.3)
       .setOrigin(0, 0.5);
     this.oddsCenterText = this.add
-      .text(540, 720, '', {
+      .text(540, 720 + TOP_BET_ROW_OFFSET_Y, '', {
         fontFamily: 'Rajdhani',
         fontSize: '24px',
         color: '#ffd166',
@@ -1344,7 +1345,7 @@ export class HiLoScene extends Phaser.Scene {
     const viewWidth = this.scale.width;
     const centerX = viewWidth / 2;
     const bottomTop = viewHeight * 0.45 + this.LOCKED_BET_SLOTS_OFFSET_Y;
-    const bottomHeight = viewHeight - bottomTop +10;
+    const bottomHeight = viewHeight - bottomTop +5;
 
     let minSlotY = Number.POSITIVE_INFINITY;
     let maxSlotY = Number.NEGATIVE_INFINITY;
@@ -4190,7 +4191,7 @@ export class HiLoScene extends Phaser.Scene {
     const container = this.add.container(x, y);
     container.setDepth(RESULT_BOX_TOTAL_SPRITE_DEPTH);
 
-    const resultBoxScaleMultiplier = 1.7;
+    const resultBoxScaleMultiplier = 1.6;
     const boxPositions = [
       { x: -96 * resultBoxScaleMultiplier, y: -40 * resultBoxScaleMultiplier },
       { x: 0, y: -40 * resultBoxScaleMultiplier },
