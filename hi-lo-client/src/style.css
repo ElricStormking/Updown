@@ -360,7 +360,12 @@ html {
   grid-template-columns: 531fr 251fr 531fr;
   z-index: 12;
   pointer-events: none;
-  transition: top 0.4s ease-out, transform 0.4s ease-out;
+  transition: top 0.4s ease-out, transform 0.4s ease-out, opacity 0.12s linear;
+}
+
+#tradingview-odds-strip.is-overlay-hidden {
+  opacity: 0;
+  visibility: hidden;
 }
 
 .tradingview-odds-segment {

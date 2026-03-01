@@ -85,6 +85,7 @@ const RESULT_DIGIT_TEXT_DEPTH = 45;
 const COMPLETE_PHASE_DURATION_MS = 10000;
 const RESULT_OVERLAY_DELAY_MS = 4500;
 const RESULT_OVERLAY_FADE_OUT_MS = 300;
+const RESULT_OVERLAY_DEPTH = 2000;
 const LIGHTNING_BEAM_TEXTURE_KEY = 'lightball';
 const LIGHTNING_HIT_TEXTURE_KEY = 'lightball_hit';
 const LIGHTNING_BEAM_ANIMATION_KEY = 'winner-lightball-beam';
@@ -208,6 +209,10 @@ export class HiLoScene extends Phaser.Scene {
   private payoutFloatText?: Phaser.GameObjects.Text;
   private winCoinSoundPlayed = false;
   private layoutRestoreEndsAt = 0;
+  private readonly RESULT_OVERLAY_PLAYER_WINS_Y = 166;
+  private readonly RESULT_OVERLAY_PAYOUT_Y_WITH_WINS = 266;
+  private readonly RESULT_OVERLAY_PAYOUT_Y_NO_WINS = 214;
+  private readonly RESULT_OVERLAY_PLAYER_WINS_WRAP_WIDTH = 860;
 
   private clearTokensButton?: Phaser.GameObjects.Image;
   private settingButton?: Phaser.GameObjects.Image;
@@ -2039,6 +2044,12 @@ export class HiLoScene extends Phaser.Scene {
     this.oddsRightEl = undefined;
   }
 
+  private setDomOddsStripHidden(hidden: boolean) {
+    this.cacheOddsStripElements();
+    if (!this.oddsStripEl) return;
+    this.oddsStripEl.classList.toggle('is-overlay-hidden', hidden);
+  }
+
   private setBetSlotsInteractiveEnabled(enabled: boolean) {
     this.betTargets.forEach((image) => {
       if (!image.input) return;
@@ -3202,15 +3213,25 @@ export class HiLoScene extends Phaser.Scene {
 
     if (!this.resultPlayerWinsText) {
       this.resultPlayerWinsText = this.add
-        .text(0, 95, text, {
-          fontFamily: 'Rajdhani',
-          fontSize: '20px',
+        .text(0, this.RESULT_OVERLAY_PLAYER_WINS_Y, text, {
+          fontFamily: "'Oxanium', 'Rajdhani', sans-serif",
+          fontSize: '28px',
+          fontStyle: '700',
           color: '#00ffb2',
           align: 'center',
-          wordWrap: { width: 440, useAdvancedWrap: true },
+          wordWrap: { width: this.RESULT_OVERLAY_PLAYER_WINS_WRAP_WIDTH, useAdvancedWrap: true },
+          stroke: '#052638',
+          strokeThickness: 4,
+          shadow: {
+            offsetX: 0,
+            offsetY: 0,
+            color: 'rgba(0, 255, 178, 0.45)',
+            blur: 10,
+            fill: true,
+          },
         })
         .setOrigin(0.5)
-        .setLineSpacing(6);
+        .setLineSpacing(10);
       const modal = this.resultOverlay.getAt(0);
       if (modal && modal instanceof Phaser.GameObjects.Container) {
         modal.add(this.resultPlayerWinsText);
@@ -3218,7 +3239,11 @@ export class HiLoScene extends Phaser.Scene {
         this.resultOverlay.add(this.resultPlayerWinsText);
       }
       if (this.resultPayoutText) {
-        this.resultPayoutText.setY(text ? 130 : 110);
+        this.resultPayoutText.setY(
+          text
+            ? this.RESULT_OVERLAY_PAYOUT_Y_WITH_WINS
+            : this.RESULT_OVERLAY_PAYOUT_Y_NO_WINS,
+        );
       }
       return;
     }
@@ -3226,7 +3251,11 @@ export class HiLoScene extends Phaser.Scene {
     this.resultPlayerWinsText.setText(text);
 
     if (this.resultPayoutText) {
-      this.resultPayoutText.setY(text ? 130 : 110);
+      this.resultPayoutText.setY(
+        text
+          ? this.RESULT_OVERLAY_PAYOUT_Y_WITH_WINS
+          : this.RESULT_OVERLAY_PAYOUT_Y_NO_WINS,
+      );
     }
   }
 
@@ -4102,6 +4131,7 @@ export class HiLoScene extends Phaser.Scene {
     const height = this.scale.height;
 
     this.clearResultOverlay();
+    this.setDomOddsStripHidden(true);
     this.sumTriangleText?.setVisible(false);
 
     let color = 0xb2bec3;
@@ -4115,30 +4145,186 @@ export class HiLoScene extends Phaser.Scene {
       titleStr = t(this.language, 'scene.push');
     }
 
-    const modal = this.add.container(width / 2, height / 2 - 505); // Move up 90px during result display
+    const modal = this.add.container(width / 2, height / 2 - 430);
+    const cardWidth = 980;
+    const cardHeight = 600;
+    const radius = 34;
+    const left = -cardWidth / 2;
+    const top = -cardHeight / 2;
+    const outcomeColor = color;
+    const sciFiCyan = outcome === 'LOSE' ? 0xff8a98 : 0x4cecff;
+    const sciFiMagenta = outcome === 'LOSE' ? 0xffb17d : 0xd062ff;
+    const sciFiLime = outcome === 'LOSE' ? 0xffd39a : 0x7dffce;
+    const titleColor =
+      outcome === 'WIN'
+        ? '#7dffcf'
+        : outcome === 'LOSE'
+          ? '#ff8a9d'
+          : outcome === 'SKIPPED'
+            ? '#a5b7c5'
+            : '#cfe8ff';
+
+    const cardBackGlow = this.add.graphics();
+    cardBackGlow.fillStyle(outcomeColor, 0.18);
+    cardBackGlow.fillRoundedRect(left - 20, top - 20, cardWidth + 40, cardHeight + 40, radius + 20);
 
     const cardBg = this.add.graphics();
-    cardBg.fillStyle(0x1e272e, 1);
-    cardBg.fillRoundedRect(-250, -150, 500, 300, 16);
-    cardBg.lineStyle(4, color, 1);
-    cardBg.strokeRoundedRect(-250, -150, 500, 300, 16);
+    cardBg.fillGradientStyle(0x0b1622, 0x0b1622, 0x10263b, 0x10263b, 0.96);
+    cardBg.fillRoundedRect(left, top, cardWidth, cardHeight, radius);
+    cardBg.lineStyle(5, outcomeColor, 0.96);
+    cardBg.strokeRoundedRect(left, top, cardWidth, cardHeight, radius);
+    cardBg.lineStyle(2, 0xe4f6ff, 0.25);
+    cardBg.strokeRoundedRect(left + 10, top + 10, cardWidth - 20, cardHeight - 20, radius - 10);
 
-    this.resultTitleText = this.add.text(0, -80, titleStr, {
-      fontFamily: 'Rajdhani',
-      fontSize: '56px',
-      fontStyle: 'bold',
-      color: '#ffffff',
+    const chromaTint = this.add.graphics();
+    chromaTint.fillGradientStyle(
+      sciFiCyan,
+      sciFiMagenta,
+      0x122742,
+      0x122742,
+      0.1,
+      0.1,
+      0.02,
+      0.02,
+    );
+    chromaTint.fillRoundedRect(left + 8, top + 8, cardWidth - 16, cardHeight - 16, radius - 8);
+
+    const chromaBloomLeft = this.add.ellipse(
+      left + cardWidth * 0.28,
+      top + cardHeight * 0.58,
+      cardWidth * 0.64,
+      cardHeight * 0.9,
+      sciFiCyan,
+      0.08,
+    );
+    chromaBloomLeft.setBlendMode(Phaser.BlendModes.SCREEN);
+    const chromaBloomRight = this.add.ellipse(
+      left + cardWidth * 0.74,
+      top + cardHeight * 0.45,
+      cardWidth * 0.55,
+      cardHeight * 0.78,
+      sciFiMagenta,
+      0.08,
+    );
+    chromaBloomRight.setBlendMode(Phaser.BlendModes.SCREEN);
+
+    const frameDetail = this.add.graphics();
+    frameDetail.lineStyle(2, 0x8fe9ff, 0.32);
+    frameDetail.strokeRoundedRect(left + 20, top + 20, cardWidth - 40, cardHeight - 40, radius - 14);
+    frameDetail.lineStyle(1, 0x6ecfff, 0.22);
+    for (let i = 0; i < 3; i += 1) {
+      const inset = 38 + i * 14;
+      frameDetail.strokeRoundedRect(
+        left + inset,
+        top + inset,
+        cardWidth - inset * 2,
+        cardHeight - inset * 2,
+        Math.max(8, radius - inset / 2),
+      );
+    }
+
+    const sideRailLeft = this.add.rectangle(left + 24, 0, 12, cardHeight - 180, sciFiCyan, 0.24);
+    sideRailLeft.setBlendMode(Phaser.BlendModes.ADD);
+    const sideRailRight = this.add.rectangle(
+      left + cardWidth - 24,
+      0,
+      12,
+      cardHeight - 180,
+      sciFiMagenta,
+      0.24,
+    );
+    sideRailRight.setBlendMode(Phaser.BlendModes.ADD);
+    const sideRailCoreLeft = this.add.rectangle(left + 24, 0, 3, cardHeight - 210, sciFiLime, 0.32);
+    sideRailCoreLeft.setBlendMode(Phaser.BlendModes.ADD);
+    const sideRailCoreRight = this.add.rectangle(left + cardWidth - 24, 0, 3, cardHeight - 210, sciFiLime, 0.32);
+    sideRailCoreRight.setBlendMode(Phaser.BlendModes.ADD);
+
+    const topCircuit = this.add.graphics();
+    topCircuit.lineStyle(2, sciFiCyan, 0.42);
+    topCircuit.lineBetween(left + 98, top + 84, -160, top + 84);
+    topCircuit.lineBetween(160, top + 84, left + cardWidth - 98, top + 84);
+    topCircuit.lineStyle(1, sciFiMagenta, 0.36);
+    topCircuit.lineBetween(-220, top + 84, -185, top + 62);
+    topCircuit.lineBetween(220, top + 84, 185, top + 62);
+    topCircuit.fillStyle(sciFiLime, 0.6);
+    topCircuit.fillCircle(-160, top + 84, 2.5);
+    topCircuit.fillCircle(160, top + 84, 2.5);
+    topCircuit.fillCircle(0, top + 84, 3.2);
+
+    const gridOverlay = this.add.graphics();
+    gridOverlay.lineStyle(1, sciFiCyan, 0.11);
+    for (let i = 1; i < 6; i += 1) {
+      const y = top + (cardHeight / 6) * i;
+      gridOverlay.lineBetween(left + 38, y, left + cardWidth - 38, y);
+    }
+    gridOverlay.lineStyle(1, sciFiMagenta, 0.09);
+    for (let i = 1; i < 8; i += 1) {
+      const x = left + (cardWidth / 8) * i;
+      gridOverlay.lineBetween(x, top + 32, x, top + cardHeight - 32);
+    }
+
+    const headerGlow = this.add.rectangle(0, top + 66, cardWidth - 180, 12, outcomeColor, 0.55);
+    headerGlow.setBlendMode(Phaser.BlendModes.ADD);
+    const headerGlowAccent = this.add.rectangle(0, top + 86, cardWidth - 240, 7, sciFiMagenta, 0.4);
+    headerGlowAccent.setBlendMode(Phaser.BlendModes.ADD);
+
+    const sheen = this.add.rectangle(0, top + 108, cardWidth - 140, 90, sciFiCyan, 0.07);
+    sheen.setBlendMode(Phaser.BlendModes.SCREEN);
+
+    const holoBandTop = this.add.rectangle(0, top + 152, cardWidth - 190, 24, sciFiCyan, 0.08);
+    holoBandTop.setBlendMode(Phaser.BlendModes.SCREEN);
+    const holoBandBottom = this.add.rectangle(0, top + cardHeight - 92, cardWidth - 170, 20, sciFiMagenta, 0.08);
+    holoBandBottom.setBlendMode(Phaser.BlendModes.SCREEN);
+
+    const scanSweepGlow = this.add.rectangle(0, top + 136, cardWidth - 140, 56, sciFiMagenta, 0.11);
+    scanSweepGlow.setBlendMode(Phaser.BlendModes.SCREEN);
+    const scanSweepCore = this.add.rectangle(0, top + 136, cardWidth - 160, 10, sciFiCyan, 0.34);
+    scanSweepCore.setBlendMode(Phaser.BlendModes.ADD);
+    const scanSweepEdge = this.add.rectangle(0, top + 136, cardWidth - 120, 3, sciFiLime, 0.4);
+    scanSweepEdge.setBlendMode(Phaser.BlendModes.ADD);
+    const scanSweepTop = top + 136;
+    const scanSweepBottom = top + cardHeight - 118;
+    const scanSweepRepeats = Math.max(4, Math.floor(displayDurationMs / 850));
+    this.tweens.add({
+      targets: [scanSweepGlow, scanSweepCore, scanSweepEdge],
+      y: { from: scanSweepTop, to: scanSweepBottom },
+      alpha: { from: 0.12, to: 0.32 },
+      duration: 820,
+      yoyo: true,
+      repeat: scanSweepRepeats,
+      ease: 'Sine.easeInOut',
+    });
+    this.tweens.add({
+      targets: [holoBandTop, holoBandBottom, chromaBloomLeft, chromaBloomRight],
+      alpha: { from: 0.06, to: 0.2 },
+      duration: 980,
+      yoyo: true,
+      repeat: scanSweepRepeats + 1,
+      ease: 'Sine.easeInOut',
+    });
+
+    this.resultTitleText = this.add.text(0, -182, titleStr, {
+      fontFamily: "'Oxanium', 'Rajdhani', sans-serif",
+      fontSize: '104px',
+      fontStyle: '900',
+      color: titleColor,
+      stroke: '#09131d',
+      strokeThickness: 9,
+      shadow: {
+        offsetX: 0,
+        offsetY: 0,
+        color: `${titleColor}77`,
+        blur: 26,
+        fill: true,
+      },
     }).setOrigin(0.5);
-
-    if (outcome === 'WIN') this.resultTitleText.setColor('#00b894');
-    else this.resultTitleText.setColor('#b2bec3');
 
     if (this.textures.exists(WIN_TITLE_TEXTURE_KEY)) {
       this.ensureWinTitleAnimation();
       this.resultTitleWinSprite = this.add
-        .sprite(0, -88, WIN_TITLE_TEXTURE_KEY, 0)
+        .sprite(0, -184, WIN_TITLE_TEXTURE_KEY, 0)
         .setOrigin(0.5)
-        .setScale(0.46)
+        .setScale(0.9)
         .setVisible(outcome === 'WIN');
       if (outcome === 'WIN') {
         this.resultTitleText.setVisible(false);
@@ -4154,12 +4340,15 @@ export class HiLoScene extends Phaser.Scene {
 
     const statsText = this.add.text(
       0,
-      -25,
+      -52,
       `${t(this.language, 'scene.finalLabel')}:  ${final}`,
       {
-        fontFamily: 'Roboto Mono',
-        fontSize: '24px',
-        color: '#dfe6e9',
+        fontFamily: "'Oxanium', 'Roboto Mono', monospace",
+        fontSize: '44px',
+        color: '#e5f6ff',
+        fontStyle: '700',
+        stroke: '#0a1822',
+        strokeThickness: 6,
         align: 'center',
       },
     ).setOrigin(0.5).setLineSpacing(10);
@@ -4179,25 +4368,57 @@ export class HiLoScene extends Phaser.Scene {
     if (extraLines.length) {
       this.resultWinnersText = this.add
         .text(0, 50, extraLines.join('\n'), {
-          fontFamily: 'Rajdhani',
-          fontSize: '16px',
-          color: '#dfe6e9',
+          fontFamily: "'Oxanium', 'Rajdhani', sans-serif",
+          fontSize: '24px',
+          color: '#b9d4e7',
+          fontStyle: '700',
+          stroke: '#0b1d2c',
+          strokeThickness: 3,
           align: 'center',
-          wordWrap: { width: 420, useAdvancedWrap: true },
+          wordWrap: { width: 840, useAdvancedWrap: true },
         })
         .setOrigin(0.5)
-        .setLineSpacing(6);
+        .setLineSpacing(10);
     }
 
-    const payoutY = 110;
+    const payoutY = this.RESULT_OVERLAY_PAYOUT_Y_NO_WINS;
 
     this.resultPayoutText = this.add.text(0, payoutY, t(this.language, 'scene.calculating'), {
-      fontFamily: 'Rajdhani',
-      fontSize: '32px',
+      fontFamily: "'Oxanium', 'Rajdhani', sans-serif",
+      fontSize: '56px',
+      fontStyle: '900',
       color: '#fdcb6e',
+      stroke: '#2b1300',
+      strokeThickness: 8,
+      shadow: {
+        offsetX: 0,
+        offsetY: 0,
+        color: 'rgba(253, 203, 110, 0.5)',
+        blur: 18,
+        fill: true,
+      },
     }).setOrigin(0.5);
 
+    modal.add(cardBackGlow);
     modal.add(cardBg);
+    modal.add(chromaTint);
+    modal.add(chromaBloomLeft);
+    modal.add(chromaBloomRight);
+    modal.add(frameDetail);
+    modal.add(sideRailLeft);
+    modal.add(sideRailRight);
+    modal.add(sideRailCoreLeft);
+    modal.add(sideRailCoreRight);
+    modal.add(topCircuit);
+    modal.add(gridOverlay);
+    modal.add(holoBandTop);
+    modal.add(holoBandBottom);
+    modal.add(scanSweepGlow);
+    modal.add(scanSweepCore);
+    modal.add(scanSweepEdge);
+    modal.add(sheen);
+    modal.add(headerGlow);
+    modal.add(headerGlowAccent);
     modal.add(this.resultTitleText);
     if (this.resultTitleWinSprite) {
       modal.add(this.resultTitleWinSprite);
@@ -4212,12 +4433,12 @@ export class HiLoScene extends Phaser.Scene {
     modal.add(this.resultPayoutText);
 
     this.resultOverlay = this.add.container(0, 0, [modal]);
-    this.resultOverlay.setDepth(100);
+    this.resultOverlay.setDepth(RESULT_OVERLAY_DEPTH);
     this.resultOverlay.setAlpha(0);
 
     this.resultRoundId = payload.roundId;
 
-    modal.setScale(0.8);
+    modal.setScale(0.6);
     this.tweens.add({
       targets: this.resultOverlay,
       alpha: 1,
@@ -4226,8 +4447,8 @@ export class HiLoScene extends Phaser.Scene {
     this.tweens.add({
       targets: modal,
       scale: 1,
-      ease: 'Back.Out',
-      duration: 400,
+      ease: 'Back.Out(1.5)',
+      duration: 460,
     });
 
     const fadeOutDuration = RESULT_OVERLAY_FADE_OUT_MS;
@@ -4243,6 +4464,7 @@ export class HiLoScene extends Phaser.Scene {
             this.resultOverlay?.destroy();
             this.resultOverlay = undefined;
             this.resultOverlayEndsAt = 0;
+            this.setDomOddsStripHidden(false);
           },
         });
       }
@@ -4602,6 +4824,7 @@ export class HiLoScene extends Phaser.Scene {
     this.resultOverlayEndsAt = 0;
     this.pendingWinPayout = 0;
     this.winCoinSoundPlayed = false;
+    this.setDomOddsStripHidden(false);
     if (this.payoutFloatText) {
       this.payoutFloatText.destroy();
       this.payoutFloatText = undefined;
