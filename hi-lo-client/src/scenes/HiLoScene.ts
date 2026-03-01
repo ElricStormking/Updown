@@ -89,14 +89,22 @@ const LIGHTNING_BEAM_TEXTURE_KEY = 'lightball';
 const LIGHTNING_HIT_TEXTURE_KEY = 'lightball_hit';
 const LIGHTNING_BEAM_ANIMATION_KEY = 'winner-lightball-beam';
 const LIGHTNING_HIT_ANIMATION_KEY = 'winner-lightball-hit';
-const WINNER_LIGHT_TEXTURE_KEY = 'number_box_light_rainbow';
-const WINNER_LIGHT_ANIMATION_KEY = 'winner-number-box-light-rainbow';
-const WINNER_LIGHT_FRAME_WIDTH = 474;
-const WINNER_LIGHT_FRAME_HEIGHT = 226;
-// Rainbow sheet has larger padded frames than the old winner FX; use effective
-// dimensions aligned to the prior winner-light envelope so glow sits on frame edges.
-const WINNER_LIGHT_EFFECTIVE_WIDTH = 270;
-const WINNER_LIGHT_EFFECTIVE_HEIGHT = 109;
+const WINNER_LIGHT_WITH_BET_TEXTURE_KEY = 'number_box_light_rainbow';
+const WINNER_LIGHT_WITH_BET_ANIMATION_KEY = 'winner-number-box-light-rainbow';
+const WINNER_LIGHT_WITH_BET_FRAME_WIDTH = 474;
+const WINNER_LIGHT_WITH_BET_FRAME_HEIGHT = 226;
+const WINNER_LIGHT_WITH_BET_EFFECTIVE_WIDTH = 270;
+const WINNER_LIGHT_WITH_BET_EFFECTIVE_HEIGHT = 109;
+const WINNER_LIGHT_WITH_BET_LAST_FRAME = 21;
+const WINNER_LIGHT_NO_BET_TEXTURE_KEY = 'number_light_box';
+const WINNER_LIGHT_NO_BET_ANIMATION_KEY = 'winner-number-light-box';
+const WINNER_LIGHT_NO_BET_FRAME_WIDTH = 298;
+const WINNER_LIGHT_NO_BET_FRAME_HEIGHT = 136;
+const WINNER_LIGHT_NO_BET_EFFECTIVE_WIDTH = 298;
+const WINNER_LIGHT_NO_BET_EFFECTIVE_HEIGHT = 136;
+const WINNER_LIGHT_NO_BET_LAST_FRAME = 18;
+const WINNER_LIGHT_WITH_BET_SCALE_MULTIPLIER = 1.1;
+const WINNER_LIGHT_NO_BET_SCALE_MULTIPLIER = 1.18;
 const WIN_TITLE_TEXTURE_KEY = 'WIN_anim';
 const WIN_TITLE_ANIMATION_KEY = 'result-win-title-anim';
 const LIGHTNING_BEAM_FRAME_HEIGHT = 269;
@@ -219,6 +227,10 @@ export class HiLoScene extends Phaser.Scene {
   private pendingPlayerPayout?: { roundId: number; totalStake: number; totalPayout: number };
   private pendingResultOutcome?: { roundId: number; outcome: ResultOverlayOutcome };
   private pendingWinningBets?: { roundId: number; bets: SettledRoundBet[] };
+  private roundDigitOutcomeByRoundId = new Map<
+    number,
+    { digitResult: string | null; digitSum: number | null }
+  >();
   private boxTotalSprite?: Phaser.GameObjects.Container;
   private pendingPhaseEndedAt = 0;
   private winnerEffectsRoundId?: number;
@@ -338,9 +350,20 @@ export class HiLoScene extends Phaser.Scene {
       { frameWidth: 270, frameHeight: 109 },
     );
     this.load.spritesheet(
-      WINNER_LIGHT_TEXTURE_KEY,
+      WINNER_LIGHT_WITH_BET_TEXTURE_KEY,
       '../UI_sprites/number_box_light_rainbow/number_box_light_rainbow.png',
-      { frameWidth: WINNER_LIGHT_FRAME_WIDTH, frameHeight: WINNER_LIGHT_FRAME_HEIGHT },
+      {
+        frameWidth: WINNER_LIGHT_WITH_BET_FRAME_WIDTH,
+        frameHeight: WINNER_LIGHT_WITH_BET_FRAME_HEIGHT,
+      },
+    );
+    this.load.spritesheet(
+      WINNER_LIGHT_NO_BET_TEXTURE_KEY,
+      '../UI_sprites/number_light_box/number_light_box.png',
+      {
+        frameWidth: WINNER_LIGHT_NO_BET_FRAME_WIDTH,
+        frameHeight: WINNER_LIGHT_NO_BET_FRAME_HEIGHT,
+      },
     );
 
     this.load.spritesheet(
@@ -2016,10 +2039,26 @@ export class HiLoScene extends Phaser.Scene {
 
   private handlePlaceDigitBet(digitType: DigitBetType, selection?: string) {
     if (!this.handlers?.onPlaceDigitBet) return;
-    this.playBetChipSound();
-    this.runHandler(() =>
-      this.handlers?.onPlaceDigitBet({ digitType, selection }),
-    );
+    try {
+      const result = this.handlers.onPlaceDigitBet({ digitType, selection });
+      if (result && typeof (result as Promise<void>).then === 'function') {
+        (result as Promise<void>)
+          .then(() => {
+            this.playBetChipSound();
+          })
+          .catch((error) =>
+            setStatus(
+              error instanceof Error ? error.message : 'Action failed',
+              true,
+            ),
+          );
+        return;
+      }
+      // Synchronous success path
+      this.playBetChipSound();
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'Action failed', true);
+    }
   }
 
   private playBetChipSound() {
@@ -2950,6 +2989,25 @@ export class HiLoScene extends Phaser.Scene {
   handleRoundResult(payload: RoundResultPayload) {
     if (!this.round || this.round.id !== payload.roundId) return;
 
+    const normalizedDigitResult =
+      payload.digitResult && /^\d{3}$/.test(payload.digitResult)
+        ? payload.digitResult
+        : null;
+    const normalizedDigitSum =
+      typeof payload.digitSum === 'number' && Number.isFinite(payload.digitSum)
+        ? payload.digitSum
+        : null;
+    this.roundDigitOutcomeByRoundId.set(payload.roundId, {
+      digitResult: normalizedDigitResult,
+      digitSum: normalizedDigitSum,
+    });
+    if (this.roundDigitOutcomeByRoundId.size > 30) {
+      const oldestRoundId = [...this.roundDigitOutcomeByRoundId.keys()].sort((a, b) => a - b)[0];
+      if (oldestRoundId !== undefined) {
+        this.roundDigitOutcomeByRoundId.delete(oldestRoundId);
+      }
+    }
+
     this.round = {
       ...this.round,
       status: 'COMPLETED',
@@ -2957,10 +3015,10 @@ export class HiLoScene extends Phaser.Scene {
       winningSide: payload.winningSide,
     };
 
-    if (payload.digitResult && /^\d{3}$/.test(payload.digitResult)) {
-      this.syncDigitResult(payload.digitResult);
+    if (normalizedDigitResult) {
+      this.syncDigitResult(normalizedDigitResult);
     }
-    this.syncDigitSum(payload.digitSum, payload.digitResult);
+    this.syncDigitSum(normalizedDigitSum, normalizedDigitResult);
     this.setRoundState(this.round);
     this.scheduleResultOverlay('SKIPPED', payload);
     this.playResultBoxTotalAnimation();
@@ -3066,6 +3124,11 @@ export class HiLoScene extends Phaser.Scene {
     this.pendingWinningBets = { roundId, bets: [...bets] };
 
     const wins = bets.filter((b) => b.result === 'WIN');
+    const playerWinningKeys = new Set(
+      wins
+        .filter((b) => b.digitType)
+        .map((b) => this.buildDigitKey(b.digitType as DigitBetType, b.selection ?? '')),
+    );
     const labels = wins.map((b) => {
       if (!b.digitType) return 'DIGIT';
       const sel = b.selection ?? '';
@@ -3090,11 +3153,6 @@ export class HiLoScene extends Phaser.Scene {
       }
     });
 
-    const winKeys = new Set(
-      wins
-        .filter((b) => b.digitType)
-        .map((b) => this.buildDigitKey(b.digitType as DigitBetType, b.selection ?? '')),
-    );
     const canTriggerWinnerEffectsNow =
       this.round?.id === roundId &&
       this.round.status === 'COMPLETED' &&
@@ -3108,7 +3166,8 @@ export class HiLoScene extends Phaser.Scene {
           return;
         }
         this.winnerEffectsRoundId = roundId;
-        this.applyWinnerHighlights(winKeys);
+        const winKeys = this.getWinningResultKeys(roundId);
+        this.applyWinnerHighlights(winKeys, playerWinningKeys);
       };
       const delay = Math.max(0, this.layoutRestoreEndsAt - this.time.now);
       if (delay > 0) {
@@ -3158,7 +3217,10 @@ export class HiLoScene extends Phaser.Scene {
     }
   }
 
-  private applyWinnerHighlights(winKeys: Set<string>) {
+  private applyWinnerHighlights(
+    winKeys: Set<string>,
+    playerWinningKeys: Set<string> = new Set<string>(),
+  ) {
     this.clearWinnerHighlights();
     this.ensureWinnerLightAnimation();
     winKeys.forEach((key) => {
@@ -3197,18 +3259,36 @@ export class HiLoScene extends Phaser.Scene {
       });
       this.winnerTweens.set(key, tween);
 
-      const light =
-        this.winnerLightSprites.get(key) ??
-        this.add.sprite(image.x, image.y, WINNER_LIGHT_TEXTURE_KEY, 0);
-      const scaleX = (image.displayWidth / WINNER_LIGHT_EFFECTIVE_WIDTH) * 1.1;
-      const scaleY = (image.displayHeight / WINNER_LIGHT_EFFECTIVE_HEIGHT) * 1.1;
+      const hasPlayerWinningBet = playerWinningKeys.has(key);
+      const lightTextureKey = hasPlayerWinningBet
+        ? WINNER_LIGHT_WITH_BET_TEXTURE_KEY
+        : WINNER_LIGHT_NO_BET_TEXTURE_KEY;
+      const lightAnimationKey = hasPlayerWinningBet
+        ? WINNER_LIGHT_WITH_BET_ANIMATION_KEY
+        : WINNER_LIGHT_NO_BET_ANIMATION_KEY;
+      const lightEffectiveWidth = hasPlayerWinningBet
+        ? WINNER_LIGHT_WITH_BET_EFFECTIVE_WIDTH
+        : WINNER_LIGHT_NO_BET_EFFECTIVE_WIDTH;
+      const lightEffectiveHeight = hasPlayerWinningBet
+        ? WINNER_LIGHT_WITH_BET_EFFECTIVE_HEIGHT
+        : WINNER_LIGHT_NO_BET_EFFECTIVE_HEIGHT;
+      const lightScaleMultiplier = hasPlayerWinningBet
+        ? WINNER_LIGHT_WITH_BET_SCALE_MULTIPLIER
+        : WINNER_LIGHT_NO_BET_SCALE_MULTIPLIER;
+      const light = this.winnerLightSprites.get(key) ?? this.add.sprite(image.x, image.y, lightTextureKey, 0);
+      const scaleX = (image.displayWidth / lightEffectiveWidth) * lightScaleMultiplier;
+      const scaleY = (image.displayHeight / lightEffectiveHeight) * lightScaleMultiplier;
       light.setPosition(image.x, baseY);
       light.setScale(scaleX, scaleY);
       light.setAlpha(0.9);
       light.setDepth(26);
       light.setBlendMode(Phaser.BlendModes.ADD);
-      if (!light.anims.isPlaying) {
-        light.play(WINNER_LIGHT_ANIMATION_KEY);
+      if (light.texture.key !== lightTextureKey) {
+        light.setTexture(lightTextureKey, 0);
+      }
+      const currentAnimKey = light.anims.currentAnim?.key;
+      if (!light.anims.isPlaying || currentAnimKey !== lightAnimationKey) {
+        light.play(lightAnimationKey, true);
       }
       this.winnerLightSprites.set(key, light);
 
@@ -3226,7 +3306,79 @@ export class HiLoScene extends Phaser.Scene {
       this.winnerLightTweens.set(key, lightTween);
     });
 
-    this.playWinnerLightningAndCoins(winKeys);
+    this.playWinnerLightningAndCoins(winKeys, playerWinningKeys);
+  }
+
+  private getWinningResultKeys(roundId: number) {
+    const fromRoundPayload = this.roundDigitOutcomeByRoundId.get(roundId);
+    if (fromRoundPayload) {
+      return this.buildWinningResultKeys(
+        fromRoundPayload.digitResult,
+        fromRoundPayload.digitSum,
+      );
+    }
+
+    const lastRoundResult =
+      state.lastRoundResult && state.lastRoundResult.roundId === roundId
+        ? state.lastRoundResult
+        : null;
+    if (lastRoundResult) {
+      return this.buildWinningResultKeys(
+        lastRoundResult.digitResult,
+        lastRoundResult.digitSum,
+      );
+    }
+
+    if (this.round?.id === roundId && this.round.status === 'COMPLETED') {
+      return this.buildWinningResultKeys(state.lastDigitResult, state.lastDigitSum);
+    }
+
+    return new Set<string>();
+  }
+
+  private buildWinningResultKeys(
+    digitResult: string | null,
+    digitSum: number | null,
+  ) {
+    const keys = new Set<string>();
+    if (!digitResult || !/^\d{3}$/.test(digitResult)) {
+      return keys;
+    }
+
+    const digits = digitResult.split('');
+    const counts = new Map<string, number>();
+    digits.forEach((digit) => {
+      counts.set(digit, (counts.get(digit) ?? 0) + 1);
+      keys.add(this.buildDigitKey('SINGLE', digit));
+    });
+
+    counts.forEach((count, digit) => {
+      if (count >= 2) {
+        keys.add(this.buildDigitKey('DOUBLE', `${digit}${digit}`));
+      }
+    });
+
+    const isTriple = digits[0] === digits[1] && digits[1] === digits[2];
+    if (isTriple) {
+      keys.add(this.buildDigitKey('ANY_TRIPLE'));
+      keys.add(this.buildDigitKey('TRIPLE', digitResult));
+    }
+
+    const resolvedSum =
+      typeof digitSum === 'number' && Number.isFinite(digitSum)
+        ? digitSum
+        : digits.reduce((acc, digit) => acc + Number(digit), 0);
+
+    if (resolvedSum >= 2 && resolvedSum <= 26) {
+      keys.add(this.buildDigitKey('SUM', String(resolvedSum)));
+    }
+
+    if (!isTriple) {
+      keys.add(this.buildDigitKey(resolvedSum <= 13 ? 'SMALL' : 'BIG'));
+      keys.add(this.buildDigitKey(resolvedSum % 2 === 0 ? 'EVEN' : 'ODD'));
+    }
+
+    return keys;
   }
 
   // Winner lightning-bolt & coin-explosion effects
@@ -3372,19 +3524,26 @@ export class HiLoScene extends Phaser.Scene {
 
   /**
    * Launch lightning bolts from the COMPLETE 3N_box_light effect to each
-   * winning bet slot, then spawn a coin explosion on impact.
+   * player-winning bet slot, then spawn a coin explosion on impact.
+   * Result-only winning slots (no player bet) keep highlight FX only.
    */
-  private playWinnerLightningAndCoins(winKeys: Set<string>) {
+  private playWinnerLightningAndCoins(
+    winKeys: Set<string>,
+    playerWinningKeys: Set<string> = new Set<string>(),
+  ) {
     this.clearWinnerEffects();
-    if (!this.textures.exists('money_anim')) return;
-    this.ensureMoneyAnimation();
+    const canSpawnCoins = this.textures.exists('money_anim');
+    if (canSpawnCoins) {
+      this.ensureMoneyAnimation();
+    }
     this.ensureLightningAnimations();
-    if (winKeys.size === 0) return;
+    const effectKeys = [...playerWinningKeys].filter((key) => winKeys.has(key));
+    if (effectKeys.length === 0) return;
 
     const runLightningSequence = () => {
       const { digitSources, sumSource } = this.getWinnerLightningSources();
       let idx = 0;
-      winKeys.forEach((key) => {
+      effectKeys.forEach((key) => {
         const img = this.betTargets.get(key);
         if (!img) return;
         const isSumBet = key.startsWith('DIGIT|SUM|');
@@ -3394,7 +3553,9 @@ export class HiLoScene extends Phaser.Scene {
         const timer = this.time.delayedCall(staggerDelay, () => {
           this.animateLightningBolt(source.x, source.y, img.x, img.y, 260, () => {
             this.spawnLightningImpact(img.x, img.y);
-            this.spawnCoinExplosion(img.x, img.y, 12);
+            if (canSpawnCoins) {
+              this.spawnCoinExplosion(img.x, img.y, 12);
+            }
           });
         });
         this.lightningTimers.push(timer);
@@ -4161,20 +4322,34 @@ export class HiLoScene extends Phaser.Scene {
 
   private ensureWinnerLightAnimation() {
     if (
-      this.anims.exists(WINNER_LIGHT_ANIMATION_KEY) ||
-      !this.textures.exists(WINNER_LIGHT_TEXTURE_KEY)
+      !this.anims.exists(WINNER_LIGHT_WITH_BET_ANIMATION_KEY) &&
+      this.textures.exists(WINNER_LIGHT_WITH_BET_TEXTURE_KEY)
     ) {
-      return;
+      this.anims.create({
+        key: WINNER_LIGHT_WITH_BET_ANIMATION_KEY,
+        frames: this.anims.generateFrameNumbers(WINNER_LIGHT_WITH_BET_TEXTURE_KEY, {
+          start: 0,
+          end: WINNER_LIGHT_WITH_BET_LAST_FRAME,
+        }),
+        frameRate: 18,
+        repeat: -1,
+      });
     }
-    this.anims.create({
-      key: WINNER_LIGHT_ANIMATION_KEY,
-      frames: this.anims.generateFrameNumbers(WINNER_LIGHT_TEXTURE_KEY, {
-        start: 0,
-        end: 21,
-      }),
-      frameRate: 18,
-      repeat: -1,
-    });
+
+    if (
+      !this.anims.exists(WINNER_LIGHT_NO_BET_ANIMATION_KEY) &&
+      this.textures.exists(WINNER_LIGHT_NO_BET_TEXTURE_KEY)
+    ) {
+      this.anims.create({
+        key: WINNER_LIGHT_NO_BET_ANIMATION_KEY,
+        frames: this.anims.generateFrameNumbers(WINNER_LIGHT_NO_BET_TEXTURE_KEY, {
+          start: 0,
+          end: WINNER_LIGHT_NO_BET_LAST_FRAME,
+        }),
+        frameRate: 18,
+        repeat: -1,
+      });
+    }
   }
 
   private playResultBoxTotalAnimation() {
