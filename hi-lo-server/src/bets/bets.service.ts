@@ -41,6 +41,8 @@ type RoundConfigLookup = {
 
 const DISABLED_DOUBLE_SELECTIONS = new Set(['00', '99']);
 const DISABLED_TRIPLE_SELECTIONS = new Set(['000', '999']);
+const INTERACTIVE_TX_MAX_WAIT_MS = 10_000;
+const INTERACTIVE_TX_TIMEOUT_MS = 30_000;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -361,6 +363,9 @@ export class BetsService {
             },
             tx,
           );
+        }, {
+          maxWait: INTERACTIVE_TX_MAX_WAIT_MS,
+          timeout: INTERACTIVE_TX_TIMEOUT_MS,
         });
       } catch (error) {
         // If wallet changed externally or any slip item is invalid, skip this user.
@@ -501,6 +506,9 @@ export class BetsService {
           await this.markLoss(tx, bet.id);
         }
       }
+    }, {
+      maxWait: INTERACTIVE_TX_MAX_WAIT_MS,
+      timeout: INTERACTIVE_TX_TIMEOUT_MS,
     });
 
     if (winningSide === null && !digitOutcome) {

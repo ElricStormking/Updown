@@ -510,9 +510,14 @@ html {
   height: auto;
   display: block;
   touch-action: pan-y;
+  -webkit-tap-highlight-color: transparent;
   margin: 0 !important;
   position: relative;
   z-index: 1;
+}
+
+#game-container {
+  -webkit-tap-highlight-color: transparent;
 }
 
 .token-bar-floating {

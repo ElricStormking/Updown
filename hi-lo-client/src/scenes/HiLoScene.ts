@@ -390,6 +390,8 @@ export class HiLoScene extends Phaser.Scene {
 
   create() {
     this.createMainLayout();
+    // Bet slots are enabled only during live BETTING window.
+    this.setBetSlotsInteractiveEnabled(false);
     this.updateCameraBounds();
     this.fitCameraZoom();
     this.enableVerticalScroll();
@@ -2037,6 +2039,13 @@ export class HiLoScene extends Phaser.Scene {
     this.oddsRightEl = undefined;
   }
 
+  private setBetSlotsInteractiveEnabled(enabled: boolean) {
+    this.betTargets.forEach((image) => {
+      if (!image.input) return;
+      image.input.enabled = enabled;
+    });
+  }
+
   private handlePlaceDigitBet(digitType: DigitBetType, selection?: string) {
     if (!this.handlers?.onPlaceDigitBet) return;
     try {
@@ -2963,6 +2972,10 @@ export class HiLoScene extends Phaser.Scene {
         this.setWinningBets(state.id, pendingWins.bets);
       }
     }
+
+    const lockAt = new Date(state.lockTime).getTime();
+    const canBetNow = state.status === 'BETTING' && Number.isFinite(lockAt) && lockAt > Date.now();
+    this.setBetSlotsInteractiveEnabled(canBetNow);
   }
 
   handleRoundLock(payload: RoundLockPayload) {

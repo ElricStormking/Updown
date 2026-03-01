@@ -50,8 +50,12 @@ export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
   private lockTimer?: NodeJS.Timeout;
   private resultTimer?: NodeJS.Timeout;
   private nextRoundTimer?: NodeJS.Timeout;
+  private startRoundRetryTimer?: NodeJS.Timeout;
   private currentRound?: RoundState;
   private disposed = false;
+  private isStartingRound = false;
+  private isLockingRound = false;
+  private isFinalizingRound = false;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -90,6 +94,9 @@ export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
     if (this.nextRoundTimer) {
       clearTimeout(this.nextRoundTimer);
     }
+    if (this.startRoundRetryTimer) {
+      clearTimeout(this.startRoundRetryTimer);
+    }
   }
 
   events$() {
@@ -101,53 +108,72 @@ export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async startNewRound() {
-    if (this.disposed) {
+    if (this.disposed || this.currentRound || this.isStartingRound) {
       return;
     }
-    const now = Date.now();
-    const config = await this.gameConfigService.getActiveConfig();
-    const merchantSnapshots =
-      await this.gameConfigService.getMerchantConfigSnapshots();
-    const runtimeVersion =
-      await this.gameConfigService.getRuntimeConfigVersionTag();
-    const roundConfig: RoundConfigSnapshot = {
-      ...config,
-      configVersion: runtimeVersion,
-      merchantSnapshots,
-    };
-    this.currentConfig = roundConfig;
-    const start = new Date(now);
-    const lock = new Date(now + roundConfig.bettingDurationMs);
-    const end = new Date(lock.getTime() + roundConfig.resultDurationMs);
-    const oddsUp = roundConfig.payoutMultiplierUp;
-    const oddsDown = roundConfig.payoutMultiplierDown;
+    this.isStartingRound = true;
+    try {
+      const now = Date.now();
+      const config = await this.gameConfigService.getActiveConfig();
+      const merchantSnapshots =
+        await this.gameConfigService.getMerchantConfigSnapshots();
+      const runtimeVersion =
+        await this.gameConfigService.getRuntimeConfigVersionTag();
+      const roundConfig: RoundConfigSnapshot = {
+        ...config,
+        configVersion: runtimeVersion,
+        merchantSnapshots,
+      };
+      this.currentConfig = roundConfig;
+      const start = new Date(now);
+      const lock = new Date(now + roundConfig.bettingDurationMs);
+      const end = new Date(lock.getTime() + roundConfig.resultDurationMs);
+      const oddsUp = roundConfig.payoutMultiplierUp;
+      const oddsDown = roundConfig.payoutMultiplierDown;
 
-    const round = await this.prisma.round.create({
-      data: {
-        startTime: start,
-        lockTime: lock,
-        endTime: end,
-        oddsUp: new Prisma.Decimal(oddsUp),
-        oddsDown: new Prisma.Decimal(oddsDown),
-        gameConfigSnapshot: roundConfig as unknown as Prisma.InputJsonValue,
-        // Keep bonus slots hidden during BETTING; generate and reveal at lock.
-        digitBonusSlots: [] as unknown as Prisma.InputJsonValue,
-        digitBonusFactor: null,
-        status: RoundStatus.BETTING,
-      },
-    });
+      const round = await this.prisma.round.create({
+        data: {
+          startTime: start,
+          lockTime: lock,
+          endTime: end,
+          oddsUp: new Prisma.Decimal(oddsUp),
+          oddsDown: new Prisma.Decimal(oddsDown),
+          gameConfigSnapshot: roundConfig as unknown as Prisma.InputJsonValue,
+          // Keep bonus slots hidden during BETTING; generate and reveal at lock.
+          digitBonusSlots: [] as unknown as Prisma.InputJsonValue,
+          digitBonusFactor: null,
+          status: RoundStatus.BETTING,
+        },
+      });
 
-    this.currentRound = this.toRoundState(round);
-    await this.cacheRoundState();
-    this.eventsSubject.next({
-      type: 'round:start',
-      payload: this.currentRound,
-    });
+      this.currentRound = this.toRoundState(round);
+      await this.cacheRoundState();
+      this.eventsSubject.next({
+        type: 'round:start',
+        payload: this.currentRound,
+      });
 
-    const lockDelay = Math.max(lock.getTime() - Date.now(), 0);
-    this.lockTimer = setTimeout(() => {
-      void this.lockCurrentRound();
-    }, lockDelay);
+      const lockDelay = Math.max(lock.getTime() - Date.now(), 0);
+      this.lockTimer = setTimeout(() => {
+        void this.lockCurrentRound();
+      }, lockDelay);
+    } catch (error) {
+      this.logger.error('Failed to start new round', error);
+      if (this.isRoundCreateUniqueConstraintError(error)) {
+        await this.repairRoundIdSequence();
+      }
+      const restored = await this.restoreActiveRound().catch((restoreError) => {
+        this.logger.warn(
+          `Failed to restore round after start error: ${restoreError instanceof Error ? restoreError.message : String(restoreError)}`,
+        );
+        return false;
+      });
+      if (!restored) {
+        this.scheduleStartNewRoundRetry();
+      }
+    } finally {
+      this.isStartingRound = false;
+    }
   }
 
   private async restoreActiveRound() {
@@ -216,147 +242,200 @@ export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async lockCurrentRound() {
-    if (!this.currentRound) {
+    if (
+      !this.currentRound ||
+      this.isLockingRound ||
+      this.currentRound.status !== RoundStatus.BETTING
+    ) {
       return;
     }
-
-    const lockedPrice = await this.fetchLatestPrice();
-    const lockedPhaseBonus = this.buildLockedPhaseBonus(this.currentConfig);
-    const bonusSlots = lockedPhaseBonus?.slots ?? [];
-    const bonusFactor = lockedPhaseBonus?.factor ?? null;
+    this.isLockingRound = true;
 
     try {
-      await this.prisma.round.update({
-        where: { id: this.currentRound.id },
-        data: {
-          status: RoundStatus.RESULT_PENDING,
-          lockedPrice:
-            lockedPrice !== null ? new Prisma.Decimal(lockedPrice) : null,
-          digitBonusSlots: bonusSlots as unknown as Prisma.InputJsonValue,
-          digitBonusFactor:
-            bonusFactor !== null ? new Prisma.Decimal(bonusFactor) : null,
-        },
-      });
-    } catch (error) {
-      this.logger.error(`Failed to lock round ${this.currentRound.id}`, error);
-      return;
-    }
+      const lockedPrice = await this.fetchLatestPrice();
+      const lockedPhaseBonus = this.buildLockedPhaseBonus(this.currentConfig);
+      const bonusSlots = lockedPhaseBonus?.slots ?? [];
+      const bonusFactor = lockedPhaseBonus?.factor ?? null;
 
-    try {
-      // Batch-write: persist all pending bet slips into Bet rows at lock.
-      await this.betsService.commitBetSlipsForRound(this.currentRound.id);
-    } catch (error) {
-      this.logger.warn(
-        `Failed to commit bet slips for round ${this.currentRound.id}: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    }
+      try {
+        await this.prisma.round.update({
+          where: { id: this.currentRound.id },
+          data: {
+            status: RoundStatus.RESULT_PENDING,
+            lockedPrice:
+              lockedPrice !== null ? new Prisma.Decimal(lockedPrice) : null,
+            digitBonusSlots: bonusSlots as unknown as Prisma.InputJsonValue,
+            digitBonusFactor:
+              bonusFactor !== null ? new Prisma.Decimal(bonusFactor) : null,
+          },
+        });
+      } catch (error) {
+        this.logger.error(`Failed to lock round ${this.currentRound.id}`, error);
+        return;
+      }
 
-    this.currentRound = {
-      ...this.currentRound,
-      status: RoundStatus.RESULT_PENDING,
-      lockedPrice,
-      digitBonus: lockedPhaseBonus,
-    };
-    await this.cacheRoundState();
-    this.eventsSubject.next({
-      type: 'round:locked',
-      payload: {
-        roundId: this.currentRound.id,
+      try {
+        // Batch-write: persist all pending bet slips into Bet rows at lock.
+        await this.betsService.commitBetSlipsForRound(this.currentRound.id);
+      } catch (error) {
+        this.logger.warn(
+          `Failed to commit bet slips for round ${this.currentRound.id}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+
+      this.currentRound = {
+        ...this.currentRound,
+        status: RoundStatus.RESULT_PENDING,
         lockedPrice,
         digitBonus: lockedPhaseBonus,
-      },
-    });
+      };
+      await this.cacheRoundState();
+      this.eventsSubject.next({
+        type: 'round:locked',
+        payload: {
+          roundId: this.currentRound.id,
+          lockedPrice,
+          digitBonus: lockedPhaseBonus,
+        },
+      });
 
-    const remaining = Math.max(
-      new Date(this.currentRound.endTime).getTime() - Date.now(),
-      0,
-    );
-    this.resultTimer = setTimeout(() => {
-      void this.finishCurrentRound();
-    }, remaining);
+      const remaining = Math.max(
+        new Date(this.currentRound.endTime).getTime() - Date.now(),
+        0,
+      );
+      this.resultTimer = setTimeout(() => {
+        void this.finishCurrentRound();
+      }, remaining);
+    } finally {
+      this.isLockingRound = false;
+    }
   }
 
   private async finishCurrentRound() {
-    if (!this.currentRound) {
+    if (
+      !this.currentRound ||
+      this.isFinalizingRound ||
+      this.currentRound.status !== RoundStatus.RESULT_PENDING
+    ) {
       return;
     }
+    this.isFinalizingRound = true;
 
-    const finalPrice = await this.fetchLatestPrice();
-    const locked = this.currentRound.lockedPrice ?? finalPrice;
-    const digitOutcome =
-      finalPrice !== null ? getDigitOutcome(finalPrice) : null;
-    const digitResult = digitOutcome?.digits ?? null;
-    const digitSum = digitOutcome?.sum ?? null;
-    let winningSide: BetSide | null = null;
-    if (locked !== null && finalPrice !== null) {
-      if (finalPrice > locked) {
-        winningSide = BetSide.UP;
-      } else if (finalPrice < locked) {
-        winningSide = BetSide.DOWN;
-      }
-    }
-
-    let stats;
     try {
-      stats = await this.betsService.settleRound(
-        this.currentRound.id,
-        winningSide,
-        digitOutcome,
-        this.currentRound.digitBonus?.slots ?? [],
-        this.currentRound.digitBonus?.factor ?? null,
-      );
-      await this.prisma.round.update({
-        where: { id: this.currentRound.id },
-        data: {
-          status: RoundStatus.COMPLETED,
-          finalPrice:
-            finalPrice !== null ? new Prisma.Decimal(finalPrice) : null,
+      const finalPrice = await this.fetchLatestPrice();
+      const locked = this.currentRound.lockedPrice ?? finalPrice;
+      const digitOutcome =
+        finalPrice !== null ? getDigitOutcome(finalPrice) : null;
+      const digitResult = digitOutcome?.digits ?? null;
+      const digitSum = digitOutcome?.sum ?? null;
+      let winningSide: BetSide | null = null;
+      if (locked !== null && finalPrice !== null) {
+        if (finalPrice > locked) {
+          winningSide = BetSide.UP;
+        } else if (finalPrice < locked) {
+          winningSide = BetSide.DOWN;
+        }
+      }
+
+      let stats;
+      try {
+        stats = await this.betsService.settleRound(
+          this.currentRound.id,
           winningSide,
+          digitOutcome,
+          this.currentRound.digitBonus?.slots ?? [],
+          this.currentRound.digitBonus?.factor ?? null,
+        );
+        await this.prisma.round.update({
+          where: { id: this.currentRound.id },
+          data: {
+            status: RoundStatus.COMPLETED,
+            finalPrice:
+              finalPrice !== null ? new Prisma.Decimal(finalPrice) : null,
+            winningSide,
+            digitResult,
+            digitSum,
+          },
+        });
+      } catch (error) {
+        this.logger.error(
+          `Failed to finalize round ${this.currentRound.id}`,
+          error,
+        );
+      }
+
+      if (!stats) {
+        stats = {
+          totalBets: 0,
+          winners: 0,
+          refunded: 0,
+          totalVolume: 0,
+          participants: [],
+          balanceUpdates: [],
+        };
+      }
+
+      this.eventsSubject.next({
+        type: 'round:result',
+        payload: {
+          roundId: this.currentRound.id,
+          lockedPrice: this.currentRound.lockedPrice ?? null,
+          finalPrice,
           digitResult,
           digitSum,
+          winningSide,
+          stats,
         },
       });
+
+      this.currentRound = undefined;
+      const displayDelay = COMPLETE_PHASE_DURATION_MS;
+      this.currentConfig = undefined;
+      await this.redis.del(CacheKeys.activeRoundState);
+
+      if (this.nextRoundTimer) {
+        clearTimeout(this.nextRoundTimer);
+      }
+      this.nextRoundTimer = setTimeout(() => {
+        void this.startNewRound();
+      }, displayDelay);
+    } finally {
+      this.isFinalizingRound = false;
+    }
+  }
+
+  private isRoundCreateUniqueConstraintError(error: unknown) {
+    return (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2002'
+    );
+  }
+
+  private async repairRoundIdSequence() {
+    try {
+      await this.prisma.$executeRawUnsafe(`
+        SELECT setval(
+          pg_get_serial_sequence('"Round"', 'id'),
+          COALESCE((SELECT MAX(id) FROM "Round"), 0) + 1,
+          false
+        )
+      `);
+      this.logger.warn('Repaired Round.id sequence after unique constraint error.');
     } catch (error) {
-      this.logger.error(
-        `Failed to finalize round ${this.currentRound.id}`,
-        error,
+      this.logger.warn(
+        `Failed to repair Round.id sequence: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
+  }
 
-    if (!stats) {
-      stats = {
-        totalBets: 0,
-        winners: 0,
-        refunded: 0,
-        totalVolume: 0,
-        balanceUpdates: [],
-      };
+  private scheduleStartNewRoundRetry(delayMs = 1500) {
+    if (this.disposed || this.startRoundRetryTimer) {
+      return;
     }
-
-    this.eventsSubject.next({
-      type: 'round:result',
-      payload: {
-        roundId: this.currentRound.id,
-        lockedPrice: this.currentRound.lockedPrice ?? null,
-        finalPrice,
-        digitResult,
-        digitSum,
-        winningSide,
-        stats,
-      },
-    });
-
-    this.currentRound = undefined;
-    const displayDelay = COMPLETE_PHASE_DURATION_MS;
-    this.currentConfig = undefined;
-    await this.redis.del(CacheKeys.activeRoundState);
-
-    if (this.nextRoundTimer) {
-      clearTimeout(this.nextRoundTimer);
-    }
-    this.nextRoundTimer = setTimeout(() => {
+    this.startRoundRetryTimer = setTimeout(() => {
+      this.startRoundRetryTimer = undefined;
       void this.startNewRound();
-    }, displayDelay);
+    }, Math.max(0, delayMs));
   }
 
   private async fetchLatestPrice(): Promise<number | null> {

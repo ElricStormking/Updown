@@ -346,8 +346,11 @@ export class GameGateway
       return;
     }
 
-    const { balanceUpdates, participants, ...publicStats } =
-      event.payload.stats;
+    const {
+      balanceUpdates = [],
+      participants = [],
+      ...publicStats
+    } = event.payload.stats ?? {};
 
     // Public broadcast: no per-user data
     this.server.emit(event.type, {
