@@ -100,17 +100,34 @@ const WINNER_LIGHT_WITH_BET_LAST_FRAME = 21;
 const WINNER_LIGHT_NO_BET_TEXTURE_KEY = 'number_light_box';
 const WINNER_LIGHT_NO_BET_ANIMATION_KEY = 'winner-number-light-box';
 const WINNER_LIGHT_NO_BET_FRAME_WIDTH = 298;
-const WINNER_LIGHT_NO_BET_FRAME_HEIGHT = 136;
+const WINNER_LIGHT_NO_BET_FRAME_HEIGHT = 144;
 const WINNER_LIGHT_NO_BET_EFFECTIVE_WIDTH = 298;
-const WINNER_LIGHT_NO_BET_EFFECTIVE_HEIGHT = 136;
+const WINNER_LIGHT_NO_BET_EFFECTIVE_HEIGHT = 144;
 const WINNER_LIGHT_NO_BET_LAST_FRAME = 18;
+const WINNER_LIGHT_NO_BET_FRAME_RATE = 30;
 const WINNER_LIGHT_WITH_BET_SCALE_MULTIPLIER = 1.1;
-const WINNER_LIGHT_NO_BET_SCALE_MULTIPLIER = 1.18;
+const WINNER_LIGHT_NO_BET_SCALE_MULTIPLIER = 1.2;
+const WINNER_LIGHT_NO_BET_SCALE_Y_MULTIPLIER = 1.59;
+const WINNER_LIGHT_NO_BET_Y_OFFSET = -6;
 const WIN_TITLE_TEXTURE_KEY = 'WIN_anim';
 const WIN_TITLE_ANIMATION_KEY = 'result-win-title-anim';
 const LIGHTNING_BEAM_FRAME_HEIGHT = 269;
 const BONUS_LIGHTNING_STAGGER_MS = 85;
 const BONUS_LIGHTNING_DURATION_MS = 240;
+const BONUS_LIGHT_DEFAULT_TEXTURE_KEY = 'number_light_box_2';
+const BONUS_LIGHT_DEFAULT_ANIMATION_KEY = 'number-light-box';
+const BONUS_LIGHT_DEFAULT_EFFECTIVE_WIDTH = 270;
+const BONUS_LIGHT_DEFAULT_EFFECTIVE_HEIGHT = 109;
+const BONUS_LIGHT_DEFAULT_SCALE_MULTIPLIER = 1.08;
+const BONUS_LIGHT_ODD_EVEN_TEXTURE_KEY = 'odd_box_light';
+const BONUS_LIGHT_ODD_EVEN_ANIMATION_KEY = 'odd-box-light';
+const BONUS_LIGHT_ODD_EVEN_FRAME_WIDTH = 293;
+const BONUS_LIGHT_ODD_EVEN_FRAME_HEIGHT = 225;
+const BONUS_LIGHT_ODD_EVEN_LAST_FRAME = 16;
+const BONUS_LIGHT_ODD_EVEN_FRAME_RATE = 18;
+const BONUS_LIGHT_ODD_EVEN_EFFECTIVE_WIDTH = 293;
+const BONUS_LIGHT_ODD_EVEN_EFFECTIVE_HEIGHT = 225;
+const BONUS_LIGHT_ODD_EVEN_SCALE_MULTIPLIER = 1.05;
 const BONUS_ODDS_Y_OFFSET = 4;
 const BONUS_ODDS_COLOR = '#69f3ff';
 const BONUS_ODDS_STROKE_COLOR = '#123549';
@@ -350,9 +367,17 @@ export class HiLoScene extends Phaser.Scene {
     });
 
     this.load.spritesheet(
-      'number_light_box_2',
+      BONUS_LIGHT_DEFAULT_TEXTURE_KEY,
       '../UI_sprites/number_light_box_2/number_light_box2.png',
       { frameWidth: 270, frameHeight: 109 },
+    );
+    this.load.spritesheet(
+      BONUS_LIGHT_ODD_EVEN_TEXTURE_KEY,
+      '../UI_sprites/odd_box_light/odd_box_light.png',
+      {
+        frameWidth: BONUS_LIGHT_ODD_EVEN_FRAME_WIDTH,
+        frameHeight: BONUS_LIGHT_ODD_EVEN_FRAME_HEIGHT,
+      },
     );
     this.load.spritesheet(
       WINNER_LIGHT_WITH_BET_TEXTURE_KEY,
@@ -750,10 +775,9 @@ export class HiLoScene extends Phaser.Scene {
 
       this.settingButton = addImage(1022, 2262, 'setting', 0.75);
     } else {
-      // Invisible hit target over the gear area so mobile taps open the DOM menu.
-      this.menuHitButton = this.add.image(1022, 2262, 'setting', 1.0);
-      this.menuHitButton.setAlpha(0.001).setDepth(1000);
-      this.makeInteractive(this.menuHitButton, () => this.openMenu());
+      // Menu interactions are handled by the real DOM floating menu button.
+      // Keep no hidden Phaser hit-target to avoid false taps opening menu.
+      this.menuHitButton = undefined;
     }
 
     this.bgLightOverlay = addImage(540, 973, 'bg_light', 0.72);
@@ -1090,7 +1114,7 @@ export class HiLoScene extends Phaser.Scene {
   }
 
   private getTokenBarSafeHeight(viewHeight: number) {
-    const fallback = Math.round(Math.max(viewHeight * 0.12, 240));
+    const fallback = Math.round(Math.max(viewHeight * 0.12, Math.min(240, viewHeight * 0.2)));
     if (typeof document === 'undefined') return fallback;
     const tokenBar = document.getElementById('token-bar-floating');
     if (!tokenBar) return fallback;
@@ -2310,13 +2334,18 @@ export class HiLoScene extends Phaser.Scene {
 
   private applyBonusHighlights() {
     this.clearBonusHighlights();
-    if (this.textures.exists('number_light_box_2')) {
+    if (this.textures.exists(BONUS_LIGHT_DEFAULT_TEXTURE_KEY)) {
       this.ensureNumberLightAnimation();
+    }
+    if (this.textures.exists(BONUS_LIGHT_ODD_EVEN_TEXTURE_KEY)) {
+      this.ensureOddBoxLightAnimation();
     }
     
     // If in locked layout mode, use scaled values
     const lockedScale = this.getLockedLayoutScale();
     const shouldPause = this.isLockedLayoutMode && !this.isLockedLayoutPending;
+    const oddKey = this.buildDigitKey('ODD');
+    const evenKey = this.buildDigitKey('EVEN');
     
     this.bonusOddsByKey.forEach((_ratio, key) => {
       const image = this.betTargets.get(key);
@@ -2345,21 +2374,37 @@ export class HiLoScene extends Phaser.Scene {
       
       this.bonusTweens.set(key, tween);
 
-      if (this.textures.exists('number_light_box_2')) {
+      let lightTextureKey = BONUS_LIGHT_DEFAULT_TEXTURE_KEY;
+      let lightAnimationKey = BONUS_LIGHT_DEFAULT_ANIMATION_KEY;
+      let lightEffectiveWidth = BONUS_LIGHT_DEFAULT_EFFECTIVE_WIDTH;
+      let lightEffectiveHeight = BONUS_LIGHT_DEFAULT_EFFECTIVE_HEIGHT;
+      let lightScaleMultiplier = BONUS_LIGHT_DEFAULT_SCALE_MULTIPLIER;
+      const isOddEvenKey = key === oddKey || key === evenKey;
+      if (isOddEvenKey && this.textures.exists(BONUS_LIGHT_ODD_EVEN_TEXTURE_KEY)) {
+        lightTextureKey = BONUS_LIGHT_ODD_EVEN_TEXTURE_KEY;
+        lightAnimationKey = BONUS_LIGHT_ODD_EVEN_ANIMATION_KEY;
+        lightEffectiveWidth = BONUS_LIGHT_ODD_EVEN_EFFECTIVE_WIDTH;
+        lightEffectiveHeight = BONUS_LIGHT_ODD_EVEN_EFFECTIVE_HEIGHT;
+        lightScaleMultiplier = BONUS_LIGHT_ODD_EVEN_SCALE_MULTIPLIER;
+      }
+
+      if (this.textures.exists(lightTextureKey)) {
         const light =
           this.bonusLightSprites.get(key) ??
-          this.add.sprite(image.x, image.y, 'number_light_box_2', 0);
-        const frameWidth = 270;
-        const frameHeight = 109;
-        const scaleX = (image.displayWidth / frameWidth) * 1.08;
-        const scaleY = (image.displayHeight / frameHeight) * 1.08;
+          this.add.sprite(image.x, image.y, lightTextureKey, 0);
+        const scaleX = (image.displayWidth / lightEffectiveWidth) * lightScaleMultiplier;
+        const scaleY = (image.displayHeight / lightEffectiveHeight) * lightScaleMultiplier;
         light.setPosition(image.x, image.y);
         light.setScale(scaleX, scaleY);
         light.setAlpha(0.85);
         light.setDepth(19);
         light.setBlendMode(Phaser.BlendModes.ADD);
-        if (!light.anims.isPlaying) {
-          light.play('number-light-box');
+        if (light.texture.key !== lightTextureKey) {
+          light.setTexture(lightTextureKey, 0);
+        }
+        const currentAnimKey = light.anims.currentAnim?.key;
+        if (!light.anims.isPlaying || currentAnimKey !== lightAnimationKey) {
+          light.play(lightAnimationKey, true);
         }
         this.bonusLightSprites.set(key, light);
 
@@ -3268,13 +3313,19 @@ export class HiLoScene extends Phaser.Scene {
       const lightEffectiveHeight = hasPlayerWinningBet
         ? WINNER_LIGHT_WITH_BET_EFFECTIVE_HEIGHT
         : WINNER_LIGHT_NO_BET_EFFECTIVE_HEIGHT;
-      const lightScaleMultiplier = hasPlayerWinningBet
+      const lightScaleMultiplierX = hasPlayerWinningBet
         ? WINNER_LIGHT_WITH_BET_SCALE_MULTIPLIER
         : WINNER_LIGHT_NO_BET_SCALE_MULTIPLIER;
+      const lightScaleMultiplierY = hasPlayerWinningBet
+        ? WINNER_LIGHT_WITH_BET_SCALE_MULTIPLIER
+        : WINNER_LIGHT_NO_BET_SCALE_Y_MULTIPLIER;
       const light = this.winnerLightSprites.get(key) ?? this.add.sprite(image.x, image.y, lightTextureKey, 0);
-      const scaleX = (image.displayWidth / lightEffectiveWidth) * lightScaleMultiplier;
-      const scaleY = (image.displayHeight / lightEffectiveHeight) * lightScaleMultiplier;
-      light.setPosition(image.x, baseY);
+      const scaleX = (image.displayWidth / lightEffectiveWidth) * lightScaleMultiplierX;
+      const scaleY = (image.displayHeight / lightEffectiveHeight) * lightScaleMultiplierY;
+      const lightBaseY = hasPlayerWinningBet
+        ? baseY
+        : baseY + WINNER_LIGHT_NO_BET_Y_OFFSET;
+      light.setPosition(image.x, lightBaseY);
       light.setScale(scaleX, scaleY);
       light.setAlpha(0.9);
       light.setDepth(26);
@@ -3290,7 +3341,7 @@ export class HiLoScene extends Phaser.Scene {
 
       const lightTween = this.tweens.add({
         targets: light,
-        y: baseY - 6,
+        y: lightBaseY - 6,
         alpha: 1,
         scaleX: scaleX * 1.04,
         scaleY: scaleY * 1.04,
@@ -4495,16 +4546,37 @@ export class HiLoScene extends Phaser.Scene {
   }
 
   private ensureNumberLightAnimation() {
-    if (this.anims.exists('number-light-box') || !this.textures.exists('number_light_box_2')) {
+    if (
+      this.anims.exists(BONUS_LIGHT_DEFAULT_ANIMATION_KEY) ||
+      !this.textures.exists(BONUS_LIGHT_DEFAULT_TEXTURE_KEY)
+    ) {
       return;
     }
     this.anims.create({
-      key: 'number-light-box',
-      frames: this.anims.generateFrameNumbers('number_light_box_2', {
+      key: BONUS_LIGHT_DEFAULT_ANIMATION_KEY,
+      frames: this.anims.generateFrameNumbers(BONUS_LIGHT_DEFAULT_TEXTURE_KEY, {
         start: 0,
         end: 21,
       }),
       frameRate: 18,
+      repeat: -1,
+    });
+  }
+
+  private ensureOddBoxLightAnimation() {
+    if (
+      this.anims.exists(BONUS_LIGHT_ODD_EVEN_ANIMATION_KEY) ||
+      !this.textures.exists(BONUS_LIGHT_ODD_EVEN_TEXTURE_KEY)
+    ) {
+      return;
+    }
+    this.anims.create({
+      key: BONUS_LIGHT_ODD_EVEN_ANIMATION_KEY,
+      frames: this.anims.generateFrameNumbers(BONUS_LIGHT_ODD_EVEN_TEXTURE_KEY, {
+        start: 0,
+        end: BONUS_LIGHT_ODD_EVEN_LAST_FRAME,
+      }),
+      frameRate: BONUS_LIGHT_ODD_EVEN_FRAME_RATE,
       repeat: -1,
     });
   }
@@ -4535,7 +4607,7 @@ export class HiLoScene extends Phaser.Scene {
           start: 0,
           end: WINNER_LIGHT_NO_BET_LAST_FRAME,
         }),
-        frameRate: 18,
+        frameRate: WINNER_LIGHT_NO_BET_FRAME_RATE,
         repeat: -1,
       });
     }

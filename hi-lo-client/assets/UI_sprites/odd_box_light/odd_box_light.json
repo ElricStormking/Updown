@@ -2,17 +2,17 @@
     "section1": {
         "files": [
             {
-                "url": "assets/anim/number_light_box/number_light_box.png",
+                "url": "assets/anim/odd_box_light/odd_box_light.png",
                 "frameConfig": {
-                    "frameWidth": 298,
-                    "frameHeight": 144,
+                    "frameWidth": 293,
+                    "frameHeight": 225,
                     "startFrame": 0,
                     "endFrame": -1,
                     "spacing": 0,
                     "margin": 0
                 },
                 "type": "spritesheet",
-                "key": "number_light_box_1"
+                "key": "odd_box_light"
             }
         ]
     },

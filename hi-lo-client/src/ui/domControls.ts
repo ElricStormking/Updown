@@ -72,6 +72,7 @@ let bettingHistoryNextBtn: HTMLButtonElement | null = null;
 let bettingHistoryPageLabelEl: HTMLSpanElement | null = null;
 let bettingHistoryListEl: HTMLDivElement | null = null;
 let authFormLocked = false;
+let menuButtonArmed = false;
 
 // Track if user has passed through the fullscreen gate (mobile only)
 let fullscreenGatePassed = false;
@@ -90,12 +91,11 @@ const isMobileViewport = () => {
   const hasNoHover = window.matchMedia?.('(hover: none)')?.matches ?? false;
   // Method 5: Viewport width check
   const narrowViewport = window.innerWidth <= 1024;
-  // Consider mobile if: UA says mobile, coarse pointer+no hover, or narrow viewport matches mobile CSS.
+  // Consider mobile if: UA says mobile, coarse pointer+no hover, or touch device with narrow viewport.
   return (
     mobileUA ||
     (hasCoarsePointer && hasNoHover) ||
-    (hasTouch && narrowViewport) ||
-    narrowViewport
+    (hasTouch && narrowViewport)
   );
 };
 
@@ -200,6 +200,23 @@ const formatPayoutRatio = (value: number) => {
   const rounded = Math.round(value * 100) / 100;
   const asStr = rounded.toFixed(2).replace(/\.?0+$/, '');
   return `${asStr}:1`;
+};
+
+const isWithinMenuButtonHotspot = (
+  event: Pick<MouseEvent, 'clientX' | 'clientY' | 'detail'>,
+  button: HTMLButtonElement,
+) => {
+  // Keyboard-triggered clicks have detail=0 and no pointer coordinates.
+  if (event.detail === 0) return true;
+  const rect = button.getBoundingClientRect();
+  const centerX = rect.left + rect.width * 0.5;
+  const centerY = rect.top + rect.height * 0.5;
+  const dx = Math.abs(event.clientX - centerX);
+  const dy = Math.abs(event.clientY - centerY);
+  // Keep interactive zone tight to the visible gear icon center.
+  const radiusX = Math.max(12, rect.width * 0.36);
+  const radiusY = Math.max(12, rect.height * 0.36);
+  return dx <= radiusX && dy <= radiusY;
 };
 
 export const initControls = (handlers: ControlHandlers) => {
@@ -800,8 +817,10 @@ export const initControls = (handlers: ControlHandlers) => {
   // Mobile: when not fullscreen, any tap in game area should request fullscreen.
   appShellEl?.addEventListener(
     'pointerdown',
-    () => {
+    (e) => {
       if (!isMobileViewport() || !state.token || isFullscreenActive()) return;
+      const target = e.target as Element | null;
+      if (target?.closest('#token-bar-floating, .stats-dock, .menu-modal, .settings-modal, .stats-modal, .chart-modal, .betting-history-modal')) return;
       void requestFullscreen();
     },
     { passive: true },
@@ -908,69 +927,33 @@ export const initControls = (handlers: ControlHandlers) => {
     }
   };
 
-  tokenBarMenuBtn?.addEventListener('click', () => {
+  tokenBarMenuBtn?.addEventListener('click', (event) => {
+    if (!tokenBarMenuBtn) return;
+    const withinHotspot =
+      menuButtonArmed || isWithinMenuButtonHotspot(event, tokenBarMenuBtn);
+    menuButtonArmed = false;
+    if (!withinHotspot) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
     toggleMenuModal();
   });
   tokenBarMenuBtn?.addEventListener(
     'pointerdown',
     (e) => {
+      if (tokenBarMenuBtn) {
+        menuButtonArmed = isWithinMenuButtonHotspot(e, tokenBarMenuBtn);
+      } else {
+        menuButtonArmed = false;
+      }
+      if (!menuButtonArmed) {
+        e.preventDefault();
+      }
       e.stopPropagation();
     },
     { passive: false },
   );
-  tokenBarFloatingEl?.addEventListener('click', (event) => {
-    const target = event.target as HTMLElement | null;
-    if (!target || !tokenBarFloatingEl) return;
-    if (
-      target.closest('#token-bar-menu-floating') ||
-      target.closest('#token-bar-clear-floating') ||
-      target.closest('.token-bar-floating-chip')
-    ) {
-      return;
-    }
-    const rect = tokenBarFloatingEl.getBoundingClientRect();
-    const clickX = (event as MouseEvent).clientX - rect.left;
-    const clickY = (event as MouseEvent).clientY - rect.top;
-    if (clickX < 0 || clickY < 0 || clickX > rect.width || clickY > rect.height) {
-      return;
-    }
-    if (clickX >= rect.width * 0.8) {
-      toggleMenuModal();
-    }
-  });
-  if (typeof document !== 'undefined') {
-    document.addEventListener(
-      'pointerdown',
-      (event) => {
-        if (!tokenBarFloatingEl || tokenBarFloatingEl.classList.contains('is-hidden')) {
-          return;
-        }
-        const target = event.target as HTMLElement | null;
-        if (
-          target?.closest('#token-bar-menu-floating') ||
-          target?.closest('#token-bar-clear-floating') ||
-          target?.closest('.token-bar-floating-chip')
-        ) {
-          return;
-        }
-        const rect = tokenBarFloatingEl.getBoundingClientRect();
-        const x = event.clientX;
-        const y = event.clientY;
-        if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
-          return;
-        }
-        const localX = x - rect.left;
-        const localY = y - rect.top;
-        if (localX >= rect.width * 0.8 && localY >= rect.height * 0.4) {
-          event.preventDefault();
-          event.stopPropagation();
-          toggleMenuModal();
-        }
-      },
-      true,
-    );
-  }
-
   tokenBarClearBtn?.addEventListener(
     'pointerdown',
     (e) => {
