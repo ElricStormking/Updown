@@ -1068,7 +1068,7 @@ export class HiLoScene extends Phaser.Scene {
       this.makeInteractive(this.settingButton, () => this.openSettings());
     }
 
-    this.fitBodyToViewport(500);
+    this.fitBodyToViewport(this.BET_SLOTS_PIVOT_Y);
     this.alignLayoutToVisibleTop(8);
   }
 
@@ -4440,6 +4440,7 @@ export class HiLoScene extends Phaser.Scene {
     this.resultOverlay = this.add.container(0, 0, [modal]);
     this.resultOverlay.setDepth(RESULT_OVERLAY_DEPTH);
     this.resultOverlay.setAlpha(0);
+    this.resultOverlay.setScrollFactor(0);
 
     this.resultRoundId = payload.roundId;
 

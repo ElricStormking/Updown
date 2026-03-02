@@ -696,13 +696,14 @@ export const initControls = (handlers: ControlHandlers) => {
       ),
     ];
     tokenOptionButtons.forEach((button) => {
-      button.onclick = () => {
+      button.addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
         const value = Number(button.dataset.token ?? 0);
         if (!Number.isFinite(value) || value <= 0) {
           return;
         }
         updateState({ selectedTokenValue: value });
-      };
+      });
     });
   };
 

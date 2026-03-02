@@ -545,7 +545,7 @@ html {
 
 .token-bar-floating {
   position: absolute;
-  bottom: -7px;
+  bottom: -12px;
   left: 50%;
   transform: translateX(-50%);
   width: min(900px, 96%);
@@ -2405,8 +2405,9 @@ li {
   }
 
   #game-container {
-    width: min(calc(100dvh * 9 / 16), 100vw) !important;
-    height: min(100dvh, calc(100vw * 16 / 9)) !important;
+    width: 100vw !important;
+    height: calc(100vw * 16 / 9) !important;
+    max-height: 100dvh !important;
     margin: 0 auto;
     border-radius: 0;
     background: #000;
@@ -2422,8 +2423,9 @@ li {
 
   @supports not (height: 100dvh) {
     #game-container {
-      width: min(calc(100vh * 9 / 16), 100vw) !important;
-      height: min(100vh, calc(100vw * 16 / 9)) !important;
+      width: 100vw !important;
+      height: calc(100vw * 16 / 9) !important;
+      max-height: 100vh !important;
     }
   }
 
@@ -2451,7 +2453,7 @@ li {
 
   .token-bar-floating {
     width: min(520px, 94%);
-    bottom: clamp(-13px, calc(1.6vh - 23px), -7px);
+    bottom: clamp(-18px, calc(1.6vh - 28px), -12px);
     transform: translateX(-50%) scale(1); /* Preserve original scale */
     transform-origin: center bottom;
   }
