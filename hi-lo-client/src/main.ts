@@ -107,8 +107,8 @@ const game = new Phaser.Game({
   backgroundColor: '#020b16',
   banner: false,
   input: {
-    mouse: { preventDefault: false },
-    touch: { capture: false },
+    mouse: { preventDefault: true },
+    touch: { capture: true },
   },
   scale: {
     mode: Phaser.Scale.FIT,

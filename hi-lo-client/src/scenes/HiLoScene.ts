@@ -399,7 +399,6 @@ export class HiLoScene extends Phaser.Scene {
     this.setBetSlotsInteractiveEnabled(false);
     this.updateCameraBounds();
     this.fitCameraZoom();
-    this.enableVerticalScroll();
     this.startBackgroundMusic();
     this.cachePhaseIndicatorElement();
     this.cachePhaseCountdownElement();
@@ -1267,52 +1266,7 @@ export class HiLoScene extends Phaser.Scene {
   }
 
   private enableVerticalScroll() {
-    const camera = this.cameras.main;
-    const clampScroll = (value: number) => {
-      const bounds = this.scrollBounds;
-      if (!bounds) return value;
-      const maxScroll = Math.max(bounds.minY, bounds.maxY - camera.height);
-      return Phaser.Math.Clamp(value, bounds.minY, maxScroll);
-    };
-
-    this.input.on('wheel', (
-      _pointer: Phaser.Input.Pointer,
-      _gameObjects: Phaser.GameObjects.GameObject[],
-      _dx: number,
-      dy: number,
-      _dz: number,
-      event: WheelEvent,
-    ) => {
-      // Only try preventDefault if the event is cancelable (non-passive)
-      if (event && event.cancelable && typeof event.preventDefault === 'function') {
-        event.preventDefault();
-      }
-      if (!this.scrollBounds) return;
-      camera.scrollY = clampScroll(camera.scrollY + dy);
-    });
-
-    this.input.on('pointerdown', (
-      pointer: Phaser.Input.Pointer,
-      gameObjects: Phaser.GameObjects.GameObject[],
-    ) => {
-      if (gameObjects.length) return;
-      this.dragScrollActive = true;
-      this.dragScrollY = pointer.y;
-    });
-
-    this.input.on('pointerup', () => {
-      this.dragScrollActive = false;
-    });
-
-    this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
-      if (!this.dragScrollActive || !pointer.isDown) return;
-      // Don't call preventDefault on passive touch events - it causes console errors
-      // The CSS touch-action: pan-y on the canvas handles scroll behavior
-      const delta = pointer.y - this.dragScrollY;
-      if (Math.abs(delta) < 2) return;
-      camera.scrollY = clampScroll(camera.scrollY - delta);
-      this.dragScrollY = pointer.y;
-    });
+    // Intentionally disabled: stage must remain fixed in 9:16 view with no drag/wheel scroll.
   }
 
   private enterLockedLayout() {
