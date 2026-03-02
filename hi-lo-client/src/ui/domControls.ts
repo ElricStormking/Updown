@@ -428,7 +428,6 @@ export const initControls = (handlers: ControlHandlers) => {
           <img src="/main_screen_UI/setting.png" alt="" />
         </button>
       </div>
-    </div>
     <div class="stats-modal-backdrop" id="stats-modal-backdrop" aria-hidden="true">
       <div class="stats-modal" role="dialog" aria-modal="true" aria-label="Statistics">
         <div class="stats-modal-header">
@@ -576,6 +575,7 @@ export const initControls = (handlers: ControlHandlers) => {
           </div>
         </div>
       </div>
+    </div>
     </div>
   `;
 
@@ -911,6 +911,13 @@ export const initControls = (handlers: ControlHandlers) => {
   tokenBarMenuBtn?.addEventListener('click', () => {
     toggleMenuModal();
   });
+  tokenBarMenuBtn?.addEventListener(
+    'pointerdown',
+    (e) => {
+      e.stopPropagation();
+    },
+    { passive: false },
+  );
   tokenBarFloatingEl?.addEventListener('click', (event) => {
     const target = event.target as HTMLElement | null;
     if (!target || !tokenBarFloatingEl) return;
@@ -964,6 +971,13 @@ export const initControls = (handlers: ControlHandlers) => {
     );
   }
 
+  tokenBarClearBtn?.addEventListener(
+    'pointerdown',
+    (e) => {
+      e.stopPropagation();
+    },
+    { passive: false },
+  );
   tokenBarClearBtn?.addEventListener('click', async () => {
     if (!tokenBarClearBtn || tokenBarClearBtn.disabled) return;
     try {
