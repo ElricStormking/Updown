@@ -2392,10 +2392,12 @@ export class HiLoScene extends Phaser.Scene {
         const light =
           this.bonusLightSprites.get(key) ??
           this.add.sprite(image.x, image.y, lightTextureKey, 0);
+        const useMirroredOddFx = isOddEvenKey && key === oddKey;
         const scaleX = (image.displayWidth / lightEffectiveWidth) * lightScaleMultiplier;
         const scaleY = (image.displayHeight / lightEffectiveHeight) * lightScaleMultiplier;
         light.setPosition(image.x, image.y);
         light.setScale(scaleX, scaleY);
+        light.setFlipX(useMirroredOddFx);
         light.setAlpha(0.85);
         light.setDepth(19);
         light.setBlendMode(Phaser.BlendModes.ADD);

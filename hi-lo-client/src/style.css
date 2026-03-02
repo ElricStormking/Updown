@@ -93,13 +93,23 @@ html {
   justify-content: center;
 }
 
-/* In fullscreen, explicit 9:16 sizing */
+/* In fullscreen on desktop: container fit (9:16 centered column) */
 #app-shell:fullscreen #game-container,
 #app-shell:-webkit-full-screen #game-container {
   width: min(calc(100vh * 9 / 16), 100vw) !important;
   height: min(100vh, calc(100vw * 16 / 9)) !important;
   margin: 0 !important;
   align-self: center;
+}
+
+/* In fullscreen on mobile: forced width fit (no side bars) */
+@media (max-width: 1024px), (pointer: coarse) and (hover: none) {
+  #app-shell:fullscreen #game-container,
+  #app-shell:-webkit-full-screen #game-container {
+    width: 100vw !important;
+    height: calc(100vw * 16 / 9) !important;
+    max-height: 100vh !important;
+  }
 }
 
 .auth-card {
