@@ -84,9 +84,6 @@ export class IntegrationController {
       dto.playerId,
       dto.accessToken,
       dto.betLimits,
-      dto.minBetAmount,
-      dto.maxBetAmount,
-      dto.digitBetAmountLimits,
       dto.timestamp,
       dto.hash,
     );

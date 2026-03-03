@@ -31,6 +31,7 @@ import {
   UpdateBetLimitResponseData,
   UpdateTokenValuesResponseData,
   DigitBetAmountLimitsDto,
+  LaunchBetLimitRangeDto,
   LaunchBetLimitsDto,
 } from './dto';
 import { LaunchSessionService } from './launch-session.service';
@@ -545,28 +546,11 @@ export class IntegrationService {
     account: string,
     playerId: string | undefined,
     merchantAccessToken: string | undefined,
-    betLimits: LaunchBetLimitsDto | undefined,
-    minBetAmount: number | undefined,
-    maxBetAmount: number | undefined,
-    digitBetAmountLimits: DigitBetAmountLimitsDto | undefined,
+    betLimits: LaunchBetLimitsDto,
     timestamp: number,
     hash: string,
   ): Promise<IntegrationResponseDto<LaunchGameResponseData>> {
-    const hasLegacyBetLimitOverrides =
-      minBetAmount !== undefined ||
-      maxBetAmount !== undefined ||
-      digitBetAmountLimits !== undefined;
-    const signatureParams = hasLegacyBetLimitOverrides
-      ? [
-          merchant.merchantId,
-          account,
-          this.stringifyOptionalNumber(minBetAmount),
-          this.stringifyOptionalNumber(maxBetAmount),
-          this.serializeDigitBetAmountLimitsForSignature(digitBetAmountLimits),
-          timestamp.toString(),
-        ]
-      : [merchant.merchantId, account, timestamp.toString()];
-
+    const signatureParams = [merchant.merchantId, account, timestamp.toString()];
     if (!validateSignature(signatureParams, merchant.hashKey, hash)) {
       return IntegrationResponseDto.error(
         IntegrationErrorCodes.INVALID_SIGNATURE,
@@ -595,75 +579,31 @@ export class IntegrationService {
     }
 
     try {
-      if (hasLegacyBetLimitOverrides) {
-        const current = await this.gameConfigService.getActiveConfig(
-          merchant.merchantId,
-        );
-        const nextMinBetAmount = minBetAmount ?? current.minBetAmount;
-        const nextMaxBetAmount = maxBetAmount ?? current.maxBetAmount;
+      const current = await this.gameConfigService.getActiveConfig(
+        merchant.merchantId,
+      );
+      const mappedLimits = this.applyLaunchBetLimits(betLimits);
+      const mappedMinBetAmount = this.resolveMinBetAmount(mappedLimits);
+      const mappedMaxBetAmount = this.resolveMaxBetAmount(mappedLimits);
 
-        if (
-          !Number.isFinite(nextMinBetAmount) ||
-          !Number.isFinite(nextMaxBetAmount) ||
-          nextMinBetAmount < 0 ||
-          nextMaxBetAmount < 0 ||
-          nextMaxBetAmount < nextMinBetAmount
-        ) {
-          return IntegrationResponseDto.error(
-            IntegrationErrorCodes.INVALID_BET_AMOUNT_LIMIT,
-            IntegrationErrorMessages[
-              IntegrationErrorCodes.INVALID_BET_AMOUNT_LIMIT
-            ],
-          );
-        }
-
-        const normalizedLimits =
-          digitBetAmountLimits !== undefined
-            ? this.mergeDigitBetAmountLimits(
-                digitBetAmountLimits,
-                current.digitBetAmountLimits,
-              )
-            : this.buildUniformDigitBetAmountLimits(
-                nextMinBetAmount,
-                nextMaxBetAmount,
-              );
-
-        await this.gameConfigService.updateConfig(
-          {
-            ...current,
-            minBetAmount: nextMinBetAmount,
-            maxBetAmount: nextMaxBetAmount,
-            digitBetAmountLimits: normalizedLimits,
-          },
-          merchant.merchantId,
-        );
-      } else if (betLimits && this.hasAnyLaunchBetLimits(betLimits)) {
-        const current = await this.gameConfigService.getActiveConfig(
-          merchant.merchantId,
-        );
-        const mappedLimits = this.applyLaunchBetLimits(
-          current.digitBetAmountLimits,
-          betLimits,
-        );
-        const mappedMaxBetAmount = this.resolveMaxBetAmount(mappedLimits);
-        if (mappedMaxBetAmount < current.minBetAmount) {
-          return IntegrationResponseDto.error(
-            IntegrationErrorCodes.INVALID_BET_AMOUNT_LIMIT,
-            IntegrationErrorMessages[
-              IntegrationErrorCodes.INVALID_BET_AMOUNT_LIMIT
-            ],
-          );
-        }
-
-        await this.gameConfigService.updateConfig(
-          {
-            ...current,
-            maxBetAmount: mappedMaxBetAmount,
-            digitBetAmountLimits: mappedLimits,
-          },
-          merchant.merchantId,
+      if (mappedMaxBetAmount < mappedMinBetAmount) {
+        return IntegrationResponseDto.error(
+          IntegrationErrorCodes.INVALID_BET_AMOUNT_LIMIT,
+          IntegrationErrorMessages[
+            IntegrationErrorCodes.INVALID_BET_AMOUNT_LIMIT
+          ],
         );
       }
+
+      await this.gameConfigService.updateConfig(
+        {
+          ...current,
+          minBetAmount: mappedMinBetAmount,
+          maxBetAmount: mappedMaxBetAmount,
+          digitBetAmountLimits: mappedLimits,
+        },
+        merchant.merchantId,
+      );
 
       let launchSessionId: string | undefined;
       let launchMode: 'legacy' | 'callback' = 'legacy';
@@ -876,48 +816,57 @@ export class IntegrationService {
     }
   }
 
-  private stringifyOptionalNumber(value: number | undefined): string {
-    if (value === undefined) {
-      return '';
-    }
-    return String(value);
-  }
-
-  private hasAnyLaunchBetLimits(betLimits: LaunchBetLimitsDto): boolean {
-    return (
-      Object.keys(LAUNCH_BET_LIMIT_RULE_KEY_MAP) as Array<
-        keyof LaunchBetLimitsDto
-      >
-    ).some((key) => {
-      const value = betLimits[key];
-      return value !== undefined;
-    });
-  }
-
   private applyLaunchBetLimits(
-    source: DigitBetAmountLimits,
     betLimits: LaunchBetLimitsDto,
   ): DigitBetAmountLimits {
-    const next = this.cloneDigitBetAmountLimits(source);
+    const next = {} as DigitBetAmountLimits;
 
     for (const [launchKey, digitRuleKey] of Object.entries(
       LAUNCH_BET_LIMIT_RULE_KEY_MAP,
     ) as Array<[keyof LaunchBetLimitsDto, keyof DigitBetAmountLimits]>) {
       const raw = betLimits[launchKey];
-      if (raw === undefined) {
-        continue;
-      }
-      const value = Number(raw);
-      if (!Number.isFinite(value) || value < 0) {
+      const normalized = this.normalizeLaunchBetLimitRange(raw);
+
+      if (normalized.maxBetAmount < normalized.minBetAmount) {
         throw new Error('Invalid launch betLimits');
       }
       next[digitRuleKey] = {
-        minBetAmount: source[digitRuleKey].minBetAmount,
-        maxBetAmount: Math.max(source[digitRuleKey].minBetAmount, value),
+        minBetAmount: normalized.minBetAmount,
+        maxBetAmount: normalized.maxBetAmount,
       };
     }
 
     return next;
+  }
+
+  private normalizeLaunchBetLimitRange(
+    range: LaunchBetLimitRangeDto,
+  ): BetAmountLimit {
+    if (!this.isRecord(range)) {
+      throw new Error('Invalid launch betLimits');
+    }
+
+    const minBetAmount = Number(range.minBetLimit);
+    const maxBetAmount = Number(range.maxBetLimit);
+
+    if (
+      !Number.isFinite(minBetAmount) ||
+      !Number.isFinite(maxBetAmount) ||
+      minBetAmount < 0 ||
+      maxBetAmount < 0
+    ) {
+      throw new Error('Invalid launch betLimits');
+    }
+
+    return { minBetAmount, maxBetAmount };
+  }
+
+  private resolveMinBetAmount(limits: DigitBetAmountLimits): number {
+    let minBetAmount = Number.POSITIVE_INFINITY;
+    for (const key of DIGIT_BET_LIMIT_RULE_KEYS) {
+      minBetAmount = Math.min(minBetAmount, limits[key].minBetAmount);
+    }
+    return Number.isFinite(minBetAmount) ? minBetAmount : 0;
   }
 
   private resolveMaxBetAmount(limits: DigitBetAmountLimits): number {

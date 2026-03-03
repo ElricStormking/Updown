@@ -1,26 +1,27 @@
 # Platform Integration API Documentation
 
-**Version:** 1.2  
-**Last Updated:** February 25, 2026  
+**Version:** 1.3  
+**Last Updated:** March 2, 2026  
 
-**Change Highlights (Platform Spec + Runtime Sync on February 25, 2026):**
-- Synced onboarding requirements from `Integration_API_Updated_0225.md` (merchant-provided inputs, provider-returned info).
-- Added security/runtime constraints used by implementation: IP whitelist enforcement and callback launch-session gate.
-- Clarified integration request/response details to match implemented APIs (including `transferId`/`orderNo` alias and launch URL payload).
-- Added missing integration error codes used by implementation (`1005`, `2003`, `6001`-`6006`).
+**Change Highlights (Standard Spec + Runtime Sync on March 2, 2026):**
+- Compared and reconciled with `5_6136363283537468543.md` (standard specification).
+- Added a dedicated **Database** section (`Merchant` table key fields + required `merchantId` columns).
+- Added compatibility notes for timestamp window wording and bet-limit response shape.
+- Kept runtime-accurate endpoint/details that extend the standard spec (callback launch session gate, per-rule limits, expanded error-code set).
 
 ---
 
 ## Table of Contents
 
 1. [Integration Application & Activation](#integration-application--activation)
-2. [Overview](#overview)
-3. [Authentication](#authentication)
-4. [Signature Generation](#signature-generation)
-5. [Base URL](#base-url)
-6. [Common Response Format](#common-response-format)
-7. [Error Codes](#error-codes)
-8. [API Endpoints](#api-endpoints)
+2. [Database](#database)
+3. [Overview](#overview)
+4. [Authentication](#authentication)
+5. [Signature Generation](#signature-generation)
+6. [Base URL](#base-url)
+7. [Common Response Format](#common-response-format)
+8. [Error Codes](#error-codes)
+9. [API Endpoints](#api-endpoints)
    - [Create Account](#1-create-account)
    - [Transfer](#2-transfer)
    - [Get Bet History](#3-get-bet-history)
@@ -34,8 +35,8 @@
    - [Get Token Values](#11-get-token-values)
    - [Set Token Values](#12-set-token-values)
    - [Launch Session Start (Platform Runtime)](#13-launch-session-start-platform-runtime)
-9. [Data Types](#data-types)
-10. [Code Examples](#code-examples)
+10. [Data Types](#data-types)
+11. [Code Examples](#code-examples)
 
 ---
 
@@ -60,6 +61,26 @@
 
 ---
 
+## Database
+
+This section captures database-side integration constraints stated in the standard specification.
+
+### Merchant Table
+
+- `merchantId`: must be included in every merchant integration API request.
+- `hashKey`: merchant secret used for request-signature generation/verification.
+  - Stored one key per merchant.
+  - Signature model: concatenate request parameters in API-defined order, append `hashKey`, then SHA256.
+
+### Other Tables
+
+The following data domains must carry merchant ownership (typically via `merchantId`) to support correct isolation and querying:
+
+- `User`
+- `Bet`
+
+---
+
 ## Overview
 
 This document describes the Integration API for platform partners to integrate the Hi-Lo BTC game into their systems. The API allows partners to:
@@ -71,7 +92,7 @@ This document describes the Integration API for platform partners to integrate t
 - Launch the game with authenticated player sessions
 - Transfer all remaining player balance back to merchant
 - Support merchant callback verification during login and offline settlement
-- Retrieve and configure global/per-rule bet limits and token values
+- Configure per-rule bet limits during Launch Game and manage token values (`Get/Set Bet Limit` are deprecated)
 
 All API endpoints use **HTTP POST** method and accept/return **JSON** payloads.
 
@@ -91,7 +112,8 @@ Every **merchant-signed integration request** requires authentication through:
 ### Timestamp Validation
 
 - Runtime validation uses `now - timestamp` and requires `0 <= diff <= toleranceSec`.
-- Default tolerance is **10 seconds** (`INTEGRATION_TIMESTAMP_TOLERANCE_SEC`).
+- The standard specification wording describes an approximately **5-10 second** acceptance window.
+- Runtime default tolerance is **10 seconds** (`INTEGRATION_TIMESTAMP_TOLERANCE_SEC`), and should be treated as the effective integration target unless explicitly overridden by environment config.
 - Future timestamps are rejected.
 - Timestamps outside this window are rejected with error code `1002`.
 
@@ -253,8 +275,8 @@ All API responses follow this structure:
 | `LaunchGame` | `POST /integration/launch` |
 | `AllTransferOut` | `POST /integration/all-transfer-out` (or partner-provided route) |
 | `LaunchSessionStart` (runtime gate) | `POST /integration/launch/session/start` (Bearer launch JWT) |
-| `GetBetLimit` | `POST /integration/config/bet-limit/get` |
-| `SetBetLimit` | `POST /integration/config/bet-limit` |
+| `GetBetLimit` | `POST /integration/config/bet-limit/get` (deprecated) |
+| `SetBetLimit` | `POST /integration/config/bet-limit` (deprecated) |
 | `GetTokens` | `POST /integration/config/token-values/get` |
 | `SetTokens` | `POST /integration/config/token-values` |
 | `Callback: LoginPlayer` | Merchant callback URL configured in platform settings |
@@ -592,10 +614,7 @@ Generate an authenticated game URL for a player.
 | `account` | string | Yes | Player account identifier |
 | `playerId` | string | No (Yes for callback mode) | Merchant-side player ID used by callback APIs for merchant verification |
 | `accessToken` | string | No (Yes for callback mode) | Merchant-side access token used by callback APIs for merchant verification |
-| `betLimits` | object | No | Per-game-type limit object from latest platform spec. See [Launch betLimits Object](#launch-betlimits-object-platform-2026-02-25) |
-| `minBetAmount` | number | No | Legacy global minimum bet amount override before URL generation |
-| `maxBetAmount` | number | No | Legacy global maximum bet amount override before URL generation |
-| `digitBetAmountLimits` | object | No | Legacy per-rule min/max override. See [Digit Bet Amount Limits](#digit-bet-amount-limits) |
+| `betLimits` | object | Yes | Per-rule limit object with `minBetLimit` + `maxBetLimit` for all 7 rule groups. See [Launch betLimits Object](#launch-betlimits-object-platform-2026-02-25) |
 | `timestamp` | integer | Yes | Unix timestamp in seconds |
 | `hash` | string | Yes | Request signature |
 
@@ -604,33 +623,13 @@ Generate an authenticated game URL for a player.
 hash = SHA256(merchantId + "&" + account + "&" + timestamp + "&" + hashKey)
 ```
 
-Use this signature when using `playerId`, `accessToken`, and/or `betLimits` without legacy bet-limit override fields.
-
-**Signature Parameters (in order, legacy bet-limit override mode):**
-```
-hash = SHA256(
-  merchantId + "&" +
-  account + "&" +
-  minBetAmountOrEmpty + "&" +
-  maxBetAmountOrEmpty + "&" +
-  digitBetAmountLimitsToken + "&" +
-  timestamp + "&" +
-  hashKey
-)
-```
-
-Where:
-- `minBetAmountOrEmpty` = `minBetAmount` value as string, or empty string if omitted.
-- `maxBetAmountOrEmpty` = `maxBetAmount` value as string, or empty string if omitted.
-- `digitBetAmountLimitsToken` format is:
-  `smallBig:min,max|oddEven:min,max|double:min,max|triple:min,max|sum:min,max|single:min,max|anyTriple:min,max`
-  (empty string if `digitBetAmountLimits` is omitted).
-- If `minBetAmount`/`maxBetAmount` are provided but `digitBetAmountLimits` is omitted, all 7 digit-rule limits are aligned to the provided global min/max.
+Launch uses this signature regardless of callback mode or provided `betLimits`.
 
 Runtime notes:
 - If merchant callback mode is enabled, `playerId` and `accessToken` are required and merchant callback URLs must be configured.
 - In callback mode, the game client must call `POST /integration/launch/session/start` with the launch JWT before entering game socket flow.
-- `betLimits` updates per-rule `maxBetAmount` values (mapped by rule key) and persists into merchant config for subsequent rounds.
+- `betLimits` is validated per rule during launch (`minBetLimit >= 0`, `maxBetLimit >= 0`, `maxBetLimit >= minBetLimit`) and persisted into merchant config for subsequent rounds.
+- Runtime derives global `minBetAmount` / `maxBetAmount` from provided per-rule limits.
 
 #### Request Example (Callback Mode with Platform Identity Fields)
 
@@ -641,35 +640,13 @@ Runtime notes:
   "account": "player123",
   "accessToken": "merchant-access-token-value",
   "betLimits": {
-    "bigSmall": 1000,
-    "oddEven": 2000,
-    "eachDouble": 3000,
-    "eachTripple": 4000,
-    "sum": 5000,
-    "single": 6000,
-    "anyTripple": 7000
-  },
-  "timestamp": 1706886400,
-  "hash": "a1b2c3d4e5f6..."
-}
-```
-
-#### Request Example (Legacy Bet-Limit Override Mode)
-
-```json
-{
-  "merchantId": "MERCHANT001",
-  "account": "player123",
-  "minBetAmount": 0,
-  "maxBetAmount": 1000,
-  "digitBetAmountLimits": {
-    "smallBig": { "minBetAmount": 0, "maxBetAmount": 2000 },
-    "oddEven": { "minBetAmount": 0, "maxBetAmount": 2000 },
-    "double": { "minBetAmount": 0, "maxBetAmount": 800 },
-    "triple": { "minBetAmount": 0, "maxBetAmount": 300 },
-    "sum": { "minBetAmount": 0, "maxBetAmount": 1200 },
-    "single": { "minBetAmount": 0, "maxBetAmount": 1000 },
-    "anyTriple": { "minBetAmount": 0, "maxBetAmount": 500 }
+    "bigSmall": { "minBetLimit": 0, "maxBetLimit": 1000 },
+    "oddEven": { "minBetLimit": 0, "maxBetLimit": 2000 },
+    "eachDouble": { "minBetLimit": 0, "maxBetLimit": 3000 },
+    "eachTripple": { "minBetLimit": 0, "maxBetLimit": 4000 },
+    "sum": { "minBetLimit": 0, "maxBetLimit": 5000 },
+    "single": { "minBetLimit": 0, "maxBetLimit": 6000 },
+    "anyTripple": { "minBetLimit": 0, "maxBetLimit": 7000 }
   },
   "timestamp": 1706886400,
   "hash": "a1b2c3d4e5f6..."
@@ -851,9 +828,9 @@ hash = SHA256(merchantId + "&" + timestamp + "&" + hashKey)
 
 ---
 
-### 9. Get Bet Limit
+### 9. Get Bet Limit (Deprecated)
 
-Retrieve the current bet limits for this merchant.
+Deprecated. Bet limits are now supplied and validated in `POST /integration/launch` via `betLimits`.
 
 **Endpoint:** `POST /integration/config/bet-limit/get`
 
@@ -909,11 +886,15 @@ hash = SHA256(merchantId + "&" + timestamp + "&" + hashKey)
 | `maxBetAmount` | number | Global maximum bet amount |
 | `digitBetAmountLimits` | object | Per-rule bet limits for SMALL/BIG, ODD/EVEN, DOUBLE, TRIPLE, SUM, SINGLE, ANY_TRIPLE |
 
+Compatibility note:
+- The standard specification may show only global fields (`minBetAmount`, `maxBetAmount`).
+- Runtime responses can include `digitBetAmountLimits` as an extended payload; integrators should safely ignore unknown fields if not used.
+
 ---
 
-### 10. Set Bet Limit
+### 10. Set Bet Limit (Deprecated)
 
-Set global and per-rule bet amount limits for this merchant.
+Deprecated. Bet limits are now supplied and validated in `POST /integration/launch` via `betLimits`.
 
 **Endpoint:** `POST /integration/config/bet-limit`
 
@@ -997,6 +978,10 @@ Where `digitBetAmountLimitsToken` format is:
   }
 }
 ```
+
+Compatibility note:
+- In standard-spec-only integrations, request/response handling may focus on global `minBetAmount`/`maxBetAmount`.
+- Runtime supports optional per-rule limits via `digitBetAmountLimits`; include it when you need granular control.
 
 ---
 
@@ -1136,29 +1121,29 @@ Failure codes commonly returned in callback flow: `6002`, `6003`, `6004`, `6005`
 
 ### Launch betLimits Object (Platform 2026-02-25)
 
-`betLimits` in `Launch Game` uses per-game-type max amount keys from the latest public platform spec:
+`betLimits` in `Launch Game` uses per-game-type keys, and each key must include both `minBetLimit` and `maxBetLimit`:
 
 | Key | Meaning |
 |-----|---------|
-| `bigSmall` | Limit for BIG/SMALL |
-| `oddEven` | Limit for ODD/EVEN |
-| `eachDouble` | Limit for each DOUBLE |
-| `eachTripple` | Limit for each TRIPLE (spelling follows external platform spec) |
-| `sum` | Limit for SUM |
-| `single` | Limit for SINGLE |
-| `anyTripple` | Limit for ANY_TRIPLE (spelling follows external platform spec) |
+| `bigSmall` | Limit object for BIG/SMALL |
+| `oddEven` | Limit object for ODD/EVEN |
+| `eachDouble` | Limit object for each DOUBLE |
+| `eachTripple` | Limit object for each TRIPLE (spelling follows external platform spec) |
+| `sum` | Limit object for SUM |
+| `single` | Limit object for SINGLE |
+| `anyTripple` | Limit object for ANY_TRIPLE (spelling follows external platform spec) |
 
 Example:
 
 ```json
 {
-  "bigSmall": 1000,
-  "oddEven": 2000,
-  "eachDouble": 3000,
-  "eachTripple": 4000,
-  "sum": 5000,
-  "single": 6000,
-  "anyTripple": 7000
+  "bigSmall": { "minBetLimit": 0, "maxBetLimit": 1000 },
+  "oddEven": { "minBetLimit": 0, "maxBetLimit": 2000 },
+  "eachDouble": { "minBetLimit": 0, "maxBetLimit": 3000 },
+  "eachTripple": { "minBetLimit": 0, "maxBetLimit": 4000 },
+  "sum": { "minBetLimit": 0, "maxBetLimit": 5000 },
+  "single": { "minBetLimit": 0, "maxBetLimit": 6000 },
+  "anyTripple": { "minBetLimit": 0, "maxBetLimit": 7000 }
 }
 ```
 
@@ -1245,19 +1230,6 @@ class GameIntegration {
       pad(date.getUTCSeconds()) +
       pad(date.getUTCMilliseconds(), 3)
     );
-  }
-
-  serializeDigitBetAmountLimitsToken(digitBetAmountLimits) {
-    if (!digitBetAmountLimits) return '';
-    const keys = ['smallBig', 'oddEven', 'double', 'triple', 'sum', 'single', 'anyTriple'];
-    return keys
-      .map((key) => {
-        const entry = digitBetAmountLimits[key] || {};
-        const min = entry.minBetAmount ?? '';
-        const max = entry.maxBetAmount ?? '';
-        return `${key}:${min},${max}`;
-      })
-      .join('|');
   }
 
   async createAccount(account) {
@@ -1349,24 +1321,11 @@ class GameIntegration {
 
   async launchGame(account, options = {}) {
     const timestamp = this.getTimestamp();
-    const hasLegacyOverride =
-      options.minBetAmount !== undefined ||
-      options.maxBetAmount !== undefined ||
-      options.digitBetAmountLimits !== undefined;
-    const hash = hasLegacyOverride
-      ? this.generateSignature([
-          this.merchantId,
-          account,
-          options.minBetAmount !== undefined ? String(options.minBetAmount) : '',
-          options.maxBetAmount !== undefined ? String(options.maxBetAmount) : '',
-          this.serializeDigitBetAmountLimitsToken(options.digitBetAmountLimits),
-          timestamp.toString(),
-        ])
-      : this.generateSignature([
-          this.merchantId,
-          account,
-          timestamp.toString(),
-        ]);
+    const hash = this.generateSignature([
+      this.merchantId,
+      account,
+      timestamp.toString(),
+    ]);
 
     const response = await axios.post(`${this.baseUrl}/integration/launch`, {
       merchantId: this.merchantId,
@@ -1379,15 +1338,6 @@ class GameIntegration {
         : {}),
       ...(options.betLimits !== undefined
         ? { betLimits: options.betLimits }
-        : {}),
-      ...(options.minBetAmount !== undefined
-        ? { minBetAmount: options.minBetAmount }
-        : {}),
-      ...(options.maxBetAmount !== undefined
-        ? { maxBetAmount: options.maxBetAmount }
-        : {}),
-      ...(options.digitBetAmountLimits !== undefined
-        ? { digitBetAmountLimits: options.digitBetAmountLimits }
         : {}),
       timestamp,
       hash,
@@ -1442,13 +1392,13 @@ async function main() {
     playerId: 'merchant-player-789',
     accessToken: 'merchant-access-token-value',
     betLimits: {
-      bigSmall: 1000,
-      oddEven: 2000,
-      eachDouble: 3000,
-      eachTripple: 4000,
-      sum: 5000,
-      single: 6000,
-      anyTripple: 7000,
+      bigSmall: { minBetLimit: 0, maxBetLimit: 1000 },
+      oddEven: { minBetLimit: 0, maxBetLimit: 2000 },
+      eachDouble: { minBetLimit: 0, maxBetLimit: 3000 },
+      eachTripple: { minBetLimit: 0, maxBetLimit: 4000 },
+      sum: { minBetLimit: 0, maxBetLimit: 5000 },
+      single: { minBetLimit: 0, maxBetLimit: 6000 },
+      anyTripple: { minBetLimit: 0, maxBetLimit: 7000 },
     },
   });
   console.log('Game URL:', launchResult.data?.url);

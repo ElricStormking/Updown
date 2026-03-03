@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
 import {
+  IsDefined,
   IsNotEmpty,
   IsNumber,
   IsOptional,
@@ -8,43 +9,54 @@ import {
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
-import { DigitBetAmountLimitsDto } from './bet-limit-rules.dto';
+
+export class LaunchBetLimitRangeDto {
+  @IsDefined()
+  @IsNumber()
+  @Min(0)
+  minBetLimit: number;
+
+  @IsDefined()
+  @IsNumber()
+  @Min(0)
+  maxBetLimit: number;
+}
 
 export class LaunchBetLimitsDto {
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  bigSmall?: number;
+  @IsDefined()
+  @ValidateNested()
+  @Type(() => LaunchBetLimitRangeDto)
+  bigSmall: LaunchBetLimitRangeDto;
 
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  oddEven?: number;
+  @IsDefined()
+  @ValidateNested()
+  @Type(() => LaunchBetLimitRangeDto)
+  oddEven: LaunchBetLimitRangeDto;
 
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  eachDouble?: number;
+  @IsDefined()
+  @ValidateNested()
+  @Type(() => LaunchBetLimitRangeDto)
+  eachDouble: LaunchBetLimitRangeDto;
 
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  eachTripple?: number;
+  @IsDefined()
+  @ValidateNested()
+  @Type(() => LaunchBetLimitRangeDto)
+  eachTripple: LaunchBetLimitRangeDto;
 
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  sum?: number;
+  @IsDefined()
+  @ValidateNested()
+  @Type(() => LaunchBetLimitRangeDto)
+  sum: LaunchBetLimitRangeDto;
 
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  single?: number;
+  @IsDefined()
+  @ValidateNested()
+  @Type(() => LaunchBetLimitRangeDto)
+  single: LaunchBetLimitRangeDto;
 
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  anyTripple?: number;
+  @IsDefined()
+  @ValidateNested()
+  @Type(() => LaunchBetLimitRangeDto)
+  anyTripple: LaunchBetLimitRangeDto;
 }
 
 export class LaunchGameDto {
@@ -68,25 +80,10 @@ export class LaunchGameDto {
   @IsNotEmpty()
   accessToken?: string;
 
-  @IsOptional()
+  @IsDefined()
   @ValidateNested()
   @Type(() => LaunchBetLimitsDto)
-  betLimits?: LaunchBetLimitsDto;
-
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  minBetAmount?: number;
-
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  maxBetAmount?: number;
-
-  @IsOptional()
-  @ValidateNested()
-  @Type(() => DigitBetAmountLimitsDto)
-  digitBetAmountLimits?: DigitBetAmountLimitsDto;
+  betLimits: LaunchBetLimitsDto;
 
   @IsNumber()
   timestamp: number;
