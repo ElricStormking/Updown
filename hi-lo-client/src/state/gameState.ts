@@ -28,6 +28,7 @@ export interface GameState {
   };
   merchantId?: string;
   language: LanguageCode;
+  serverWalletBalance: number;
   walletBalance: number;
   selectedTokenValue: number;
   selectedSide: BetSide;
@@ -53,6 +54,7 @@ const listeners = new Set<(state: GameState) => void>();
 
 export const state: GameState = {
   language: getInitialLanguage(),
+  serverWalletBalance: 0,
   walletBalance: 0,
   selectedTokenValue: 10,
   selectedSide: 'UP',

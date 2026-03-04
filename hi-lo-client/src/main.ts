@@ -223,10 +223,16 @@ const socket = createGameSocket(
       setRoundTiming(payload.lockTime, payload.endTime);
       setPriceFreeze(false);
       setLockedPrice(null);
+      const nextPlacements: Record<string, TokenPlacement> = {};
       updateState({
         currentRound: payload,
         digitSelections: [],
-        tokenPlacements: {},
+        tokenPlacements: nextPlacements,
+        walletBalance: deriveDisplayedWalletBalance(
+          state.serverWalletBalance,
+          nextPlacements,
+          payload,
+        ),
       });
       // Merchant-tuned odds must be reflected every new round start.
       if (lastConfigRefreshRoundId !== payload.id) {
@@ -343,8 +349,10 @@ const socket = createGameSocket(
       scene.setWinningBets(payload.roundId, payload.bets);
     },
     onBalance: (balance) => {
-      updateState({ walletBalance: balance });
-      scene.setBalance(balance);
+      const serverWalletBalance = Number(balance);
+      const walletBalance = deriveDisplayedWalletBalance(serverWalletBalance);
+      updateState({ serverWalletBalance, walletBalance });
+      scene.setBalance(walletBalance);
     },
     onBetPlaced: () => setStatus('Bet accepted via socket!'),
     onToken: rememberAccessToken,
@@ -359,6 +367,36 @@ const buildHiLoBetKey = (side: BetSide) => `HILO|${side}`;
 const buildDigitBetKey = (digitType: DigitBetType, selection?: string) =>
   `DIGIT|${digitType}|${selection ?? ''}`;
 
+const getPlacementTotal = (placement?: TokenPlacement) => placement?.total ?? 0;
+
+const getTotalPlacedStake = (
+  placements: Record<string, TokenPlacement> = state.tokenPlacements ?? {},
+) =>
+  Object.values(placements).reduce(
+    (sum, placement) => sum + getPlacementTotal(placement),
+    0,
+  );
+
+const isBettingWindowOpenForTokenSpend = (
+  round = state.currentRound,
+) =>
+  Boolean(
+    round &&
+      round.status === 'BETTING' &&
+      new Date(round.lockTime).getTime() > Date.now(),
+  );
+
+const deriveDisplayedWalletBalance = (
+  serverWalletBalance: number,
+  placements: Record<string, TokenPlacement> = state.tokenPlacements ?? {},
+  round = state.currentRound,
+) => {
+  const pendingStake = isBettingWindowOpenForTokenSpend(round)
+    ? getTotalPlacedStake(placements)
+    : 0;
+  return Math.max(0, serverWalletBalance - pendingStake);
+};
+
 const addTokenPlacement = (key: string, tokenValue: number) => {
   const nextPlacements = { ...(state.tokenPlacements ?? {}) };
   const existing = nextPlacements[key];
@@ -367,17 +405,15 @@ const addTokenPlacement = (key: string, tokenValue: number) => {
     chipValue: tokenValue,
   };
   nextPlacements[key] = nextPlacement;
-  updateState({ tokenPlacements: nextPlacements });
+  updateState({
+    tokenPlacements: nextPlacements,
+    walletBalance: deriveDisplayedWalletBalance(
+      state.serverWalletBalance,
+      nextPlacements,
+    ),
+  });
   return nextPlacement;
 };
-
-const getPlacementTotal = (placement?: TokenPlacement) => placement?.total ?? 0;
-
-const getTotalPlacedStake = () =>
-  Object.values(state.tokenPlacements ?? {}).reduce(
-    (sum, placement) => sum + getPlacementTotal(placement),
-    0,
-  );
 
 async function bootstrapLaunchAuthFromUrl() {
   if (typeof window === 'undefined') {
@@ -441,6 +477,8 @@ async function bootstrapLaunchAuthFromUrl() {
       api.fetchWallet(launchToken),
     ]);
     launchToken = resolveAccessToken(launchToken);
+    const serverWalletBalance = Number(wallet.balance);
+    const nextPlacements: Record<string, TokenPlacement> = {};
     const tokenValues = normalizeTokenValues(config?.tokenValues);
     const selectedTokenValue = resolveSelectedTokenValue(
       state.selectedTokenValue,
@@ -458,9 +496,13 @@ async function bootstrapLaunchAuthFromUrl() {
       },
       merchantId,
       config,
-      walletBalance: Number(wallet.balance),
+      serverWalletBalance,
+      walletBalance: deriveDisplayedWalletBalance(
+        serverWalletBalance,
+        nextPlacements,
+      ),
       selectedTokenValue,
-      tokenPlacements: {},
+      tokenPlacements: nextPlacements,
     });
     persistMerchantId(merchantId);
     scene.setResultDisplayDuration(COMPLETE_PHASE_DURATION_MS);
@@ -522,6 +564,10 @@ async function handleLogin(credentials: { account: string; password: string; mer
     config,
     selectedTokenValue,
     tokenPlacements: {},
+    walletBalance: deriveDisplayedWalletBalance(
+      state.serverWalletBalance,
+      {},
+    ),
   });
   persistMerchantId(merchantId);
   scene.setResultDisplayDuration(COMPLETE_PHASE_DURATION_MS);
@@ -597,7 +643,7 @@ async function handlePlaceDigitBet(selection: {
       `Token value outside betting limits for ${getDigitBetLimitScopeLabel(selection.digitType)}`,
     );
   }
-  if (state.walletBalance < getTotalPlacedStake() + amount) {
+  if (state.serverWalletBalance < getTotalPlacedStake() + amount) {
     const message = 'Insufficient balance';
     setStatus(message, true);
     throw new Error(message);
@@ -656,10 +702,16 @@ async function handleClearTokens() {
 
   const roundId = state.currentRound.id;
   const res = await api.clearRoundBets(state.token, roundId);
+  const serverWalletBalance = Number(res.data.walletBalance);
+  const nextPlacements: Record<string, TokenPlacement> = {};
 
   updateState({
-    walletBalance: res.data.walletBalance,
-    tokenPlacements: {},
+    serverWalletBalance,
+    walletBalance: deriveDisplayedWalletBalance(
+      serverWalletBalance,
+      nextPlacements,
+    ),
+    tokenPlacements: nextPlacements,
     digitSelections: [],
   });
   scene.clearPlayerBets();
@@ -780,9 +832,12 @@ async function refreshPlayerData() {
         : [];
   const lastRoundStake = summaryBets.reduce((sum, bet) => sum + bet.amount, 0);
   const lastRoundPayout = summaryBets.reduce((sum, bet) => sum + bet.payout, 0);
+  const serverWalletBalance = Number(walletRes.data.balance);
+  const walletBalance = deriveDisplayedWalletBalance(serverWalletBalance);
 
   updateState({
-    walletBalance: Number(walletRes.data.balance),
+    serverWalletBalance,
+    walletBalance,
     betHistory: betsRes.data,
     roundHistory: roundsRes.data,
     lastRoundResult,
@@ -791,7 +846,7 @@ async function refreshPlayerData() {
     lastDigitResult: latestDigitResult,
     lastDigitSum: latestDigitSum,
   });
-  scene.setBalance(Number(walletRes.data.balance));
+  scene.setBalance(walletBalance);
 }
 
 function extractBetErrorMessage(error: unknown): string {
