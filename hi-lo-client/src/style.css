@@ -705,6 +705,13 @@ html {
   opacity: 0.95;
 }
 
+html[data-app-lang='zh'] .stats-dock-tab-text {
+  transform: none;
+  text-transform: none;
+  letter-spacing: 0.02em;
+  text-orientation: upright;
+}
+
 .stats-dock-panel {
   width: min(440px, calc(100vw - 90px));
   max-width: min(440px, calc(100vw - 90px));
@@ -1128,10 +1135,13 @@ html {
   top: 170px;
   left: 52px;
   right: 52px;
-  bottom: 34px;
-  padding: 0;
+  bottom: 20px;
+  padding: 0 0 14px;
   gap: 24px;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
 .settings-row {
@@ -2378,12 +2388,15 @@ li {
     top: clamp(95px, 22%, 170px);
     left: clamp(18px, 5.5%, 52px);
     right: clamp(18px, 5.5%, 52px);
-    bottom: clamp(16px, 4.5%, 34px);
-    gap: clamp(10px, 2.4vh, 24px);
+    bottom: clamp(8px, 3.2%, 20px);
+    padding-bottom: clamp(10px, 2.2vh, 18px);
+    gap: clamp(8px, 2vh, 20px);
+    overflow-x: hidden;
+    overflow-y: auto;
   }
 
   .settings-row {
-    min-height: clamp(74px, 15%, 105px);
+    min-height: clamp(60px, 12.5%, 105px);
     padding: 0 clamp(16px, 3.8vw, 36px);
   }
 

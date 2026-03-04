@@ -1333,6 +1333,18 @@ const render = (nextState: typeof state) => {
 let lastAppliedLanguage: LanguageCode | null = null;
 
 const applyI18n = (lang: LanguageCode) => {
+  if (typeof document !== 'undefined') {
+    const html = document.documentElement;
+    html.setAttribute('data-app-lang', lang);
+    if (lang === 'zh') {
+      html.setAttribute('lang', 'zh-Hans');
+    } else if (lang === 'ms') {
+      html.setAttribute('lang', 'ms');
+    } else {
+      html.setAttribute('lang', 'en');
+    }
+  }
+
   if (lastAppliedLanguage === lang) return;
   lastAppliedLanguage = lang;
 
