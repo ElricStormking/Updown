@@ -201,8 +201,8 @@ public String generateSignature(String[] params, String hashKey) {
 
 | Environment | Base URL |
 |------------|----------|
-| Production | `https://api.your-game-domain.com` |
-| Sandbox | `https://sandbox-api.your-game-domain.com` |
+| Production | `TBD` |
+| Sandbox | `http://www.ehooray.ch:4003` |
 
 All endpoints are prefixed with `/integration/`
 
@@ -418,6 +418,9 @@ hash = SHA256(merchantId + "&" + account + "&" + type + "&" + amount + "&" + tim
   "data": null
 }
 ```
+
+Runtime note:
+- Successful withdrawal (`type=1`) closes the player's active launch sessions.
 
 ---
 
@@ -740,6 +743,9 @@ hash = SHA256(merchantId + "&" + account + "&" + timestamp + "&" + hashKey)
 | Field | Type | Description |
 |-------|------|-------------|
 | `balance` | number | Remaining game-side balance after all funds are transferred out |
+
+Runtime note:
+- Successful `AllTransferOut` closes all active launch sessions for that account.
 
 ---
 
@@ -1113,7 +1119,7 @@ Start callback-mode launch verification using the launch JWT from `Launch Game`.
 | `code` | integer | Integration code (`0` on success; callback/session errors on failure) |
 | `message` | string | Failure reason for blocked launch |
 
-Failure codes commonly returned in callback flow: `6002`, `6003`, `6004`, `6005`.
+Failure codes commonly returned in callback flow: `6002`, `6003`, `6004`, `6005`, `6006`.
 
 ---
 

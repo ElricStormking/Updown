@@ -1,7 +1,8 @@
-import { Body, Controller, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Post, Req, UseFilters, UseGuards } from '@nestjs/common';
 import { Merchant } from '@prisma/client';
 import { IntegrationService } from './integration.service';
 import { MerchantAuthGuard, MERCHANT_KEY } from './guards/merchant-auth.guard';
+import { IntegrationApiExceptionFilter } from './filters/integration-api-exception.filter';
 import {
   AccountCreateDto,
   TransferDto,
@@ -17,6 +18,7 @@ import {
 
 @Controller('integration')
 @UseGuards(MerchantAuthGuard)
+@UseFilters(new IntegrationApiExceptionFilter())
 export class IntegrationController {
   constructor(private readonly integrationService: IntegrationService) {}
 

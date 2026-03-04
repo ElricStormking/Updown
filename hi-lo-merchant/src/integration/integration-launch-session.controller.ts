@@ -1,8 +1,9 @@
-import { Controller, Post, Req, UseGuards } from '@nestjs/common';
-import { LaunchSessionStatus } from '@prisma/client';
+import { Controller, Post, Req, UseFilters, UseGuards } from '@nestjs/common';
+import { LaunchSessionOfflineStatus, LaunchSessionStatus } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PrismaService } from '../prisma/prisma.service';
 import { LaunchSessionStartResponseDto } from './dto';
+import { LaunchSessionExceptionFilter } from './filters/launch-session-exception.filter';
 import { LaunchSessionService } from './launch-session.service';
 import { MerchantCallbackService } from './merchant-callback.service';
 import {
@@ -19,6 +20,7 @@ type AuthenticatedLaunchUser = {
 
 @Controller('integration/launch/session')
 @UseGuards(JwtAuthGuard)
+@UseFilters(new LaunchSessionExceptionFilter())
 export class IntegrationLaunchSessionController {
   constructor(
     private readonly launchSessionService: LaunchSessionService,
@@ -68,6 +70,18 @@ export class IntegrationLaunchSessionController {
         message:
           IntegrationErrorMessages[
             IntegrationErrorCodes.LAUNCH_SESSION_NOT_ACTIVE
+          ],
+      };
+    }
+
+    if (session.offlineStatus === LaunchSessionOfflineStatus.CALLBACK_FAILED) {
+      return {
+        ready: false,
+        mode: 'callback',
+        code: IntegrationErrorCodes.UPDATE_BALANCE_CALLBACK_FAILED,
+        message:
+          IntegrationErrorMessages[
+            IntegrationErrorCodes.UPDATE_BALANCE_CALLBACK_FAILED
           ],
       };
     }

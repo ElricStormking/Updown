@@ -48,14 +48,14 @@ model User {
   id                 String              @id @default(cuid())
   email              String              @unique
   password           String
-  merchantId         String?
+  merchantId         String
   merchantAccount    String?
   status             UserStatus          @default(ENABLED)
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
   bets               Bet[]
   wallet             Wallet?
-  merchant           Merchant?           @relation(fields: [merchantId], references: [merchantId])
+  merchant           Merchant            @relation(fields: [merchantId], references: [merchantId])
   transfers          Transfer[]
   walletTransactions WalletTransaction[]
   playerLogins       PlayerLogin[]
@@ -107,7 +107,7 @@ model Bet {
   id         String       @id @default(cuid())
   userId     String
   roundId    Int
-  merchantId String?
+  merchantId String
   betType    BetType      @default(HILO)
   side       BetSide?
   digitType  DigitBetType?
