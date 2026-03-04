@@ -5,4 +5,6 @@ export interface AuthUser {
   merchantId?: string;
   launchSessionId?: string;
   launchMode?: 'legacy' | 'callback';
+  tokenIat?: number;
+  tokenExp?: number;
 }

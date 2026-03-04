@@ -251,9 +251,9 @@ export class AdminAccountsService {
     };
   }
 
-  async deleteAccount(id: string, scope?: AdminAccountScope) {
+  async disableAccount(id: string, scope?: AdminAccountScope) {
     if (!scope?.isSuperAdmin) {
-      throw new ForbiddenException('Only superadmin can delete admin accounts');
+      throw new ForbiddenException('Only superadmin can disable admin accounts');
     }
 
     const existing = await this.prisma.adminAccount.findUnique({
@@ -264,24 +264,33 @@ export class AdminAccountsService {
     }
     if (existing.merchantId === 'hotcoregm') {
       throw new BadRequestException(
-        'Cannot delete superadmin accounts from this action',
+        'Cannot disable superadmin accounts from this action',
       );
     }
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.adminLoginRecord.deleteMany({
-        where: { adminId: existing.id },
-      });
-      await tx.adminAccount.delete({
-        where: { id: existing.id },
-      });
+    if (existing.status === AdminAccountStatus.DISABLED) {
+      return {
+        disabled: true,
+        alreadyDisabled: true,
+        id: existing.id,
+        account: existing.account,
+        merchantId: existing.merchantId,
+        status: existing.status,
+      };
+    }
+
+    const account = await this.prisma.adminAccount.update({
+      where: { id: existing.id },
+      data: { status: AdminAccountStatus.DISABLED },
     });
 
     return {
-      deleted: true,
-      id: existing.id,
-      account: existing.account,
-      merchantId: existing.merchantId,
+      disabled: true,
+      alreadyDisabled: false,
+      id: account.id,
+      account: account.account,
+      merchantId: account.merchantId,
+      status: account.status,
     };
   }
 

@@ -38,6 +38,7 @@ export interface GameSocketCallbacks {
   onRoundUserSettlement(payload: RoundUserSettlementPayload): void;
   onBalance(balance: number): void;
   onBetPlaced(): void;
+  onToken(accessToken: string): void;
 }
 
 export const createGameSocket = (
@@ -65,6 +66,13 @@ export const createGameSocket = (
     callbacks.onBalance(payload.balance),
   );
   socket.on('bet:placed', callbacks.onBetPlaced);
+  socket.on('auth:token', (payload: { accessToken?: string }) => {
+    const accessToken =
+      typeof payload?.accessToken === 'string' ? payload.accessToken.trim() : '';
+    if (accessToken) {
+      callbacks.onToken(accessToken);
+    }
+  });
 
   return socket;
 };

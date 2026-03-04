@@ -1288,6 +1288,7 @@
 
     <script>
       const tokenKey = 'adminToken';
+      const tokenRefreshHeader = 'x-access-token';
       const adminInfoKey = 'adminInfo';
       let token = localStorage.getItem(tokenKey) || '';
       let currentAdmin = null;
@@ -1919,11 +1920,17 @@
                       '\')">Edit</button>',
                   ];
                   if (!isSuper) {
-                    actions.push(
-                      '<button class="small danger" onclick="deleteAdminAccount(\'' +
-                        item.id +
-                        '\')">Delete</button>',
-                    );
+                    if (item.status !== 'DISABLED') {
+                      actions.push(
+                        '<button class="small danger" onclick="disableAdminAccount(\'' +
+                          item.id +
+                          '\')">Disable</button>',
+                      );
+                    } else {
+                      actions.push(
+                        '<button class="small" disabled>Disabled</button>',
+                      );
+                    }
                   }
                   actionHtml = '<div class="action-buttons">' + actions.join('') + '</div>';
                 }
@@ -2112,8 +2119,11 @@
                   const whitelist = Array.isArray(m.integrationAllowedIps) && m.integrationAllowedIps.length
                     ? m.integrationAllowedIps.join(', ')
                     : '--';
+                  const disableMerchantButton = m.isActive
+                    ? `<button class="small danger" onclick="disableMerchant('${m.id}')">Disable</button>`
+                    : `<button class="small" disabled>Disabled</button>`;
                   const actionCellHtml = canEditMerchants
-                    ? `<td><div class="action-buttons"><button class="small secondary" onclick="editMerchant('${m.id}')">Edit</button><button class="small danger" onclick="deleteMerchant('${m.id}')">Delete</button></div></td>`
+                    ? `<td><div class="action-buttons"><button class="small secondary" onclick="editMerchant('${m.id}')">Edit</button>${disableMerchantButton}</div></td>`
                     : '';
                   return (
                     `<tr>` +
@@ -2375,15 +2385,16 @@
           alert(err.message || 'Failed to load merchant details.');
         }
       };
-      window.deleteMerchant = async (id) => {
+      window.disableMerchant = async (id) => {
         if (!isSuperAdmin()) {
-          alert('Only superadmin can delete merchants.');
+          alert('Only superadmin can disable merchants.');
           return;
         }
-        if (!confirm('Delete this merchant? This action cannot be undone.')) return;
+        if (!confirm('Disable this merchant? History records will be preserved.')) return;
         try {
           await apiFetch('/admin/merchants/' + id, { method: 'DELETE' });
           await loadMerchants(pageState.merchants);
+          await loadAdminAccounts(pageState.adminAccounts);
         } catch (err) {
           alert(err.message);
         }
@@ -2400,12 +2411,12 @@
         }
         openAdminAccountEditModal(current);
       };
-      window.deleteAdminAccount = async (id) => {
+      window.disableAdminAccount = async (id) => {
         if (!isSuperAdmin()) {
-          alert('Only superadmin can delete admin accounts.');
+          alert('Only superadmin can disable admin accounts.');
           return;
         }
-        if (!confirm('Delete this limited admin account? This action cannot be undone.')) return;
+        if (!confirm('Disable this admin account? History records will be preserved.')) return;
         try {
           await apiFetch('/admin/accounts/' + id, { method: 'DELETE' });
           await loadAdminAccounts(pageState.adminAccounts);
@@ -2413,6 +2424,8 @@
           alert(err.message);
         }
       };
+      window.deleteMerchant = window.disableMerchant;
+      window.deleteAdminAccount = window.disableAdminAccount;
 
       // Transfers
       const loadTransfers = async (page = 0) => {
@@ -2485,6 +2498,23 @@
         return response.statusText || 'Request failed';
       };
 
+      const persistAuthToken = (nextToken) => {
+        const normalized =
+          typeof nextToken === 'string' ? nextToken.trim() : '';
+        if (!normalized) return;
+        token = normalized;
+        localStorage.setItem(tokenKey, normalized);
+      };
+
+      const syncAuthTokenFromResponse = (response) => {
+        const refreshed = response?.headers
+          ?.get(tokenRefreshHeader)
+          ?.trim();
+        if (refreshed) {
+          persistAuthToken(refreshed);
+        }
+      };
+
       const handleAuthFailure = (message) => {
         token = '';
         localStorage.removeItem(tokenKey);
@@ -2499,6 +2529,7 @@
         headers['Content-Type'] = 'application/json';
         if (token) headers['Authorization'] = 'Bearer ' + token;
         const response = await fetch(path, Object.assign({}, next, { headers }));
+        syncAuthTokenFromResponse(response);
         if (!response.ok) {
           const message = await parseErrorMessage(response);
           if (response.status === 401 || response.status === 403) {
@@ -2519,8 +2550,7 @@
           return false;
         }
 
-        token = data.accessToken;
-        localStorage.setItem(tokenKey, token);
+        persistAuthToken(data.accessToken);
         saveAdminInfo(data.user || null);
         setStatus(statusEl, successMessage || 'Login successful.');
         setAuthState(true);

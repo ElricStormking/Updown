@@ -4,7 +4,7 @@ import './style.css';
 import { HiLoScene } from './scenes/HiLoScene';
 import { initControls, setAuthFormLocked, setStatus } from './ui/domControls';
 import type { BetSide, DigitBetType } from './types';
-import { api } from './services/api';
+import { api, setAccessTokenRefreshListener } from './services/api';
 import { authenticateGameSocket, createGameSocket } from './services/socket';
 import { state, updateState, type TokenPlacement } from './state/gameState';
 import {
@@ -47,6 +47,20 @@ const getMerchantId = () =>
   readMerchantIdFromUrl() ||
   readMerchantIdFromStorage() ||
   '';
+
+let latestAccessToken = '';
+const rememberAccessToken = (accessToken: string) => {
+  const nextToken = accessToken.trim();
+  if (!nextToken) {
+    return;
+  }
+  latestAccessToken = nextToken;
+  if (state.token !== nextToken) {
+    updateState({ token: nextToken });
+  }
+};
+const resolveAccessToken = (fallbackToken: string) =>
+  latestAccessToken.trim() || fallbackToken;
 
 const decodeJwtPayload = (token: string): LaunchTokenPayload | null => {
   const parts = token.split('.');
@@ -333,9 +347,11 @@ const socket = createGameSocket(
       scene.setBalance(balance);
     },
     onBetPlaced: () => setStatus('Bet accepted via socket!'),
+    onToken: rememberAccessToken,
   },
   () => state.token,
 );
+setAccessTokenRefreshListener(rememberAccessToken);
 
 void bootstrapLaunchAuthFromUrl();
 
@@ -368,11 +384,13 @@ async function bootstrapLaunchAuthFromUrl() {
     return;
   }
 
-  const launchToken = (new URLSearchParams(window.location.search).get('accessToken') ?? '').trim();
+  let launchToken = (new URLSearchParams(window.location.search).get('accessToken') ?? '').trim();
   if (!launchToken) {
+    latestAccessToken = '';
     setAuthFormLocked(false);
     return;
   }
+  latestAccessToken = launchToken;
 
   const decoded = decodeJwtPayload(launchToken);
   const merchantId =
@@ -402,6 +420,7 @@ async function bootstrapLaunchAuthFromUrl() {
         merchantId,
         tokenPlacements: {},
       });
+      latestAccessToken = '';
       socket.disconnect();
       setAuthFormLocked(lockLaunchUrl);
       const blockedReason = launchSession.message?.trim();
@@ -421,6 +440,7 @@ async function bootstrapLaunchAuthFromUrl() {
       api.fetchGameConfig(launchToken, merchantId),
       api.fetchWallet(launchToken),
     ]);
+    launchToken = resolveAccessToken(launchToken);
     const tokenValues = normalizeTokenValues(config?.tokenValues);
     const selectedTokenValue = resolveSelectedTokenValue(
       state.selectedTokenValue,
@@ -457,6 +477,7 @@ async function bootstrapLaunchAuthFromUrl() {
       user: undefined,
       tokenPlacements: {},
     });
+    latestAccessToken = '';
     socket.disconnect();
     clearLaunchTokenFromUrl();
     setAuthFormLocked(lockLaunchUrl);
@@ -472,10 +493,13 @@ async function bootstrapLaunchAuthFromUrl() {
 async function handleLogin(credentials: { account: string; password: string; merchantId: string }) {
   lastConfigRefreshRoundId = null;
   const { data: auth } = await api.login(credentials.account, credentials.password);
+  let accessToken = auth.accessToken;
+  latestAccessToken = accessToken;
   const { data: config } = await api.fetchGameConfig(
-    auth.accessToken,
+    accessToken,
     credentials.merchantId.trim(),
   );
+  accessToken = resolveAccessToken(accessToken);
   const merchantId =
     auth.user?.merchantId?.trim() ||
     credentials.merchantId.trim() ||
@@ -492,7 +516,7 @@ async function handleLogin(credentials: { account: string; password: string; mer
   );
 
   updateState({
-    token: auth.accessToken,
+    token: accessToken,
     user: auth.user,
     merchantId,
     config,
@@ -503,7 +527,7 @@ async function handleLogin(credentials: { account: string; password: string; mer
   scene.setResultDisplayDuration(COMPLETE_PHASE_DURATION_MS);
 
   await refreshPlayerData();
-  authenticateGameSocket(socket, auth.accessToken);
+  authenticateGameSocket(socket, accessToken);
 }
 
 async function refreshConfig(): Promise<boolean> {

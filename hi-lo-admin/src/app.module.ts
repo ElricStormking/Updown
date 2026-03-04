@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { APP_INTERCEPTOR } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { configuration } from './config/configuration';
 import { validateEnv } from './config/env.validation';
@@ -7,6 +8,7 @@ import { AuthModule } from './auth/auth.module';
 import { AdminModule } from './admin/admin.module';
 import { HealthController } from './health.controller';
 import { GameConfigProxyController } from './config/game-config-proxy.controller';
+import { SlidingJwtInterceptor } from './auth/interceptors/sliding-jwt.interceptor';
 
 @Module({
   imports: [
@@ -29,5 +31,11 @@ import { GameConfigProxyController } from './config/game-config-proxy.controller
     AdminModule,
   ],
   controllers: [HealthController, GameConfigProxyController],
+  providers: [
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: SlidingJwtInterceptor,
+    },
+  ],
 })
 export class AppModule {}

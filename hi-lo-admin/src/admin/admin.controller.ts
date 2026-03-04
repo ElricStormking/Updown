@@ -223,14 +223,14 @@ export class AdminController {
 
   @UseGuards(JwtAuthGuard, AdminGuard)
   @Delete('merchants/:id')
-  deleteMerchant(
+  disableMerchant(
     @Param('id') id: string,
     @Req() request?: { adminContext?: AdminContext },
   ) {
     if (!request?.adminContext?.isSuperAdmin) {
-      throw new ForbiddenException('Only superadmin can delete merchants');
+      throw new ForbiddenException('Only superadmin can disable merchants');
     }
-    return this.dataService.deleteMerchant(id);
+    return this.dataService.disableMerchant(id);
   }
 
   // Financial Management - Transfers
@@ -327,14 +327,14 @@ export class AdminController {
 
   @UseGuards(JwtAuthGuard, AdminGuard)
   @Delete('accounts/:id')
-  deleteAdminAccount(
+  disableAdminAccount(
     @Param('id') id: string,
     @Req() request?: { adminContext?: AdminContext },
   ) {
     if (!request?.adminContext?.isSuperAdmin) {
-      throw new ForbiddenException('Only superadmin can delete admin accounts');
+      throw new ForbiddenException('Only superadmin can disable admin accounts');
     }
-    return this.accountsService.deleteAccount(
+    return this.accountsService.disableAccount(
       id,
       this.resolveAdminScope(request),
     );

@@ -26,6 +26,7 @@ async function bootstrap() {
   app.enableCors({
     origin: frontendOrigin,
     credentials: true,
+    exposedHeaders: ['x-access-token'],
   });
 
   await app.listen(port);

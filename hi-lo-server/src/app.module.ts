@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { APP_INTERCEPTOR } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -14,6 +15,7 @@ import { BinanceModule } from './binance/binance.module';
 import { GameModule } from './game/game.module';
 import { BetsModule } from './bets/bets.module';
 import { HistoryModule } from './history/history.module';
+import { SlidingJwtInterceptor } from './auth/interceptors/sliding-jwt.interceptor';
 
 @Module({
   imports: [
@@ -36,6 +38,12 @@ import { HistoryModule } from './history/history.module';
     GameModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: SlidingJwtInterceptor,
+    },
+  ],
 })
 export class AppModule {}

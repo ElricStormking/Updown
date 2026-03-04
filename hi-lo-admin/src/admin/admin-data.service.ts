@@ -551,70 +551,35 @@ export class AdminDataService {
     };
   }
 
-  async deleteMerchant(id: string) {
+  async disableMerchant(id: string) {
     const merchant = await this.prisma.merchant.findUnique({ where: { id } });
     if (!merchant) {
       throw new NotFoundException('Merchant not found');
     }
     if (merchant.merchantId === 'hotcoregm') {
       throw new BadRequestException(
-        'Cannot delete reserved merchantId=hotcoregm',
+        'Cannot disable reserved merchantId=hotcoregm',
       );
     }
-
-    const [userCount, transferCount, launchSessionCount] =
-      await this.prisma.$transaction([
-        this.prisma.user.count({ where: { merchantId: merchant.merchantId } }),
-        this.prisma.transfer.count({
-          where: { merchantId: merchant.merchantId },
-        }),
-        this.prisma.merchantLaunchSession.count({
-          where: { merchantId: merchant.merchantId },
-        }),
-      ]);
-
-    if (userCount > 0 || transferCount > 0 || launchSessionCount > 0) {
-      throw new BadRequestException(
-        `Cannot delete merchant ${merchant.merchantId} with related records (users=${userCount}, transfers=${transferCount}, sessions=${launchSessionCount}). Set merchant inactive instead.`,
-      );
-    }
-
-    const linkedAdmins = await this.prisma.adminAccount.findMany({
-      where: {
+    if (!merchant.isActive) {
+      return {
+        disabled: true,
+        alreadyDisabled: true,
+        id: merchant.id,
         merchantId: merchant.merchantId,
-      },
-      select: {
-        id: true,
-      },
-    });
-    const linkedAdminIds = linkedAdmins.map((item) => item.id);
+      };
+    }
 
-    await this.prisma.$transaction(async (tx) => {
-      if (linkedAdminIds.length > 0) {
-        await tx.adminLoginRecord.deleteMany({
-          where: {
-            adminId: { in: linkedAdminIds },
-          },
-        });
-        await tx.adminAccount.deleteMany({
-          where: {
-            id: { in: linkedAdminIds },
-          },
-        });
-      }
-      await tx.gameConfig.deleteMany({
-        where: {
-          merchantId: merchant.merchantId,
-        },
-      });
-      await tx.merchant.delete({ where: { id: merchant.id } });
+    const updated = await this.prisma.merchant.update({
+      where: { id: merchant.id },
+      data: { isActive: false },
     });
 
     return {
-      deleted: true,
-      id: merchant.id,
-      merchantId: merchant.merchantId,
-      deletedAdminAccounts: linkedAdminIds.length,
+      disabled: true,
+      alreadyDisabled: false,
+      id: updated.id,
+      merchantId: updated.merchantId,
     };
   }
 

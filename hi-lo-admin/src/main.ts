@@ -21,6 +21,7 @@ async function bootstrap() {
   app.enableCors({
     origin: configService.getOrThrow<string>('frontend.origin'),
     credentials: true,
+    exposedHeaders: ['x-access-token'],
   });
 
   const port = configService.getOrThrow<number>('api.port', { infer: true });
@@ -28,4 +29,3 @@ async function bootstrap() {
 }
 
 void bootstrap();
-

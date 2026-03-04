@@ -49,6 +49,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       merchantId,
       launchSessionId: payload.launchSessionId,
       launchMode: payload.launchMode,
+      tokenIat: payload.iat,
+      tokenExp: payload.exp,
     };
   }
 }

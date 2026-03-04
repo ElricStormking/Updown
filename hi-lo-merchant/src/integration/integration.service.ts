@@ -35,6 +35,7 @@ import {
   LaunchBetLimitsDto,
 } from './dto';
 import { LaunchSessionService } from './launch-session.service';
+import { MerchantCallbackService } from './merchant-callback.service';
 
 const DIGIT_BET_LIMIT_RULE_KEYS = [
   'smallBig',
@@ -70,6 +71,7 @@ export class IntegrationService {
     private readonly configService: ConfigService,
     private readonly gameConfigService: GameConfigService,
     private readonly launchSessionService: LaunchSessionService,
+    private readonly merchantCallbackService: MerchantCallbackService,
   ) {}
 
   async createAccount(
@@ -605,12 +607,11 @@ export class IntegrationService {
         merchant.merchantId,
       );
 
-      let launchSessionId: string | undefined;
       let launchMode: 'legacy' | 'callback' = 'legacy';
+      const normalizedPlayerId = playerId?.trim() ?? '';
+      const normalizedMerchantAccessToken = merchantAccessToken?.trim() ?? '';
 
       if (merchant.callbackEnabled) {
-        const normalizedPlayerId = playerId?.trim() ?? '';
-        const normalizedMerchantAccessToken = merchantAccessToken?.trim() ?? '';
         if (!normalizedPlayerId || !normalizedMerchantAccessToken) {
           return IntegrationResponseDto.error(
             IntegrationErrorCodes.CALLBACK_FIELDS_REQUIRED,
@@ -630,18 +631,46 @@ export class IntegrationService {
             ],
           );
         }
+        launchMode = 'callback';
+      }
 
-        const launchSession =
-          await this.launchSessionService.createOrReplaceActiveSession({
+      // Always bind launch URLs to a session so a newer launch invalidates older links.
+      const launchSession = await this.launchSessionService.createOrReplaceActiveSession({
+        merchantId: merchant.merchantId,
+        userId: user.id,
+        account,
+        playerId: normalizedPlayerId || account,
+        merchantAccessToken:
+          normalizedMerchantAccessToken ||
+          `legacy:${merchant.merchantId}:${user.id}:${timestamp}`,
+        currency: merchant.currency,
+      });
+      const launchSessionId = launchSession.id;
+
+      if (launchMode === 'callback') {
+        const callbackResult = await this.merchantCallbackService.sendLoginPlayer(
+          merchant,
+          launchSession,
+        );
+
+        if (!callbackResult.success) {
+          await this.launchSessionService.markLoginFailed(launchSessionId);
+          return IntegrationResponseDto.error(
+            IntegrationErrorCodes.LOGIN_PLAYER_CALLBACK_FAILED,
+            callbackResult.errorMessage ||
+              IntegrationErrorMessages[
+                IntegrationErrorCodes.LOGIN_PLAYER_CALLBACK_FAILED
+              ],
+          );
+        }
+
+        await this.launchSessionService.markLoginVerified(launchSessionId);
+        await this.prisma.playerLogin.create({
+          data: {
             merchantId: merchant.merchantId,
             userId: user.id,
-            account,
-            playerId: normalizedPlayerId,
-            merchantAccessToken: normalizedMerchantAccessToken,
-            currency: merchant.currency,
-          });
-        launchSessionId = launchSession.id;
-        launchMode = 'callback';
+          },
+        });
       }
 
       const payload = {

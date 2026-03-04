@@ -159,10 +159,10 @@ export class GameGateway
           ? payload.launchSessionId.trim()
           : '';
       const launchMode = payload.launchMode ?? 'legacy';
-      if (launchMode === 'callback') {
-        if (!launchSessionId) {
-          throw new UnauthorizedException('Missing launch session ID');
-        }
+      if (launchMode === 'callback' && !launchSessionId) {
+        throw new UnauthorizedException('Missing launch session ID');
+      }
+      if (launchSessionId) {
         const session = await this.launchSessionService.getLaunchSessionForUser(
           launchSessionId,
           user.id,
@@ -171,7 +171,7 @@ export class GameGateway
         if (!session || session.status !== LaunchSessionStatus.ACTIVE) {
           throw new UnauthorizedException('Launch session is not active');
         }
-        if (session.loginStatus !== 'VERIFIED') {
+        if (launchMode === 'callback' && session.loginStatus !== 'VERIFIED') {
           throw new UnauthorizedException(
             'Launch verification required. Call /integration/launch/session/start first.',
           );
@@ -179,15 +179,26 @@ export class GameGateway
 
         await this.launchSessionService.markOnline(launchSessionId);
         this.incrementLaunchSessionConnection(launchSessionId);
-        client.data.launchSessionId = launchSessionId;
       }
 
       client.data.userId = user.id;
+      client.data.account = payload.account;
+      client.data.merchantId = user.merchantId;
+      client.data.launchMode = launchMode;
+      client.data.launchSessionId = launchSessionId || undefined;
       await client.join(this.getUserRoom(user.id));
       const wallet = await this.walletService.getOrCreateWallet(user.id);
 
       client.emit('balance:update', {
         balance: Number(wallet.balance),
+      });
+      this.emitRefreshedSocketToken(client, {
+        sub: user.id,
+        account: payload.account,
+        type: 'user',
+        merchantId: user.merchantId,
+        launchSessionId: launchSessionId || undefined,
+        launchMode,
       });
 
       return {
@@ -235,6 +246,7 @@ export class GameGateway
         .emit('balance:update', {
           balance: Number(result.walletBalance),
         });
+      this.emitRefreshedSocketTokenFromClientState(client);
 
       return { status: 'ok', bet: serializedBet };
     } catch (error) {
@@ -257,6 +269,42 @@ export class GameGateway
   private async verifyToken(token: string) {
     const secret = this.configService.getOrThrow<string>('auth.jwtSecret');
     return this.jwtService.verifyAsync<JwtPayload>(token, { secret });
+  }
+
+  private emitRefreshedSocketTokenFromClientState(client: Socket) {
+    const userId =
+      typeof client.data.userId === 'string' ? client.data.userId.trim() : '';
+    const account =
+      typeof client.data.account === 'string' ? client.data.account.trim() : '';
+    const merchantId =
+      typeof client.data.merchantId === 'string'
+        ? client.data.merchantId.trim()
+        : '';
+    if (!userId || !account || !merchantId) {
+      return;
+    }
+
+    const launchSessionId =
+      typeof client.data.launchSessionId === 'string'
+        ? client.data.launchSessionId.trim()
+        : '';
+    const launchMode = client.data.launchMode === 'callback' ? 'callback' : 'legacy';
+    this.emitRefreshedSocketToken(client, {
+      sub: userId,
+      account,
+      type: 'user',
+      merchantId,
+      launchSessionId: launchSessionId || undefined,
+      launchMode,
+    });
+  }
+
+  private emitRefreshedSocketToken(client: Socket, payload: JwtPayload) {
+    const secret = this.configService.getOrThrow<string>('auth.jwtSecret');
+    const expiresIn = (this.configService.get<string>('auth.jwtExpiresIn') ??
+      '1h') as any;
+    const accessToken = this.jwtService.sign(payload, { secret, expiresIn });
+    client.emit('auth:token', { accessToken });
   }
 
   private incrementLaunchSessionConnection(sessionId: string) {

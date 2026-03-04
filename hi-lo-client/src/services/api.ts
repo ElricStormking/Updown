@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios, { type AxiosInstance } from 'axios';
 import type {
   AuthResponse,
   BetHistoryItem,
@@ -12,6 +12,11 @@ import type {
 
 const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1']);
 const hasWindow = typeof window !== 'undefined';
+const TOKEN_REFRESH_HEADER = 'x-access-token';
+
+type AccessTokenRefreshListener = (accessToken: string) => void;
+
+let accessTokenRefreshListener: AccessTokenRefreshListener | undefined;
 
 const trimTrailingSlash = (value: string) => value.replace(/\/+$/, '');
 
@@ -50,11 +55,53 @@ const integrationClient = axios.create({
   withCredentials: true,
 });
 
+const extractHeaderString = (headers: unknown, name: string) => {
+  if (!headers || typeof headers !== 'object') {
+    return '';
+  }
+
+  const candidate =
+    typeof (headers as { get?: (key: string) => unknown }).get === 'function'
+      ? (headers as { get: (key: string) => unknown }).get(name)
+      : (headers as Record<string, unknown>)[name];
+
+  if (typeof candidate === 'string') {
+    return candidate.trim();
+  }
+  if (Array.isArray(candidate) && typeof candidate[0] === 'string') {
+    return candidate[0].trim();
+  }
+  return '';
+};
+
+const emitAccessTokenRefreshIfPresent = (headers: unknown) => {
+  const refreshedToken = extractHeaderString(headers, TOKEN_REFRESH_HEADER);
+  if (refreshedToken) {
+    accessTokenRefreshListener?.(refreshedToken);
+  }
+};
+
+const attachAccessTokenRefreshInterceptor = (client: AxiosInstance) => {
+  client.interceptors.response.use((response) => {
+    emitAccessTokenRefreshIfPresent(response.headers);
+    return response;
+  });
+};
+
+attachAccessTokenRefreshInterceptor(gameClient);
+attachAccessTokenRefreshInterceptor(integrationClient);
+
 const authHeader = (token: string) => ({
   headers: {
     Authorization: `Bearer ${token}`,
   },
 });
+
+export const setAccessTokenRefreshListener = (
+  listener?: AccessTokenRefreshListener,
+) => {
+  accessTokenRefreshListener = listener;
+};
 
 export const api = {
   login: (account: string, password: string) =>

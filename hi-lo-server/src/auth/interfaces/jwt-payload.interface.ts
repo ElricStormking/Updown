@@ -5,4 +5,6 @@ export interface JwtPayload {
   merchantId?: string;
   launchSessionId?: string;
   launchMode?: 'legacy' | 'callback';
+  iat?: number;
+  exp?: number;
 }
