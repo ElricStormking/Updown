@@ -13,6 +13,9 @@ JWT_EXPIRES_IN=1h
 PASSWORD_SALT_ROUNDS=12
 # Admin allowlist (comma-separated account identifiers)
 ADMIN_ACCOUNTS=
+# Default merchant seeded into Merchant table and assigned to base users
+SEED_MERCHANT_ID=TEST_MERCHANT
+SEED_MERCHANT_NAME=Test Casino
 # Account identifier used as login (was email)
 SEED_USER_ACCOUNT=demo_account
 SEED_USER_PASSWORD=changeme

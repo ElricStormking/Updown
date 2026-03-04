@@ -295,7 +295,14 @@ export class BetsService {
         where: { id: userId },
         select: { merchantId: true },
       });
-      const merchantId = user?.merchantId ?? null;
+      if (!user) {
+        this.logger.warn(
+          `Slip commit skipped for missing user ${userId} round ${roundId}`,
+        );
+        await this.clearSlip(userId, roundId);
+        continue;
+      }
+      const merchantId = user.merchantId;
       const config = this.resolveConfigForMerchant(configLookup, merchantId);
 
       try {

@@ -113,6 +113,7 @@ export interface MerchantResponseItem {
   merchantId: string;
   name: string;
   hashKeyMasked: string;
+  hashKey?: string;
   currency: string;
   callbackEnabled: boolean;
   loginPlayerCallbackUrl: string | null;

@@ -4,7 +4,7 @@ const prisma = new PrismaClient();
 
 const formatDate = (value: Date) => value.toISOString();
 
-const printRow = (value: {
+type AuditUserRow = {
   id: string;
   email: string;
   merchantId: string | null;
@@ -12,7 +12,9 @@ const printRow = (value: {
   status: string;
   createdAt: Date;
   updatedAt: Date;
-}) => {
+};
+
+const printRow = (value: AuditUserRow) => {
   console.log(
     [
       value.id,
@@ -27,21 +29,19 @@ const printRow = (value: {
 };
 
 async function main() {
-  const users = await prisma.user.findMany({
-    where: {
-      OR: [{ merchantId: null }, { merchantId: '' }],
-    },
-    select: {
-      id: true,
-      email: true,
-      merchantId: true,
-      merchantAccount: true,
-      status: true,
-      createdAt: true,
-      updatedAt: true,
-    },
-    orderBy: { createdAt: 'asc' },
-  });
+  const users = await prisma.$queryRaw<AuditUserRow[]>`
+    SELECT
+      "id",
+      "email",
+      "merchantId",
+      "merchantAccount",
+      "status",
+      "createdAt",
+      "updatedAt"
+    FROM "User"
+    WHERE "merchantId" IS NULL OR "merchantId" = ''
+    ORDER BY "createdAt" ASC
+  `;
 
   if (!users.length) {
     console.log('No users found with null/empty merchantId.');

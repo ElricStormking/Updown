@@ -198,6 +198,7 @@ export class AdminController {
     return this.dataService.getMerchantById(
       id,
       this.resolveMerchantScope(request),
+      request?.adminContext?.isSuperAdmin ?? false,
     );
   }
 

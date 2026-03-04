@@ -2,9 +2,17 @@ import { PrismaClient, Prisma } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
+const DEFAULT_SEED_MERCHANT_ID = process.env.SEED_MERCHANT_ID ?? 'TEST_MERCHANT';
 
-async function seedTestMerchant() {
-  const merchantId = process.env.SEED_MERCHANT_ID ?? 'TEST_MERCHANT';
+function getSeedMerchantId(): string {
+  const merchantId = DEFAULT_SEED_MERCHANT_ID.trim();
+  if (!merchantId) {
+    throw new Error('SEED_MERCHANT_ID must not be empty');
+  }
+  return merchantId;
+}
+
+async function seedTestMerchant(merchantId: string) {
   const merchantName = process.env.SEED_MERCHANT_NAME ?? 'Test Casino';
   const hashKey = process.env.SEED_MERCHANT_HASH_KEY ?? 'dGVzdGhhc2hrZXkxMjM0NTY3ODkwYWI=';
 
@@ -44,6 +52,7 @@ async function seedDemoUser() {
   const account = process.env.SEED_USER_ACCOUNT ?? 'demo_account';
   const password = process.env.SEED_USER_PASSWORD ?? 'changeme';
   const saltRounds = Number(process.env.PASSWORD_SALT_ROUNDS ?? 12);
+  const merchantId = getSeedMerchantId();
 
   const passwordHash = await bcrypt.hash(password, saltRounds);
 
@@ -54,10 +63,14 @@ async function seedDemoUser() {
     where: { email: account },
     update: {
       password: passwordHash,
+      merchantId,
+      merchantAccount: account,
     },
     create: {
       email: account,
       password: passwordHash,
+      merchantId,
+      merchantAccount: account,
       wallet: {
         create: {
           balance: balanceDecimal,
@@ -81,6 +94,7 @@ async function seedAdminUser() {
   const account = process.env.SEED_ADMIN_ACCOUNT ?? 'design';
   const password = process.env.SEED_ADMIN_PASSWORD ?? 'design1234';
   const saltRounds = Number(process.env.PASSWORD_SALT_ROUNDS ?? 12);
+  const merchantId = getSeedMerchantId();
 
   const passwordHash = await bcrypt.hash(password, saltRounds);
 
@@ -88,10 +102,14 @@ async function seedAdminUser() {
     where: { email: account },
     update: {
       password: passwordHash,
+      merchantId,
+      merchantAccount: account,
     },
     create: {
       email: account,
       password: passwordHash,
+      merchantId,
+      merchantAccount: account,
       wallet: {
         create: {
           balance: new Prisma.Decimal(0),
@@ -160,6 +178,8 @@ async function seedTestPlayerTopUp() {
   const password = process.env.SEED_TESTPLAYER_PASSWORD ?? 'changeme';
   const saltRounds = Number(process.env.PASSWORD_SALT_ROUNDS ?? 12);
   const topUpAmount = new Prisma.Decimal(process.env.SEED_TESTPLAYER_TOPUP ?? '1000000');
+  const merchantId = getSeedMerchantId();
+  const passwordHash = await bcrypt.hash(password, saltRounds);
 
   const existing = await prisma.user.findUnique({
     where: { email: account },
@@ -167,6 +187,15 @@ async function seedTestPlayerTopUp() {
   });
 
   if (existing) {
+    await prisma.user.update({
+      where: { id: existing.id },
+      data: {
+        password: passwordHash,
+        merchantId,
+        merchantAccount: account,
+      },
+    });
+
     if (existing.wallet) {
       const updatedWallet = await prisma.wallet.update({
         where: { userId: existing.id },
@@ -189,11 +218,12 @@ async function seedTestPlayerTopUp() {
     return existing;
   }
 
-  const passwordHash = await bcrypt.hash(password, saltRounds);
   const user = await prisma.user.create({
     data: {
       email: account,
       password: passwordHash,
+      merchantId,
+      merchantAccount: account,
       wallet: {
         create: {
           balance: topUpAmount,
@@ -307,7 +337,8 @@ async function seedQaBannedPlayer() {
 }
 
 async function main() {
-  await seedTestMerchant();
+  const merchantId = getSeedMerchantId();
+  await seedTestMerchant(merchantId);
   await seedDemoUser();
   await seedAdminUser();
   await seedQaAdminAccount();

@@ -43,6 +43,8 @@ Admin APIs/UI and merchant integration APIs are now split into separate services
 | `SEED_USER_ACCOUNT` | Seed user login | `demo_account` |
 | `SEED_USER_PASSWORD` | Seed user password | `changeme` |
 | `SEED_USER_BALANCE` | Seed wallet balance | `1000` |
+| `SEED_MERCHANT_ID` | Default seed merchant ID for base users | `TEST_MERCHANT` |
+| `SEED_MERCHANT_NAME` | Default seed merchant display name | `Test Casino` |
 | `ADMIN_ACCOUNTS` | Comma-separated admin accounts for `/config/game` | `designer1,designer2` |
 | `PLAYER_BET_HISTORY_LIMIT` | Bets returned from `/history/bets` | `100` |
 | `ROUND_HISTORY_LIMIT` | Rounds returned from `/history/rounds` | `100` |
@@ -69,8 +71,8 @@ npm run start        # single run
 npm run lint         # eslint + prettier
 npm run test         # unit tests
 npm run test:e2e     # e2e
-npm run prisma:migrate -- --name init   # create + apply migration
-npm run prisma:deploy                   # run migrations in CI/prod
+npm run prisma:migrate:dev -- --name init # create + apply migration (dev)
+npm run prisma:migrate                    # apply checked-in migrations (CI/prod/new server)
 npm run db:seed                         # seed demo wallet/user
 ```
 

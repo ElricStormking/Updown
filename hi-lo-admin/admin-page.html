@@ -1252,7 +1252,7 @@
             </label>
             <label>LoginPlayer Callback URL<input id="merchant-edit-login-callback-url" type="url" placeholder="https://merchant.example.com/login-player" /></label>
             <label>UpdateBalance Callback URL<input id="merchant-edit-update-callback-url" type="url" placeholder="https://merchant.example.com/update-balance" /></label>
-            <label>Merchant Hash Key (leave blank to keep current)<input id="merchant-edit-hash-key" type="text" minlength="8" /></label>
+            <label>Merchant Hash Key<input id="merchant-edit-hash-key" type="text" minlength="8" /></label>
             <label>Integration Whitelist IPs (comma separated)<input id="merchant-edit-integration-ips" type="text" placeholder="e.g. 203.0.113.10,203.0.113.11" required /></label>
             <label>Active<select id="merchant-edit-active"><option value="true">Active</option><option value="false">Inactive</option></select></label>
           </div>
@@ -1617,7 +1617,7 @@
         }
         syncMerchantEditCallbackFields();
         if (merchantEditHashKeyInput) {
-          merchantEditHashKeyInput.value = '';
+          merchantEditHashKeyInput.value = merchant.hashKey || '';
         }
         if (merchantEditIntegrationIpsInput) {
           const ips = Array.isArray(merchant.integrationAllowedIps)
@@ -2368,12 +2368,12 @@
           alert('Only superadmin can edit merchant information.');
           return;
         }
-        const current = merchantItemsById.get(id);
-        if (!current) {
-          alert('Merchant not found.');
-          return;
+        try {
+          const detail = await apiFetch('/admin/merchants/' + id);
+          openMerchantEditModal(detail);
+        } catch (err) {
+          alert(err.message || 'Failed to load merchant details.');
         }
-        openMerchantEditModal(current);
       };
       window.deleteMerchant = async (id) => {
         if (!isSuperAdmin()) {

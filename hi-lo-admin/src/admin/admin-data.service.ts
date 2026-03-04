@@ -525,7 +525,11 @@ export class AdminDataService {
     };
   }
 
-  async getMerchantById(id: string, merchantScope?: string) {
+  async getMerchantById(
+    id: string,
+    merchantScope?: string,
+    includeHashKey = false,
+  ) {
     const merchant = await this.prisma.merchant.findUnique({ where: { id } });
     if (!merchant || (merchantScope && merchant.merchantId !== merchantScope)) {
       throw new NotFoundException('Merchant not found');
@@ -535,6 +539,7 @@ export class AdminDataService {
       merchantId: merchant.merchantId,
       name: merchant.name,
       hashKeyMasked: maskHashKey(merchant.hashKey),
+      ...(includeHashKey ? { hashKey: merchant.hashKey } : {}),
       currency: merchant.currency,
       callbackEnabled: merchant.callbackEnabled,
       loginPlayerCallbackUrl: merchant.loginPlayerCallbackUrl,
