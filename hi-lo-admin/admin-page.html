@@ -281,6 +281,18 @@
         box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.16);
         background: #0f1b2f;
       }
+      .input-action-row {
+        display: flex;
+        align-items: center;
+        gap: 0.55rem;
+      }
+      .input-action-row input {
+        flex: 1;
+        min-width: 0;
+      }
+      .input-action-row button {
+        white-space: nowrap;
+      }
       .bonus-mode-toggle {
         background: rgba(56, 189, 248, 0.08);
         border: 1px solid rgba(56, 189, 248, 0.35);
@@ -1220,7 +1232,27 @@
             </label>
             <label>LoginPlayer Callback URL<input id="merchant-admin-login-callback-url" type="url" placeholder="https://merchant.example.com/login-player" /></label>
             <label>UpdateBalance Callback URL<input id="merchant-admin-update-callback-url" type="url" placeholder="https://merchant.example.com/update-balance" /></label>
-            <label>Merchant Hash Key<input id="merchant-admin-hash-key" type="text" minlength="8" required /></label>
+            <label>
+              Merchant Hash Key
+              <div class="input-action-row">
+                <input
+                  id="merchant-admin-hash-key"
+                  type="text"
+                  minlength="32"
+                  maxlength="32"
+                  autocomplete="off"
+                  required
+                />
+                <button
+                  id="merchant-admin-generate-hash-key"
+                  class="secondary small"
+                  type="button"
+                  disabled
+                >
+                  Generate
+                </button>
+              </div>
+            </label>
             <label>Integration Whitelist IPs (comma separated)<input id="merchant-admin-integration-ips" type="text" placeholder="e.g. 203.0.113.10,203.0.113.11" required /></label>
             <label>Admin Account<input id="merchant-admin-account" type="text" required /></label>
             <label>Admin Password<input id="merchant-admin-password" type="password" minlength="6" required /></label>
@@ -1345,6 +1377,9 @@
       const merchantAdminLoginCallbackUrlInput = $('#merchant-admin-login-callback-url');
       const merchantAdminUpdateCallbackUrlInput = $('#merchant-admin-update-callback-url');
       const merchantAdminHashKeyInput = $('#merchant-admin-hash-key');
+      const merchantAdminGenerateHashKeyButton = $(
+        '#merchant-admin-generate-hash-key',
+      );
       const merchantAdminIntegrationIpsInput = $('#merchant-admin-integration-ips');
       const merchantAdminAccountInput = $('#merchant-admin-account');
       const merchantAdminPasswordInput = $('#merchant-admin-password');
@@ -1528,6 +1563,69 @@
         }
       };
 
+      const isValidMerchantHashKey = (value) =>
+        /^(?:[A-Za-z0-9+/]{32}|[A-Za-z0-9+/]{31}=|[A-Za-z0-9+/]{30}==)$/.test(
+          value,
+        );
+
+      const generateMerchantHashKey = () => {
+        const bytes = new Uint8Array(24);
+        if (window.crypto?.getRandomValues) {
+          window.crypto.getRandomValues(bytes);
+        } else {
+          for (let idx = 0; idx < bytes.length; idx += 1) {
+            bytes[idx] = Math.floor(Math.random() * 256);
+          }
+        }
+        let binary = '';
+        for (const byte of bytes) {
+          binary += String.fromCharCode(byte);
+        }
+        return btoa(binary);
+      };
+
+      const canGenerateMerchantHashKey = () => {
+        const merchantId = merchantAdminMerchantIdInput?.value.trim() || '';
+        const name = merchantAdminMerchantNameInput?.value.trim() || '';
+        const currency = merchantAdminCurrencyInput?.value.trim() || '';
+        const callbackEnabled = merchantAdminCallbackEnabledInput?.value === 'true';
+        const loginPlayerCallbackUrl =
+          merchantAdminLoginCallbackUrlInput?.value.trim() || '';
+        const updateBalanceCallbackUrl =
+          merchantAdminUpdateCallbackUrlInput?.value.trim() || '';
+        const integrationIpsRaw = merchantAdminIntegrationIpsInput?.value.trim() || '';
+
+        if (!merchantId || !name || !currency || !integrationIpsRaw) {
+          return false;
+        }
+        if (
+          callbackEnabled &&
+          (!loginPlayerCallbackUrl || !updateBalanceCallbackUrl)
+        ) {
+          return false;
+        }
+        if (loginPlayerCallbackUrl && !isValidHttpUrl(loginPlayerCallbackUrl)) {
+          return false;
+        }
+        if (
+          updateBalanceCallbackUrl &&
+          !isValidHttpUrl(updateBalanceCallbackUrl)
+        ) {
+          return false;
+        }
+        const integrationAllowedIps = integrationIpsRaw
+          .split(',')
+          .map((ip) => ip.trim())
+          .filter(Boolean);
+        return integrationAllowedIps.length > 0;
+      };
+
+      const syncMerchantAdminHashKeyGenerator = () => {
+        if (!merchantAdminGenerateHashKeyButton) return;
+        merchantAdminGenerateHashKeyButton.disabled =
+          !canGenerateMerchantHashKey();
+      };
+
       const syncMerchantAdminCallbackFields = () => {
         const enabled = merchantAdminCallbackEnabledInput?.value === 'true';
         if (merchantAdminLoginCallbackUrlInput) {
@@ -1536,6 +1634,7 @@
         if (merchantAdminUpdateCallbackUrlInput) {
           merchantAdminUpdateCallbackUrlInput.required = enabled;
         }
+        syncMerchantAdminHashKeyGenerator();
       };
 
       const syncMerchantEditCallbackFields = () => {
@@ -1742,6 +1841,34 @@
         if (event.target === merchantAdminModal) {
           closeMerchantAdminModal();
         }
+      });
+      merchantAdminForm?.addEventListener(
+        'input',
+        syncMerchantAdminHashKeyGenerator,
+      );
+      merchantAdminForm?.addEventListener(
+        'change',
+        syncMerchantAdminHashKeyGenerator,
+      );
+      merchantAdminGenerateHashKeyButton?.addEventListener('click', () => {
+        if (!canGenerateMerchantHashKey()) {
+          setStatus(
+            merchantAdminStatus,
+            'Fill required merchant details before generating hash key.',
+            true,
+          );
+          return;
+        }
+        if (!merchantAdminHashKeyInput) {
+          return;
+        }
+        merchantAdminHashKeyInput.value = generateMerchantHashKey();
+        merchantAdminHashKeyInput.focus();
+        merchantAdminHashKeyInput.select();
+        setStatus(
+          merchantAdminStatus,
+          'Merchant hash key generated (32-character BASE64).',
+        );
       });
       merchantEditCancel?.addEventListener('click', () => {
         closeMerchantEditModal();
@@ -2176,8 +2303,12 @@
           setStatus(merchantAdminStatus, 'Please fill all fields.', true);
           return;
         }
-        if (hashKey.length < 8) {
-          setStatus(merchantAdminStatus, 'Merchant hash key must be at least 8 characters.', true);
+        if (!isValidMerchantHashKey(hashKey)) {
+          setStatus(
+            merchantAdminStatus,
+            'Merchant hash key must be a 32-character BASE64 string.',
+            true,
+          );
           return;
         }
         if (
