@@ -35,7 +35,6 @@ import {
   LaunchBetLimitsDto,
 } from './dto';
 import { LaunchSessionService } from './launch-session.service';
-import { MerchantCallbackService } from './merchant-callback.service';
 
 const DIGIT_BET_LIMIT_RULE_KEYS = [
   'smallBig',
@@ -71,7 +70,6 @@ export class IntegrationService {
     private readonly configService: ConfigService,
     private readonly gameConfigService: GameConfigService,
     private readonly launchSessionService: LaunchSessionService,
-    private readonly merchantCallbackService: MerchantCallbackService,
   ) {}
 
   async createAccount(
@@ -546,8 +544,8 @@ export class IntegrationService {
   async launchGame(
     merchant: Merchant,
     account: string,
-    playerId: string | undefined,
-    merchantAccessToken: string | undefined,
+    playerId: string,
+    merchantAccessToken: string,
     betLimits: LaunchBetLimitsDto,
     timestamp: number,
     hash: string,
@@ -607,31 +605,28 @@ export class IntegrationService {
         merchant.merchantId,
       );
 
-      let launchMode: 'legacy' | 'callback' = 'legacy';
       const normalizedPlayerId = playerId?.trim() ?? '';
       const normalizedMerchantAccessToken = merchantAccessToken?.trim() ?? '';
 
-      if (merchant.callbackEnabled) {
-        if (!normalizedPlayerId || !normalizedMerchantAccessToken) {
-          return IntegrationResponseDto.error(
-            IntegrationErrorCodes.CALLBACK_FIELDS_REQUIRED,
-            IntegrationErrorMessages[
-              IntegrationErrorCodes.CALLBACK_FIELDS_REQUIRED
-            ],
-          );
-        }
-        if (
-          !merchant.loginPlayerCallbackUrl ||
-          !merchant.updateBalanceCallbackUrl
-        ) {
-          return IntegrationResponseDto.error(
-            IntegrationErrorCodes.CALLBACK_MERCHANT_NOT_CONFIGURED,
-            IntegrationErrorMessages[
-              IntegrationErrorCodes.CALLBACK_MERCHANT_NOT_CONFIGURED
-            ],
-          );
-        }
-        launchMode = 'callback';
+      if (!normalizedPlayerId || !normalizedMerchantAccessToken) {
+        return IntegrationResponseDto.error(
+          IntegrationErrorCodes.CALLBACK_FIELDS_REQUIRED,
+          IntegrationErrorMessages[
+            IntegrationErrorCodes.CALLBACK_FIELDS_REQUIRED
+          ],
+        );
+      }
+      if (
+        !merchant.callbackEnabled ||
+        !merchant.loginPlayerCallbackUrl ||
+        !merchant.updateBalanceCallbackUrl
+      ) {
+        return IntegrationResponseDto.error(
+          IntegrationErrorCodes.CALLBACK_MERCHANT_NOT_CONFIGURED,
+          IntegrationErrorMessages[
+            IntegrationErrorCodes.CALLBACK_MERCHANT_NOT_CONFIGURED
+          ],
+        );
       }
 
       // Always bind launch URLs to a session so a newer launch invalidates older links.
@@ -639,46 +634,18 @@ export class IntegrationService {
         merchantId: merchant.merchantId,
         userId: user.id,
         account,
-        playerId: normalizedPlayerId || account,
-        merchantAccessToken:
-          normalizedMerchantAccessToken ||
-          `legacy:${merchant.merchantId}:${user.id}:${timestamp}`,
+        playerId: normalizedPlayerId,
+        merchantAccessToken: normalizedMerchantAccessToken,
         currency: merchant.currency,
       });
       const launchSessionId = launchSession.id;
-
-      if (launchMode === 'callback') {
-        const callbackResult = await this.merchantCallbackService.sendLoginPlayer(
-          merchant,
-          launchSession,
-        );
-
-        if (!callbackResult.success) {
-          await this.launchSessionService.markLoginFailed(launchSessionId);
-          return IntegrationResponseDto.error(
-            IntegrationErrorCodes.LOGIN_PLAYER_CALLBACK_FAILED,
-            callbackResult.errorMessage ||
-              IntegrationErrorMessages[
-                IntegrationErrorCodes.LOGIN_PLAYER_CALLBACK_FAILED
-              ],
-          );
-        }
-
-        await this.launchSessionService.markLoginVerified(launchSessionId);
-        await this.prisma.playerLogin.create({
-          data: {
-            merchantId: merchant.merchantId,
-            userId: user.id,
-          },
-        });
-      }
 
       const payload = {
         sub: user.id,
         account: user.merchantAccount ?? account,
         merchantId: merchant.merchantId,
         launchSessionId,
-        launchMode,
+        launchMode: 'callback' as const,
         type: 'user' as const,
       };
 

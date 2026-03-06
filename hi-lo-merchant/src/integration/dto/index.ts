@@ -7,7 +7,6 @@ export * from './get-bet-limit.dto';
 export * from './get-token-values.dto';
 export * from './launch-game.dto';
 export * from './all-transfer-out.dto';
-export * from './launch-session.dto';
 export * from './bet-limit-rules.dto';
 export * from './update-bet-limit.dto';
 export * from './update-token-values.dto';

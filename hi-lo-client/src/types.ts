@@ -70,7 +70,7 @@ export interface AuthResponse {
 
 export interface LaunchSessionStartResponse {
   ready: boolean;
-  mode: 'legacy' | 'callback';
+  mode: 'callback';
   code: number;
   message: string;
 }

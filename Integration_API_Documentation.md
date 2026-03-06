@@ -615,8 +615,8 @@ Generate an authenticated game URL for a player.
 |-----------|------|----------|-------------|
 | `merchantId` | string | Yes | Your merchant ID |
 | `account` | string | Yes | Player account identifier |
-| `playerId` | string | No (Yes for callback mode) | Merchant-side player ID used by callback APIs for merchant verification |
-| `accessToken` | string | No (Yes for callback mode) | Merchant-side access token used by callback APIs for merchant verification |
+| `playerId` | string | Yes | Merchant-side player ID used by callback APIs for merchant verification |
+| `accessToken` | string | Yes | Merchant-side access token used by callback APIs for merchant verification |
 | `betLimits` | object | Yes | Per-rule limit object with `minBetLimit` + `maxBetLimit` for all 7 rule groups. See [Launch betLimits Object](#launch-betlimits-object-platform-2026-02-25) |
 | `timestamp` | integer | Yes | Unix timestamp in seconds |
 | `hash` | string | Yes | Request signature |
@@ -626,15 +626,15 @@ Generate an authenticated game URL for a player.
 hash = SHA256(merchantId + "&" + account + "&" + timestamp + "&" + hashKey)
 ```
 
-Launch uses this signature regardless of callback mode or provided `betLimits`.
+Launch uses this signature regardless of provided `betLimits`.
 
 Runtime notes:
-- If merchant callback mode is enabled, `playerId` and `accessToken` are required and merchant callback URLs must be configured.
-- In callback mode, the game client must call `POST /integration/launch/session/start` with the launch JWT before entering game socket flow.
+- Launch is callback-only. `playerId`, `accessToken`, and merchant callback URLs are required.
+- The game client must call `POST /integration/launch/session/start` with the launch JWT before entering game socket flow.
 - `betLimits` is validated per rule during launch (`minBetLimit >= 0`, `maxBetLimit >= 0`, `maxBetLimit >= minBetLimit`) and persisted into merchant config for subsequent rounds.
 - Runtime derives global `minBetAmount` / `maxBetAmount` from provided per-rule limits.
 
-#### Request Example (Callback Mode with Platform Identity Fields)
+#### Request Example
 
 ```json
 {
@@ -1115,7 +1115,7 @@ Start callback-mode launch verification using the launch JWT from `Launch Game`.
 | Field | Type | Description |
 |-------|------|-------------|
 | `ready` | boolean | `true` when launch may proceed; `false` when blocked |
-| `mode` | string | `"legacy"` or `"callback"` |
+| `mode` | string | `"callback"` |
 | `code` | integer | Integration code (`0` on success; callback/session errors on failure) |
 | `message` | string | Failure reason for blocked launch |
 
@@ -1325,7 +1325,7 @@ class GameIntegration {
     return response.data;
   }
 
-  async launchGame(account, options = {}) {
+  async launchGame(account, options) {
     const timestamp = this.getTimestamp();
     const hash = this.generateSignature([
       this.merchantId,
@@ -1336,15 +1336,9 @@ class GameIntegration {
     const response = await axios.post(`${this.baseUrl}/integration/launch`, {
       merchantId: this.merchantId,
       account,
-      ...(options.playerId !== undefined
-        ? { playerId: options.playerId }
-        : {}),
-      ...(options.accessToken !== undefined
-        ? { accessToken: options.accessToken }
-        : {}),
-      ...(options.betLimits !== undefined
-        ? { betLimits: options.betLimits }
-        : {}),
+      playerId: options.playerId,
+      accessToken: options.accessToken,
+      betLimits: options.betLimits,
       timestamp,
       hash,
     });

@@ -158,9 +158,14 @@ export class GameGateway
         typeof payload.launchSessionId === 'string'
           ? payload.launchSessionId.trim()
           : '';
-      const launchMode = payload.launchMode ?? 'legacy';
+      const launchMode = payload.launchMode === 'callback' ? 'callback' : undefined;
       if (launchMode === 'callback' && !launchSessionId) {
         throw new UnauthorizedException('Missing launch session ID');
+      }
+      if (launchSessionId && launchMode !== 'callback') {
+        throw new UnauthorizedException(
+          'Launch token must use callback mode',
+        );
       }
       if (launchSessionId) {
         const session = await this.launchSessionService.getLaunchSessionForUser(
@@ -171,7 +176,7 @@ export class GameGateway
         if (!session || session.status !== LaunchSessionStatus.ACTIVE) {
           throw new UnauthorizedException('Launch session is not active');
         }
-        if (launchMode === 'callback' && session.loginStatus !== 'VERIFIED') {
+        if (session.loginStatus !== 'VERIFIED') {
           throw new UnauthorizedException(
             'Launch verification required. Call /integration/launch/session/start first.',
           );
@@ -288,7 +293,7 @@ export class GameGateway
       typeof client.data.launchSessionId === 'string'
         ? client.data.launchSessionId.trim()
         : '';
-    const launchMode = client.data.launchMode === 'callback' ? 'callback' : 'legacy';
+    const launchMode = client.data.launchMode === 'callback' ? 'callback' : undefined;
     this.emitRefreshedSocketToken(client, {
       sub: userId,
       account,

@@ -2,7 +2,6 @@ import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { IntegrationController } from './integration.controller';
-import { IntegrationLaunchSessionController } from './integration-launch-session.controller';
 import { IntegrationService } from './integration.service';
 import { MerchantAuthGuard } from './guards/merchant-auth.guard';
 import { PrismaModule } from '../prisma/prisma.module';
@@ -29,7 +28,7 @@ import { LaunchSessionOfflineService } from './launch-session-offline.service';
       }),
     }),
   ],
-  controllers: [IntegrationController, IntegrationLaunchSessionController],
+  controllers: [IntegrationController],
   providers: [
     IntegrationService,
     MerchantAuthGuard,

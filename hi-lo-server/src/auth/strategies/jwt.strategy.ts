@@ -2,7 +2,7 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
-import { UserStatus } from '@prisma/client';
+import { LaunchSessionStatus, UserStatus } from '@prisma/client';
 import { JwtPayload } from '../interfaces/jwt-payload.interface';
 import { PrismaService } from '../../prisma/prisma.service';
 
@@ -40,6 +40,28 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         throw new UnauthorizedException('Invalid token merchant context');
       }
       merchantId = user.merchantId;
+    }
+
+    if (payload.launchSessionId || payload.launchMode) {
+      if (payload.launchMode !== 'callback' || !payload.launchSessionId) {
+        throw new UnauthorizedException('Invalid launch session token');
+      }
+      const launchSession = await this.prisma.merchantLaunchSession.findUnique({
+        where: { id: payload.launchSessionId },
+        select: {
+          merchantId: true,
+          userId: true,
+          status: true,
+        },
+      });
+      if (
+        !launchSession ||
+        launchSession.userId !== payload.sub ||
+        launchSession.merchantId !== merchantId ||
+        launchSession.status !== LaunchSessionStatus.ACTIVE
+      ) {
+        throw new UnauthorizedException('Launch session is not active');
+      }
     }
 
     return {

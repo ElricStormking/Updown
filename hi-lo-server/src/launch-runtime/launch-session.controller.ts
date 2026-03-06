@@ -5,7 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { LaunchSessionService } from './launch-session.service';
 import { MerchantCallbackService } from './merchant-callback.service';
 
-type LaunchSessionMode = 'legacy' | 'callback';
+type LaunchSessionMode = 'callback';
 
 type LaunchSessionStartResponse = {
   ready: boolean;
@@ -64,10 +64,10 @@ export class LaunchSessionController {
 
     if (!launchSessionId || launchMode !== 'callback') {
       return {
-        ready: true,
-        mode: 'legacy',
-        code: LaunchSessionErrorCodes.SUCCESS,
-        message: '',
+        ready: false,
+        mode: 'callback',
+        code: LaunchSessionErrorCodes.LAUNCH_SESSION_NOT_FOUND,
+        message: 'Launch URL is missing callback session metadata',
       };
     }
 

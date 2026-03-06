@@ -43,7 +43,7 @@ export const IntegrationErrorMessages: Record<number, string> = {
   [IntegrationErrorCodes.INVALID_BET_AMOUNT_LIMIT]: 'Invalid bet amount limit',
   [IntegrationErrorCodes.INVALID_TOKEN_VALUES]: 'Invalid token values',
   [IntegrationErrorCodes.CALLBACK_FIELDS_REQUIRED]:
-    'Callback mode requires playerId and accessToken',
+    'Launch Game requires playerId and accessToken',
   [IntegrationErrorCodes.CALLBACK_MERCHANT_NOT_CONFIGURED]:
     'Merchant callback mode is not configured',
   [IntegrationErrorCodes.LAUNCH_SESSION_NOT_FOUND]: 'Launch session not found',

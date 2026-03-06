@@ -4,7 +4,7 @@ export interface JwtPayload {
   type?: 'user' | 'admin';
   merchantId?: string;
   launchSessionId?: string;
-  launchMode?: 'legacy' | 'callback';
+  launchMode?: 'callback';
   iat?: number;
   exp?: number;
 }

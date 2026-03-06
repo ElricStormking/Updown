@@ -3,10 +3,8 @@ import {
   IsDefined,
   IsNotEmpty,
   IsNumber,
-  IsOptional,
   IsString,
   Min,
-  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 
@@ -68,17 +66,13 @@ export class LaunchGameDto {
   @IsNotEmpty()
   account: string;
 
-  @IsOptional()
   @IsString()
-  @ValidateIf((o) => o.playerId !== undefined)
   @IsNotEmpty()
-  playerId?: string;
+  playerId: string;
 
-  @IsOptional()
   @IsString()
-  @ValidateIf((o) => o.accessToken !== undefined)
   @IsNotEmpty()
-  accessToken?: string;
+  accessToken: string;
 
   @IsDefined()
   @ValidateNested()

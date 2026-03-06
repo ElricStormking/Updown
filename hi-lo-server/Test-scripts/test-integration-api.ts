@@ -6,6 +6,16 @@ const CONFIG = {
   apiBaseUrl: process.env.API_BASE_URL ?? 'http://localhost:4000',
 };
 
+const DEFAULT_LAUNCH_BET_LIMITS = {
+  bigSmall: { minBetLimit: 0, maxBetLimit: 1000 },
+  oddEven: { minBetLimit: 0, maxBetLimit: 1000 },
+  eachDouble: { minBetLimit: 0, maxBetLimit: 1000 },
+  eachTripple: { minBetLimit: 0, maxBetLimit: 1000 },
+  sum: { minBetLimit: 0, maxBetLimit: 1000 },
+  single: { minBetLimit: 0, maxBetLimit: 1000 },
+  anyTripple: { minBetLimit: 0, maxBetLimit: 1000 },
+};
+
 function generateSignature(params: string[], hashKey: string): string {
   const data = params.join('&') + '&' + hashKey;
   return crypto.createHash('sha256').update(data).digest('hex');
@@ -93,31 +103,25 @@ async function transfer(
 
 async function launchGame(
   account: string,
-  options?: {
-    playerId?: string;
-    merchantAccessToken?: string;
-    betLimits?: Record<string, number>;
+  options: {
+    playerId: string;
+    merchantAccessToken: string;
+    betLimits?: typeof DEFAULT_LAUNCH_BET_LIMITS;
   },
 ) {
   const timestamp = getTimestamp();
   const params = [CONFIG.merchantId, account, timestamp.toString()];
   const hash = generateSignature(params, CONFIG.hashKey);
 
-  const requestBody: Record<string, unknown> = {
+  const requestBody = {
     merchantId: CONFIG.merchantId,
     account,
+    playerId: options.playerId,
+    accessToken: options.merchantAccessToken,
+    betLimits: options.betLimits ?? DEFAULT_LAUNCH_BET_LIMITS,
     timestamp,
     hash,
   };
-  if (options?.playerId) {
-    requestBody.playerId = options.playerId;
-  }
-  if (options?.merchantAccessToken) {
-    requestBody.accessToken = options.merchantAccessToken;
-  }
-  if (options?.betLimits) {
-    requestBody.betLimits = options.betLimits;
-  }
 
   await makeRequest('/integration/launch', requestBody);
 }
@@ -259,9 +263,8 @@ Commands:
   create-account <account>                    Create a new player account
   transfer-in <account> <amount> <transferId> Deposit funds to player
   transfer-out <account> <amount> <transferId> Withdraw funds from player
-  launch <account>                            Get game launch URL
-  launch-callback <account> <playerId> <merchantAccessToken>
-                                              Get callback-mode launch URL
+  launch <account> <playerId> <merchantAccessToken>
+                                              Get callback launch URL
   all-transfer-out <account> <transferId>     Transfer out all player balance
   bet-history [startDate]                     Get bet history
   transfer-history [startDate]                Get transfer history
@@ -279,8 +282,7 @@ Examples:
   npx ts-node Test-scripts/test-integration-api.ts create-account player001
   npx ts-node Test-scripts/test-integration-api.ts transfer-in player001 100 TXN001
   npx ts-node Test-scripts/test-integration-api.ts transfer-out player001 50 TXN002
-  npx ts-node Test-scripts/test-integration-api.ts launch player001
-  npx ts-node Test-scripts/test-integration-api.ts launch-callback player001 pid-001 merchantToken001
+  npx ts-node Test-scripts/test-integration-api.ts launch player001 pid-001 merchantToken001
   npx ts-node Test-scripts/test-integration-api.ts all-transfer-out player001 TXN003
   npx ts-node Test-scripts/test-integration-api.ts bet-history 2026-01-01
   npx ts-node Test-scripts/test-integration-api.ts transfer-history
@@ -332,14 +334,6 @@ async function main() {
       break;
 
     case 'launch':
-      if (!args[0]) {
-        console.error('Error: account name required');
-        process.exit(1);
-      }
-      await launchGame(args[0]);
-      break;
-
-    case 'launch-callback':
       if (!args[0] || !args[1] || !args[2]) {
         console.error(
           'Error: account, playerId, and merchantAccessToken required',

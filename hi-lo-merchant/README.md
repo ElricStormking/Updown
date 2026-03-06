@@ -5,8 +5,10 @@ Standalone NestJS service for merchant-facing integration APIs.
 ## Responsibilities
 
 - Exposes `/integration/*` APIs for merchant systems.
-- Handles launch callback preflight `/integration/launch/session/start`.
+- Issues callback-backed launch URLs through `POST /integration/launch`.
 - Uses the shared database schema and JWT secret with `hi-lo-server`.
+
+Launch-session preflight for players is served by `hi-lo-server`, not this service.
 
 Schema migrations are owned by `hi-lo-server/prisma`.
 
