@@ -48,6 +48,12 @@ const selectProxy = (url = '/') => {
   if (pathname === '/admin' || pathname.startsWith('/admin/')) {
     return { proxy: adminProxy, name: 'admin', target: adminTarget };
   }
+  if (
+    pathname === '/integration/launch/session/start' ||
+    pathname === '/integration/launch/session/start/'
+  ) {
+    return { proxy: gameProxy, name: 'game', target: gameTarget };
+  }
   if (pathname === '/integration' || pathname.startsWith('/integration/')) {
     return { proxy: merchantProxy, name: 'merchant', target: merchantTarget };
   }
@@ -88,6 +94,9 @@ server.on('upgrade', (req, socket, head) => {
 server.listen(gatewayPort, () => {
   console.log(`[gateway] listening on http://localhost:${gatewayPort}`);
   console.log(`[gateway] /admin* -> ${adminTarget}`);
+  console.log(
+    `[gateway] /integration/launch/session/start -> ${gameTarget}`,
+  );
   console.log(`[gateway] /integration/* -> ${merchantTarget}`);
   console.log(`[gateway] all other paths -> ${gameTarget}`);
 });

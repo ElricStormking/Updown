@@ -39,19 +39,9 @@ const GAME_API_URL = trimTrailingSlash(
   import.meta.env.VITE_API_URL ??
     (isLocalBrowserHost() ? 'http://localhost:4001' : gatewayOrigin),
 );
-const INTEGRATION_API_URL = trimTrailingSlash(
-  import.meta.env.VITE_INTEGRATION_API_URL ??
-    import.meta.env.VITE_API_URL ??
-    (isLocalBrowserHost() ? 'http://localhost:4003' : gatewayOrigin),
-);
 
 const gameClient = axios.create({
   baseURL: GAME_API_URL,
-  withCredentials: true,
-});
-
-const integrationClient = axios.create({
-  baseURL: INTEGRATION_API_URL,
   withCredentials: true,
 });
 
@@ -89,7 +79,6 @@ const attachAccessTokenRefreshInterceptor = (client: AxiosInstance) => {
 };
 
 attachAccessTokenRefreshInterceptor(gameClient);
-attachAccessTokenRefreshInterceptor(integrationClient);
 
 const authHeader = (token: string) => ({
   headers: {
@@ -108,7 +97,7 @@ export const api = {
     gameClient.post<AuthResponse>('/auth/login', { account, password }),
 
   startLaunchSession: (token: string) =>
-    integrationClient.post<LaunchSessionStartResponse>(
+    gameClient.post<LaunchSessionStartResponse>(
       '/integration/launch/session/start',
       {},
       authHeader(token),
