@@ -18,6 +18,7 @@ import {
   ValidationPipe,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Interval } from '@nestjs/schedule';
 import { Server, Socket } from 'socket.io';
 import { Subscription } from 'rxjs';
 import { JwtService } from '@nestjs/jwt';
@@ -38,6 +39,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RoundEvent } from './interfaces/round-event.interface';
 import { LaunchSessionService } from '../launch-runtime/launch-session.service';
 import { MerchantCallbackService } from '../launch-runtime/merchant-callback.service';
+
+const LAUNCH_SESSION_HEARTBEAT_INTERVAL_MS = 5000;
 
 @Injectable()
 @WebSocketGateway({
@@ -129,6 +132,18 @@ export class GameGateway
     }
   }
 
+  @Interval(LAUNCH_SESSION_HEARTBEAT_INTERVAL_MS)
+  async flushLaunchSessionHeartbeats() {
+    const activeSessionIds = Array.from(this.launchSessionConnections.entries())
+      .filter(([, connectionCount]) => connectionCount > 0)
+      .map(([sessionId]) => sessionId);
+    if (!activeSessionIds.length) {
+      return;
+    }
+
+    await this.launchSessionService.refreshOnlineSessions(activeSessionIds);
+  }
+
   @UsePipes(
     new ValidationPipe({
       transform: true,
@@ -175,6 +190,14 @@ export class GameGateway
         );
         if (!session || session.status !== LaunchSessionStatus.ACTIVE) {
           throw new UnauthorizedException('Launch session is not active');
+        }
+        if (
+          session.offlineStatus === LaunchSessionOfflineStatus.CALLBACK_SENDING ||
+          session.offlineStatus === LaunchSessionOfflineStatus.CALLBACK_SENT
+        ) {
+          throw new UnauthorizedException(
+            'Launch session settlement is in progress',
+          );
         }
         if (session.loginStatus !== 'VERIFIED') {
           throw new UnauthorizedException(
@@ -364,24 +387,51 @@ export class GameGateway
       return;
     }
     if (
+      session.offlineStatus === LaunchSessionOfflineStatus.CALLBACK_SENDING ||
       session.offlineStatus === LaunchSessionOfflineStatus.CALLBACK_SENT ||
       session.offlineStatus === LaunchSessionOfflineStatus.SETTLED
     ) {
       return;
     }
 
+    const offlineGraceMs =
+      this.configService.get<number>('integration.offlineGraceMs') ?? 30000;
+    const cutoff = new Date(Date.now() - offlineGraceMs);
+    if (session.updatedAt > cutoff) {
+      return;
+    }
+
+    const claimed = await this.launchSessionService.claimUpdateBalanceCallback(
+      session.id,
+    );
+    if (!claimed) {
+      return;
+    }
+
+    const current = await this.launchSessionService.getLaunchSessionById(
+      sessionId,
+    );
+    if (!current || current.status !== LaunchSessionStatus.ACTIVE) {
+      return;
+    }
+    if (
+      current.offlineStatus !== LaunchSessionOfflineStatus.CALLBACK_SENDING
+    ) {
+      return;
+    }
+
     const callbackResult = await this.merchantCallbackService.sendUpdateBalance(
-      session.merchant,
-      session,
+      current.merchant,
+      current,
     );
     await this.launchSessionService.markUpdateBalanceResult(
-      session.id,
+      current.id,
       callbackResult.success,
     );
 
     if (!callbackResult.success) {
       this.logger.warn(
-        `UpdateBalance callback failed for session ${session.id}: ${callbackResult.errorMessage}`,
+        `UpdateBalance callback failed for session ${current.id}: ${callbackResult.errorMessage}`,
       );
     }
   }

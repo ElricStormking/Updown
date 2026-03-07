@@ -156,6 +156,27 @@ export class LaunchSessionService {
     });
   }
 
+  async claimUpdateBalanceCallback(sessionId: string): Promise<boolean> {
+    const result = await this.prisma.merchantLaunchSession.updateMany({
+      where: {
+        id: sessionId,
+        status: LaunchSessionStatus.ACTIVE,
+        loginStatus: 'VERIFIED',
+        offlineStatus: {
+          in: [
+            LaunchSessionOfflineStatus.OFFLINE_PENDING,
+            LaunchSessionOfflineStatus.CALLBACK_FAILED,
+          ],
+        },
+      },
+      data: {
+        offlineStatus: LaunchSessionOfflineStatus.CALLBACK_SENDING,
+      },
+    });
+
+    return result.count > 0;
+  }
+
   async markUpdateBalanceResult(
     sessionId: string,
     success: boolean,
@@ -164,6 +185,7 @@ export class LaunchSessionService {
       where: {
         id: sessionId,
         status: LaunchSessionStatus.ACTIVE,
+        offlineStatus: LaunchSessionOfflineStatus.CALLBACK_SENDING,
       },
       data: success
         ? {
@@ -173,6 +195,22 @@ export class LaunchSessionService {
         : {
             offlineStatus: LaunchSessionOfflineStatus.CALLBACK_FAILED,
           },
+    });
+  }
+
+  async recoverStaleSendingCallbacks(staleBefore: Date): Promise<void> {
+    await this.prisma.merchantLaunchSession.updateMany({
+      where: {
+        status: LaunchSessionStatus.ACTIVE,
+        loginStatus: 'VERIFIED',
+        offlineStatus: LaunchSessionOfflineStatus.CALLBACK_SENDING,
+        updatedAt: {
+          lte: staleBefore,
+        },
+      },
+      data: {
+        offlineStatus: LaunchSessionOfflineStatus.CALLBACK_FAILED,
+      },
     });
   }
 

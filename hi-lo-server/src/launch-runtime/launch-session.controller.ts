@@ -100,7 +100,19 @@ export class LaunchSessionController {
       };
     }
 
-    if (session.offlineStatus === LaunchSessionOfflineStatus.CALLBACK_FAILED) {
+    if (session.offlineStatus === LaunchSessionOfflineStatus.CALLBACK_SENDING) {
+      return {
+        ready: false,
+        mode: 'callback',
+        code: LaunchSessionErrorCodes.UPDATE_BALANCE_CALLBACK_FAILED,
+        message: 'UpdateBalance callback is in progress',
+      };
+    }
+
+    if (
+      session.offlineStatus === LaunchSessionOfflineStatus.CALLBACK_SENT ||
+      session.offlineStatus === LaunchSessionOfflineStatus.CALLBACK_FAILED
+    ) {
       return {
         ready: false,
         mode: 'callback',

@@ -2,7 +2,6 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Interval } from '@nestjs/schedule';
 import {
-  LaunchSessionLoginStatus,
   LaunchSessionOfflineStatus,
   LaunchSessionStatus,
   Prisma,
@@ -72,13 +71,11 @@ export class LaunchSessionOfflineService {
 
   private async findSessionsEligibleForOfflineCallback(
     cutoff: Date,
-  ): Promise<
-    LaunchSessionWithMerchant[]
-  > {
+  ): Promise<LaunchSessionWithMerchant[]> {
     return this.prisma.merchantLaunchSession.findMany({
       where: {
         status: LaunchSessionStatus.ACTIVE,
-        loginStatus: LaunchSessionLoginStatus.VERIFIED,
+        loginStatus: 'VERIFIED',
         offlineStatus: {
           in: [
             LaunchSessionOfflineStatus.ONLINE,
@@ -100,7 +97,10 @@ export class LaunchSessionOfflineService {
     });
   }
 
-  private async processSession(sessionId: string, cutoff: Date): Promise<void> {
+  private async processSession(
+    sessionId: string,
+    cutoff: Date,
+  ): Promise<void> {
     let current = await this.prisma.merchantLaunchSession.findUnique({
       where: { id: sessionId },
       include: { merchant: true },
@@ -111,12 +111,13 @@ export class LaunchSessionOfflineService {
     if (current.status !== LaunchSessionStatus.ACTIVE) {
       return;
     }
-    if (current.loginStatus !== LaunchSessionLoginStatus.VERIFIED) {
+    if (current.loginStatus !== 'VERIFIED') {
       return;
     }
     if (current.updatedAt > cutoff) {
       return;
     }
+
     if (current.offlineStatus === LaunchSessionOfflineStatus.ONLINE) {
       await this.launchSessionService.markOfflinePending(current.id);
       current = await this.prisma.merchantLaunchSession.findUnique({
@@ -127,6 +128,7 @@ export class LaunchSessionOfflineService {
         return;
       }
     }
+
     if (
       current.offlineStatus !== LaunchSessionOfflineStatus.OFFLINE_PENDING &&
       current.offlineStatus !== LaunchSessionOfflineStatus.CALLBACK_FAILED

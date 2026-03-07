@@ -302,6 +302,7 @@ enum LaunchSessionLoginStatus {
 enum LaunchSessionOfflineStatus {
   ONLINE
   OFFLINE_PENDING
+  CALLBACK_SENDING
   CALLBACK_SENT
   CALLBACK_FAILED
   SETTLED

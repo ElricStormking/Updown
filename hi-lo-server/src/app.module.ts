@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { configuration } from './config/configuration';
@@ -19,6 +20,7 @@ import { SlidingJwtInterceptor } from './auth/interceptors/sliding-jwt.intercept
 
 @Module({
   imports: [
+    ScheduleModule.forRoot(),
     ConfigModule.forRoot({
       isGlobal: true,
       load: [configuration],
