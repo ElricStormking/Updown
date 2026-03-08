@@ -98,6 +98,7 @@ const WINNER_LIGHT_WITH_BET_EFFECTIVE_WIDTH = 270;
 const WINNER_LIGHT_WITH_BET_EFFECTIVE_HEIGHT = 109;
 const WINNER_LIGHT_WITH_BET_LAST_FRAME = 21;
 const WINNER_LIGHT_WITH_BET_SCALE_MULTIPLIER = 1.1;
+const PLACED_BET_FRAME_COLOR = 0x00ffb2;
 const WINNER_WITH_BET_HIGHLIGHT_COLOR = 0x00ffb2;
 const WINNER_NO_BET_HIGHLIGHT_COLOR = 0x4dffd2;
 const WINNER_NO_BET_GLOW_COLOR = WINNER_NO_BET_HIGHLIGHT_COLOR;
@@ -217,6 +218,7 @@ export class HiLoScene extends Phaser.Scene {
   private winnerLightTweens = new Map<string, Phaser.Tweens.Tween>();
   private winnerLightSprites = new Map<string, Phaser.GameObjects.Sprite>();
   private winnerNoBetGlowSprites = new Map<string, Phaser.GameObjects.Graphics>();
+  private placedBetFrameOverlays = new Map<string, Phaser.GameObjects.Graphics>();
   private bonusLightTweens = new Map<string, Phaser.Tweens.Tween>();
   private bonusLightSprites = new Map<string, Phaser.GameObjects.Sprite>();
   private bonusLightningRoundId?: number;
@@ -1805,6 +1807,7 @@ export class HiLoScene extends Phaser.Scene {
     this.betTargets.set(key, image);
     image.setData('baseScale', image.scaleX);
     image.setData('inactiveTextureKey', image.texture.key);
+    image.setData('usePlacedFrameOverlay', true);
     const activeTextureKey = `${image.texture.key}_on`;
     if (this.textures.exists(activeTextureKey)) {
       image.setData('activeTextureKey', activeTextureKey);
@@ -2613,20 +2616,54 @@ export class HiLoScene extends Phaser.Scene {
         this.buildDigitKey(selection.digitType, selection.selection ?? ''),
       ),
     );
+    const placedKeys = new Set<string>();
     Object.entries(placements ?? {}).forEach(([key, placement]) => {
       if ((placement?.total ?? 0) > 0) {
         activeKeys.add(key);
+        placedKeys.add(key);
+      }
+    });
+    this.placedBetFrameOverlays.forEach((overlay, key) => {
+      if (!placedKeys.has(key)) {
+        overlay.destroy();
+        this.placedBetFrameOverlays.delete(key);
       }
     });
     this.betTargets.forEach((image, key) => {
       const activeTextureKey = image.getData('activeTextureKey') as string | undefined;
       const inactiveTextureKey = image.getData('inactiveTextureKey') as string | undefined;
+      const usePlacedFrameOverlay =
+        (image.getData('usePlacedFrameOverlay') as boolean | undefined) === true;
       if (activeKeys.has(key)) {
-        if (activeTextureKey) {
+        if (placedKeys.has(key)) {
+          if (inactiveTextureKey && image.texture.key !== inactiveTextureKey) {
+            image.setTexture(inactiveTextureKey);
+          }
+          image.setTint(0x00ffb2);
+          if (usePlacedFrameOverlay) {
+            const overlay =
+              this.placedBetFrameOverlays.get(key) ?? this.add.graphics();
+            this.drawPlacedBetFrame(
+              overlay,
+              inactiveTextureKey ?? image.texture.key,
+              image.width,
+              image.height,
+            );
+            overlay.setPosition(image.x, image.y);
+            overlay.setScale(image.scaleX, image.scaleY);
+            overlay.setDepth(image.depth + 0.05);
+            this.placedBetFrameOverlays.set(key, overlay);
+          }
+        } else if (activeTextureKey) {
           if (image.texture.key !== activeTextureKey) {
             image.setTexture(activeTextureKey);
           }
           image.clearTint();
+          const overlay = this.placedBetFrameOverlays.get(key);
+          if (overlay) {
+            overlay.destroy();
+            this.placedBetFrameOverlays.delete(key);
+          }
         } else {
           image.setTint(0x00ffb2);
         }
@@ -2635,6 +2672,11 @@ export class HiLoScene extends Phaser.Scene {
           image.setTexture(inactiveTextureKey);
         }
         image.clearTint();
+        const overlay = this.placedBetFrameOverlays.get(key);
+        if (overlay) {
+          overlay.destroy();
+          this.placedBetFrameOverlays.delete(key);
+        }
       }
     });
   }
@@ -3128,20 +3170,36 @@ export class HiLoScene extends Phaser.Scene {
     const thickness = Math.min(10, Math.max(5, Math.round(minSide * 0.1)));
 
     frame.clear();
-    this.strokeNoBetWinnerFrame(frame, textureKey, width, height, thickness, 1);
+    this.strokeBetFrame(frame, textureKey, width, height, thickness, 1, WINNER_NO_BET_GLOW_COLOR);
   }
 
-  private strokeNoBetWinnerFrame(
+  private drawPlacedBetFrame(
+    frame: Phaser.GameObjects.Graphics,
+    textureKey: string,
+    width: number,
+    height: number,
+  ) {
+    const minSide = Math.min(width, height);
+    const thickness = Math.min(7, Math.max(4, Math.round(minSide * 0.075)));
+
+    frame.clear();
+    this.strokeBetFrame(frame, textureKey, width, height, thickness, 1, PLACED_BET_FRAME_COLOR);
+  }
+
+  private strokeBetFrame(
     frame: Phaser.GameObjects.Graphics,
     textureKey: string,
     width: number,
     height: number,
     thickness: number,
     alpha: number,
+    color: number,
   ) {
     const inset = thickness / 2;
+    const effectiveHeight =
+      textureKey === 'button_any triple' ? Math.min(height, 234) : height;
     const halfW = width / 2 - inset;
-    const halfH = height / 2 - inset;
+    const halfH = effectiveHeight / 2 - inset;
     const minSide = Math.min(width, height);
     let points: Array<[number, number]>;
 
@@ -3193,7 +3251,7 @@ export class HiLoScene extends Phaser.Scene {
       ];
     }
 
-    frame.lineStyle(thickness, WINNER_NO_BET_GLOW_COLOR, alpha);
+    frame.lineStyle(thickness, color, alpha);
     frame.beginPath();
     frame.moveTo(points[0][0], points[0][1]);
     points.slice(1).forEach(([x, y]) => frame.lineTo(x, y));
