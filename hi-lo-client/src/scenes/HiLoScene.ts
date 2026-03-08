@@ -98,10 +98,12 @@ const WINNER_LIGHT_WITH_BET_EFFECTIVE_WIDTH = 270;
 const WINNER_LIGHT_WITH_BET_EFFECTIVE_HEIGHT = 109;
 const WINNER_LIGHT_WITH_BET_LAST_FRAME = 21;
 const WINNER_LIGHT_WITH_BET_SCALE_MULTIPLIER = 1.1;
-const WINNER_NO_BET_GLOW_COLOR = 0x2dffb0;
-const WINNER_NO_BET_GLOW_BASE_ALPHA = 0.78;
-const WINNER_NO_BET_GLOW_SCALE_MULTIPLIER = 1.06;
-const WINNER_NO_BET_GLOW_PULSE_SCALE = 1.04;
+const WINNER_WITH_BET_HIGHLIGHT_COLOR = 0x00ffb2;
+const WINNER_NO_BET_HIGHLIGHT_COLOR = 0x4dffd2;
+const WINNER_NO_BET_GLOW_COLOR = WINNER_NO_BET_HIGHLIGHT_COLOR;
+const WINNER_NO_BET_GLOW_BASE_ALPHA = 0.92;
+const WINNER_NO_BET_GLOW_SCALE_MULTIPLIER = 1.0;
+const WINNER_NO_BET_GLOW_PULSE_SCALE = 1.035;
 const WIN_TITLE_TEXTURE_KEY = 'WIN_anim';
 const WIN_TITLE_ANIMATION_KEY = 'result-win-title-anim';
 const LIGHTNING_BEAM_FRAME_HEIGHT = 269;
@@ -121,6 +123,15 @@ const BONUS_LIGHT_ODD_EVEN_FRAME_RATE = 18;
 const BONUS_LIGHT_ODD_EVEN_EFFECTIVE_WIDTH = 293;
 const BONUS_LIGHT_ODD_EVEN_EFFECTIVE_HEIGHT = 225;
 const BONUS_LIGHT_ODD_EVEN_SCALE_MULTIPLIER = 1.05;
+const BONUS_LIGHT_ANY_TRIPLE_TEXTURE_KEY = 'any_box_light';
+const BONUS_LIGHT_ANY_TRIPLE_ANIMATION_KEY = 'any-box-light';
+const BONUS_LIGHT_ANY_TRIPLE_FRAME_WIDTH = 400;
+const BONUS_LIGHT_ANY_TRIPLE_FRAME_HEIGHT = 280;
+const BONUS_LIGHT_ANY_TRIPLE_LAST_FRAME = 13;
+const BONUS_LIGHT_ANY_TRIPLE_FRAME_RATE = 18;
+const BONUS_LIGHT_ANY_TRIPLE_EFFECTIVE_WIDTH = 370;
+const BONUS_LIGHT_ANY_TRIPLE_EFFECTIVE_HEIGHT = 249;
+const BONUS_LIGHT_ANY_TRIPLE_SCALE_MULTIPLIER = 1.0;
 const BONUS_ODDS_Y_OFFSET = 4;
 const BONUS_ODDS_COLOR = '#69f3ff';
 const BONUS_ODDS_STROKE_COLOR = '#123549';
@@ -205,7 +216,7 @@ export class HiLoScene extends Phaser.Scene {
   private winnerTweens = new Map<string, Phaser.Tweens.Tween>();
   private winnerLightTweens = new Map<string, Phaser.Tweens.Tween>();
   private winnerLightSprites = new Map<string, Phaser.GameObjects.Sprite>();
-  private winnerNoBetGlowSprites = new Map<string, Phaser.GameObjects.Image>();
+  private winnerNoBetGlowSprites = new Map<string, Phaser.GameObjects.Graphics>();
   private bonusLightTweens = new Map<string, Phaser.Tweens.Tween>();
   private bonusLightSprites = new Map<string, Phaser.GameObjects.Sprite>();
   private bonusLightningRoundId?: number;
@@ -376,6 +387,14 @@ export class HiLoScene extends Phaser.Scene {
       {
         frameWidth: BONUS_LIGHT_ODD_EVEN_FRAME_WIDTH,
         frameHeight: BONUS_LIGHT_ODD_EVEN_FRAME_HEIGHT,
+      },
+    );
+    this.load.spritesheet(
+      BONUS_LIGHT_ANY_TRIPLE_TEXTURE_KEY,
+      '../UI_sprites/any_box_light/any_box_light.png',
+      {
+        frameWidth: BONUS_LIGHT_ANY_TRIPLE_FRAME_WIDTH,
+        frameHeight: BONUS_LIGHT_ANY_TRIPLE_FRAME_HEIGHT,
       },
     );
     this.load.spritesheet(
@@ -2336,22 +2355,26 @@ export class HiLoScene extends Phaser.Scene {
     if (this.textures.exists(BONUS_LIGHT_ODD_EVEN_TEXTURE_KEY)) {
       this.ensureOddBoxLightAnimation();
     }
-    
+    if (this.textures.exists(BONUS_LIGHT_ANY_TRIPLE_TEXTURE_KEY)) {
+      this.ensureAnyTripleBoxLightAnimation();
+    }
+
     // If in locked layout mode, use scaled values
     const lockedScale = this.getLockedLayoutScale();
     const shouldPause = this.isLockedLayoutMode && !this.isLockedLayoutPending;
+    const anyTripleKey = this.buildDigitKey('ANY_TRIPLE');
     const oddKey = this.buildDigitKey('ODD');
     const evenKey = this.buildDigitKey('EVEN');
-    
+
     this.bonusOddsByKey.forEach((_ratio, key) => {
       const image = this.betTargets.get(key);
       if (!image) return;
       const baseScale = image.getData('baseScale') as number | undefined;
       const scale = typeof baseScale === 'number' ? baseScale : 0.75;
-      
+
       // Apply locked scale to the pulse animation
       const effectiveScale = scale * lockedScale;
-      
+
       const tween = this.tweens.add({
         targets: image,
         scaleX: effectiveScale * 1.04,
@@ -2362,12 +2385,12 @@ export class HiLoScene extends Phaser.Scene {
         repeat: -1,
         ease: 'Sine.easeInOut',
       });
-      
+
       // If in locked mode, pause the tween immediately
       if (shouldPause) {
         tween.pause();
       }
-      
+
       this.bonusTweens.set(key, tween);
 
       let lightTextureKey = BONUS_LIGHT_DEFAULT_TEXTURE_KEY;
@@ -2375,8 +2398,15 @@ export class HiLoScene extends Phaser.Scene {
       let lightEffectiveWidth = BONUS_LIGHT_DEFAULT_EFFECTIVE_WIDTH;
       let lightEffectiveHeight = BONUS_LIGHT_DEFAULT_EFFECTIVE_HEIGHT;
       let lightScaleMultiplier = BONUS_LIGHT_DEFAULT_SCALE_MULTIPLIER;
+      const isAnyTripleKey = key === anyTripleKey;
       const isOddEvenKey = key === oddKey || key === evenKey;
-      if (isOddEvenKey && this.textures.exists(BONUS_LIGHT_ODD_EVEN_TEXTURE_KEY)) {
+      if (isAnyTripleKey && this.textures.exists(BONUS_LIGHT_ANY_TRIPLE_TEXTURE_KEY)) {
+        lightTextureKey = BONUS_LIGHT_ANY_TRIPLE_TEXTURE_KEY;
+        lightAnimationKey = BONUS_LIGHT_ANY_TRIPLE_ANIMATION_KEY;
+        lightEffectiveWidth = BONUS_LIGHT_ANY_TRIPLE_EFFECTIVE_WIDTH;
+        lightEffectiveHeight = BONUS_LIGHT_ANY_TRIPLE_EFFECTIVE_HEIGHT;
+        lightScaleMultiplier = BONUS_LIGHT_ANY_TRIPLE_SCALE_MULTIPLIER;
+      } else if (isOddEvenKey && this.textures.exists(BONUS_LIGHT_ODD_EVEN_TEXTURE_KEY)) {
         lightTextureKey = BONUS_LIGHT_ODD_EVEN_TEXTURE_KEY;
         lightAnimationKey = BONUS_LIGHT_ODD_EVEN_ANIMATION_KEY;
         lightEffectiveWidth = BONUS_LIGHT_ODD_EVEN_EFFECTIVE_WIDTH;
@@ -3088,6 +3118,89 @@ export class HiLoScene extends Phaser.Scene {
     });
   }
 
+  private drawNoBetWinnerFrame(
+    frame: Phaser.GameObjects.Graphics,
+    textureKey: string,
+    width: number,
+    height: number,
+  ) {
+    const minSide = Math.min(width, height);
+    const thickness = Math.min(10, Math.max(5, Math.round(minSide * 0.1)));
+
+    frame.clear();
+    this.strokeNoBetWinnerFrame(frame, textureKey, width, height, thickness, 1);
+  }
+
+  private strokeNoBetWinnerFrame(
+    frame: Phaser.GameObjects.Graphics,
+    textureKey: string,
+    width: number,
+    height: number,
+    thickness: number,
+    alpha: number,
+  ) {
+    const inset = thickness / 2;
+    const halfW = width / 2 - inset;
+    const halfH = height / 2 - inset;
+    const minSide = Math.min(width, height);
+    let points: Array<[number, number]>;
+
+    if (textureKey === 'button_any triple') {
+      const inset = width * 0.18;
+      points = [
+        [-halfW + inset, -halfH],
+        [halfW - inset, -halfH],
+        [halfW, halfH],
+        [-halfW, halfH],
+      ];
+    } else if (textureKey === 'button_even') {
+      const slant = width * 0.24;
+      points = [
+        [-halfW, -halfH],
+        [halfW, -halfH],
+        [halfW, halfH],
+        [-halfW + slant, halfH],
+      ];
+    } else if (textureKey === 'button_odd') {
+      const slant = width * 0.24;
+      points = [
+        [-halfW, -halfH],
+        [halfW, -halfH],
+        [halfW - slant, halfH],
+        [-halfW, halfH],
+      ];
+    } else if (textureKey === 'button_small' || textureKey === 'button_big') {
+      const cut = minSide * 0.14;
+      points = [
+        [-halfW + cut, -halfH],
+        [halfW - cut, -halfH],
+        [halfW, -halfH + cut],
+        [halfW, halfH - cut],
+        [halfW - cut, halfH],
+        [-halfW + cut, halfH],
+        [-halfW, halfH - cut],
+        [-halfW, -halfH + cut],
+      ];
+    } else {
+      const cut = minSide * 0.26;
+      points = [
+        [-halfW + cut, -halfH],
+        [halfW, -halfH],
+        [halfW, halfH - cut],
+        [halfW - cut, halfH],
+        [-halfW, halfH],
+        [-halfW, -halfH + cut],
+      ];
+    }
+
+    frame.lineStyle(thickness, WINNER_NO_BET_GLOW_COLOR, alpha);
+    frame.beginPath();
+    frame.moveTo(points[0][0], points[0][1]);
+    points.slice(1).forEach(([x, y]) => frame.lineTo(x, y));
+    frame.closePath();
+    frame.strokePath();
+  }
+
   setResultDisplayDuration(durationMs: number) {
     if (!Number.isFinite(durationMs)) {
       return;
@@ -3285,6 +3398,7 @@ export class HiLoScene extends Phaser.Scene {
     winKeys.forEach((key) => {
       const image = this.betTargets.get(key);
       if (!image) return;
+      const hasPlayerWinningBet = playerWinningKeys.has(key);
       const baseY = image.y;
       const baseScaleX = image.scaleX;
       const baseScaleY = image.scaleY;
@@ -3293,33 +3407,33 @@ export class HiLoScene extends Phaser.Scene {
         image.setData('winnerBaseScaleY', baseScaleY);
         image.setData('winnerBaseBlend', image.blendMode);
       }
-      image.setTint(0x00ffb2);
-      image.setBlendMode(Phaser.BlendModes.ADD);
-      const tween = this.tweens.add({
-        targets: image,
-        y: baseY - 6,
-        alpha: 0.5,
-        scaleX: baseScaleX * 1.08,
-        scaleY: baseScaleY * 1.08,
-        duration: 180,
-        yoyo: true,
-        repeat: 16,
-        ease: 'Sine.easeInOut',
-        onComplete: () => {
-          image.setAlpha(1);
-          image.setTint(0x00ffb2);
-          image.y = baseY;
-          image.setScale(baseScaleX, baseScaleY);
-          const baseBlend = image.getData('winnerBaseBlend') as number | undefined;
-          if (typeof baseBlend === 'number') {
-            image.setBlendMode(baseBlend);
-          }
-        },
-      });
-      this.winnerTweens.set(key, tween);
 
-      const hasPlayerWinningBet = playerWinningKeys.has(key);
       if (hasPlayerWinningBet) {
+        image.setTint(WINNER_WITH_BET_HIGHLIGHT_COLOR);
+        image.setBlendMode(Phaser.BlendModes.ADD);
+        const tween = this.tweens.add({
+          targets: image,
+          y: baseY - 6,
+          alpha: 0.5,
+          scaleX: baseScaleX * 1.08,
+          scaleY: baseScaleY * 1.08,
+          duration: 180,
+          yoyo: true,
+          repeat: 16,
+          ease: 'Sine.easeInOut',
+          onComplete: () => {
+            image.setAlpha(1);
+            image.setTint(WINNER_WITH_BET_HIGHLIGHT_COLOR);
+            image.y = baseY;
+            image.setScale(baseScaleX, baseScaleY);
+            const baseBlend = image.getData('winnerBaseBlend') as number | undefined;
+            if (typeof baseBlend === 'number') {
+              image.setBlendMode(baseBlend);
+            }
+          },
+        });
+        this.winnerTweens.set(key, tween);
+
         const light = this.winnerLightSprites.get(key)
           ?? this.add.sprite(image.x, image.y, WINNER_LIGHT_WITH_BET_TEXTURE_KEY, 0);
         const scaleX =
@@ -3353,32 +3467,31 @@ export class HiLoScene extends Phaser.Scene {
         });
         this.winnerLightTweens.set(key, lightTween);
       } else {
-        const highlightTextureKey = (image.getData('activeTextureKey') as string | undefined) ?? image.texture.key;
-        const noBetGlow = this.winnerNoBetGlowSprites.get(key)
-          ?? this.add.image(image.x, baseY, highlightTextureKey);
-
-        if (noBetGlow.texture.key !== highlightTextureKey) {
-          noBetGlow.setTexture(highlightTextureKey);
+        image.setAlpha(1);
+        image.clearTint();
+        const baseBlend = image.getData('winnerBaseBlend') as number | undefined;
+        if (typeof baseBlend === 'number') {
+          image.setBlendMode(baseBlend);
         }
+
+        const highlightTextureKey =
+          (image.getData('inactiveTextureKey') as string | undefined) ?? image.texture.key;
+        const noBetGlow = this.winnerNoBetGlowSprites.get(key)
+          ?? this.add.graphics();
 
         const glowScaleX = baseScaleX * WINNER_NO_BET_GLOW_SCALE_MULTIPLIER;
         const glowScaleY = baseScaleY * WINNER_NO_BET_GLOW_SCALE_MULTIPLIER;
+        this.drawNoBetWinnerFrame(noBetGlow, highlightTextureKey, image.width, image.height);
         noBetGlow.setPosition(image.x, baseY);
         noBetGlow.setScale(glowScaleX, glowScaleY);
-        if (highlightTextureKey === image.texture.key) {
-          noBetGlow.setTint(WINNER_NO_BET_GLOW_COLOR);
-        } else {
-          noBetGlow.clearTint();
-        }
         noBetGlow.setAlpha(WINNER_NO_BET_GLOW_BASE_ALPHA);
-        noBetGlow.setBlendMode(Phaser.BlendModes.ADD);
+        noBetGlow.setBlendMode(Phaser.BlendModes.NORMAL);
         noBetGlow.setDepth(image.depth + 0.1);
         this.winnerNoBetGlowSprites.set(key, noBetGlow);
 
         const glowTween = this.tweens.add({
           targets: noBetGlow,
-          y: baseY - 5,
-          alpha: 1,
+          alpha: 0.62,
           scaleX: glowScaleX * WINNER_NO_BET_GLOW_PULSE_SCALE,
           scaleY: glowScaleY * WINNER_NO_BET_GLOW_PULSE_SCALE,
           duration: 180,
@@ -4615,6 +4728,24 @@ export class HiLoScene extends Phaser.Scene {
         end: BONUS_LIGHT_ODD_EVEN_LAST_FRAME,
       }),
       frameRate: BONUS_LIGHT_ODD_EVEN_FRAME_RATE,
+      repeat: -1,
+    });
+  }
+
+  private ensureAnyTripleBoxLightAnimation() {
+    if (
+      this.anims.exists(BONUS_LIGHT_ANY_TRIPLE_ANIMATION_KEY) ||
+      !this.textures.exists(BONUS_LIGHT_ANY_TRIPLE_TEXTURE_KEY)
+    ) {
+      return;
+    }
+    this.anims.create({
+      key: BONUS_LIGHT_ANY_TRIPLE_ANIMATION_KEY,
+      frames: this.anims.generateFrameNumbers(BONUS_LIGHT_ANY_TRIPLE_TEXTURE_KEY, {
+        start: 0,
+        end: BONUS_LIGHT_ANY_TRIPLE_LAST_FRAME,
+      }),
+      frameRate: BONUS_LIGHT_ANY_TRIPLE_FRAME_RATE,
       repeat: -1,
     });
   }
