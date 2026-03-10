@@ -796,12 +796,23 @@ export const initControls = (handlers: ControlHandlers) => {
   // Fullscreen button in game area
   fullscreenBtnEl?.addEventListener('click', requestFullscreen);
 
+  const fullscreenTarget = appShellEl ?? root.querySelector<HTMLElement>('#app-shell');
+  const fullscreenAvailable = canFullscreen(fullscreenTarget);
+
+  if (!fullscreenAvailable && fullscreenGateEl) {
+    const gateDesc = fullscreenGateEl.querySelector<HTMLElement>('.fullscreen-gate-content > p:not(.rotate-phone-text)');
+    if (gateDesc) gateDesc.textContent = 'Tap anywhere to start the game';
+    if (fullscreenGateBtnEl) fullscreenGateBtnEl.textContent = 'Tap to Start';
+    const inGameBtn = fullscreenBtnEl;
+    if (inGameBtn) inGameBtn.textContent = 'Tap to Start';
+  }
+
   const triggerMobileFullscreenFromTap = () => {
     if (!isMobileViewport() || !state.token) return;
     if (!fullscreenGatePassed) {
       dismissFullscreenGate();
     }
-    if (!isFullscreenActive()) {
+    if (fullscreenAvailable && !isFullscreenActive()) {
       void requestFullscreen();
     }
   };
@@ -809,23 +820,28 @@ export const initControls = (handlers: ControlHandlers) => {
   // Fullscreen gate button (shown after login, before game)
   fullscreenGateBtnEl?.addEventListener('click', () => {
     dismissFullscreenGate();
-    void requestFullscreen();
+    if (fullscreenAvailable) {
+      void requestFullscreen();
+    }
   });
 
   // Mobile: tapping anywhere in the fullscreen gate should enter game fullscreen.
   fullscreenGateEl?.addEventListener('pointerdown', triggerMobileFullscreenFromTap);
 
   // Mobile: when not fullscreen, any tap in game area should request fullscreen.
-  appShellEl?.addEventListener(
-    'pointerdown',
-    (e) => {
-      if (!isMobileViewport() || !state.token || isFullscreenActive()) return;
-      const target = e.target as Element | null;
-      if (target?.closest('#token-bar-floating, .stats-dock, .menu-modal, .settings-modal, .stats-modal, .chart-modal, .betting-history-modal')) return;
-      void requestFullscreen();
-    },
-    { passive: true },
-  );
+  // Skip entirely on platforms without Fullscreen API (iOS Safari).
+  if (fullscreenAvailable) {
+    appShellEl?.addEventListener(
+      'pointerdown',
+      (e) => {
+        if (!isMobileViewport() || !state.token || isFullscreenActive()) return;
+        const target = e.target as Element | null;
+        if (target?.closest('#token-bar-floating, .stats-dock, .menu-modal, .settings-modal, .stats-modal, .chart-modal, .betting-history-modal')) return;
+        void requestFullscreen();
+      },
+      { passive: true },
+    );
+  }
 
   if (typeof document !== 'undefined') {
     document.addEventListener('fullscreenchange', updateFullscreenPrompt);

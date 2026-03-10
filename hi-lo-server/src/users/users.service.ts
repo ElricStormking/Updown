@@ -25,7 +25,7 @@ export class UsersService {
 
     const merchant = await this.prisma.merchant.findUnique({
       where: { merchantId },
-      select: { merchantId: true },
+      select: { merchantId: true, currency: true },
     });
     if (!merchant) {
       throw new BadRequestException(`Merchant ${merchantId} not found`);
@@ -40,7 +40,7 @@ export class UsersService {
         wallet: {
           create: {
             balance: data.initialBalance ?? new Prisma.Decimal(0),
-            currency: 'USDT',
+            currency: merchant.currency,
           },
         },
       },

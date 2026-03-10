@@ -192,37 +192,6 @@ async function getTransferHistory(startDate?: string) {
   });
 }
 
-async function getBetLimit() {
-  const timestamp = getTimestamp();
-  const params = [CONFIG.merchantId, timestamp.toString()];
-  const hash = generateSignature(params, CONFIG.hashKey);
-
-  await makeRequest('/integration/config/bet-limit/get', {
-    merchantId: CONFIG.merchantId,
-    timestamp,
-    hash,
-  });
-}
-
-async function setBetLimit(minBetAmount: number, maxBetAmount: number) {
-  const timestamp = getTimestamp();
-  const params = [
-    CONFIG.merchantId,
-    minBetAmount.toString(),
-    maxBetAmount.toString(),
-    timestamp.toString(),
-  ];
-  const hash = generateSignature(params, CONFIG.hashKey);
-
-  await makeRequest('/integration/config/bet-limit', {
-    merchantId: CONFIG.merchantId,
-    minBetAmount,
-    maxBetAmount,
-    timestamp,
-    hash,
-  });
-}
-
 async function getTokenValues() {
   const timestamp = getTimestamp();
   const params = [CONFIG.merchantId, timestamp.toString()];
@@ -268,8 +237,6 @@ Commands:
   all-transfer-out <account> <transferId>     Transfer out all player balance
   bet-history [startDate]                     Get bet history
   transfer-history [startDate]                Get transfer history
-  get-bet-limit                               Get bet limits
-  set-bet-limit <min> <max>                   Set bet limits
   get-token-values                            Get token values
   set-token-values <v1,v2,v3,v4,v5,v6,v7>      Set token values
 
@@ -286,8 +253,6 @@ Examples:
   npx ts-node Test-scripts/test-integration-api.ts all-transfer-out player001 TXN003
   npx ts-node Test-scripts/test-integration-api.ts bet-history 2026-01-01
   npx ts-node Test-scripts/test-integration-api.ts transfer-history
-  npx ts-node Test-scripts/test-integration-api.ts get-bet-limit
-  npx ts-node Test-scripts/test-integration-api.ts set-bet-limit 0 1000
   npx ts-node Test-scripts/test-integration-api.ts get-token-values
   npx ts-node Test-scripts/test-integration-api.ts set-token-values 5,10,20,50,100,200,500
 `);
@@ -360,18 +325,6 @@ async function main() {
 
     case 'transfer-history':
       await getTransferHistory(args[0]);
-      break;
-
-    case 'get-bet-limit':
-      await getBetLimit();
-      break;
-
-    case 'set-bet-limit':
-      if (!args[0] || !args[1]) {
-        console.error('Error: min and max bet amounts required');
-        process.exit(1);
-      }
-      await setBetLimit(Number(args[0]), Number(args[1]));
       break;
 
     case 'get-token-values':

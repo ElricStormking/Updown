@@ -25,12 +25,9 @@ import {
   BetHistoryItem,
   GetTransferHistoryResponseData,
   TransferHistoryItem,
-  GetBetLimitResponseData,
   GetTokenValuesResponseData,
   LaunchGameResponseData,
-  UpdateBetLimitResponseData,
   UpdateTokenValuesResponseData,
-  DigitBetAmountLimitsDto,
   LaunchBetLimitRangeDto,
   LaunchBetLimitsDto,
 } from './dto';
@@ -112,7 +109,7 @@ export class IntegrationService {
           wallet: {
             create: {
               balance: new Prisma.Decimal(0),
-              currency: 'USDT',
+              currency: merchant.currency,
             },
           },
         },
@@ -685,133 +682,6 @@ export class IntegrationService {
     }
   }
 
-  async getBetLimit(
-    merchant: Merchant,
-    timestamp: number,
-    hash: string,
-  ): Promise<IntegrationResponseDto<GetBetLimitResponseData>> {
-    const params = [merchant.merchantId, timestamp.toString()];
-    if (!validateSignature(params, merchant.hashKey, hash)) {
-      return IntegrationResponseDto.error(
-        IntegrationErrorCodes.INVALID_SIGNATURE,
-        IntegrationErrorMessages[IntegrationErrorCodes.INVALID_SIGNATURE],
-      );
-    }
-
-    try {
-      const current = await this.gameConfigService.getActiveConfig(
-        merchant.merchantId,
-      );
-      return IntegrationResponseDto.success({
-        minBetAmount: current.minBetAmount,
-        maxBetAmount: current.maxBetAmount,
-        digitBetAmountLimits: this.cloneDigitBetAmountLimits(
-          current.digitBetAmountLimits,
-        ),
-      });
-    } catch (error) {
-      this.logger.error('Failed to get bet limit', error);
-      return IntegrationResponseDto.error(
-        IntegrationErrorCodes.INTERNAL_ERROR,
-        IntegrationErrorMessages[IntegrationErrorCodes.INTERNAL_ERROR],
-      );
-    }
-  }
-
-  async setBetLimit(
-    merchant: Merchant,
-    minBetAmount: number,
-    maxBetAmount: number,
-    digitBetAmountLimits: DigitBetAmountLimitsDto | undefined,
-    timestamp: number,
-    hash: string,
-  ): Promise<IntegrationResponseDto<UpdateBetLimitResponseData>> {
-    const legacyParams = [
-      merchant.merchantId,
-      String(minBetAmount ?? ''),
-      String(maxBetAmount ?? ''),
-      timestamp.toString(),
-    ];
-    const extendedParams = [
-      merchant.merchantId,
-      String(minBetAmount ?? ''),
-      String(maxBetAmount ?? ''),
-      this.serializeDigitBetAmountLimitsForSignature(digitBetAmountLimits),
-      timestamp.toString(),
-    ];
-    const validSignature =
-      digitBetAmountLimits !== undefined
-        ? validateSignature(extendedParams, merchant.hashKey, hash)
-        : validateSignature(legacyParams, merchant.hashKey, hash) ||
-          validateSignature(extendedParams, merchant.hashKey, hash);
-
-    if (!validSignature) {
-      return IntegrationResponseDto.error(
-        IntegrationErrorCodes.INVALID_SIGNATURE,
-        IntegrationErrorMessages[IntegrationErrorCodes.INVALID_SIGNATURE],
-      );
-    }
-
-    if (
-      !Number.isFinite(minBetAmount) ||
-      !Number.isFinite(maxBetAmount) ||
-      minBetAmount < 0 ||
-      maxBetAmount < 0 ||
-      maxBetAmount < minBetAmount
-    ) {
-      return IntegrationResponseDto.error(
-        IntegrationErrorCodes.INVALID_BET_AMOUNT_LIMIT,
-        IntegrationErrorMessages[
-          IntegrationErrorCodes.INVALID_BET_AMOUNT_LIMIT
-        ],
-      );
-    }
-
-    try {
-      const current = await this.gameConfigService.getActiveConfig(
-        merchant.merchantId,
-      );
-      const normalizedLimits =
-        digitBetAmountLimits !== undefined
-          ? this.mergeDigitBetAmountLimits(
-              digitBetAmountLimits,
-              current.digitBetAmountLimits,
-            )
-          : this.buildUniformDigitBetAmountLimits(minBetAmount, maxBetAmount);
-
-      const updated = await this.gameConfigService.updateConfig(
-        {
-          ...current,
-          minBetAmount,
-          maxBetAmount,
-          digitBetAmountLimits: normalizedLimits,
-        },
-        merchant.merchantId,
-      );
-      return IntegrationResponseDto.success({
-        minBetAmount: updated.minBetAmount,
-        maxBetAmount: updated.maxBetAmount,
-        digitBetAmountLimits: this.cloneDigitBetAmountLimits(
-          updated.digitBetAmountLimits,
-        ),
-      });
-    } catch (error) {
-      if (this.isBetLimitValidationError(error)) {
-        return IntegrationResponseDto.error(
-          IntegrationErrorCodes.INVALID_BET_AMOUNT_LIMIT,
-          IntegrationErrorMessages[
-            IntegrationErrorCodes.INVALID_BET_AMOUNT_LIMIT
-          ],
-        );
-      }
-      this.logger.error('Failed to update bet limit', error);
-      return IntegrationResponseDto.error(
-        IntegrationErrorCodes.INTERNAL_ERROR,
-        IntegrationErrorMessages[IntegrationErrorCodes.INTERNAL_ERROR],
-      );
-    }
-  }
-
   private applyLaunchBetLimits(
     betLimits: LaunchBetLimitsDto,
   ): DigitBetAmountLimits {
@@ -875,89 +745,6 @@ export class IntegrationService {
 
   private isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
-  }
-
-  private serializeDigitBetAmountLimitsForSignature(
-    digitBetAmountLimits: DigitBetAmountLimitsDto | undefined,
-  ): string {
-    if (!digitBetAmountLimits) {
-      return '';
-    }
-
-    return DIGIT_BET_LIMIT_RULE_KEYS.map((key) => {
-      const entry = this.isRecord(digitBetAmountLimits[key])
-        ? (digitBetAmountLimits[key] as Record<string, unknown>)
-        : null;
-      const minBetAmount =
-        entry?.minBetAmount === undefined ? '' : String(entry.minBetAmount);
-      const maxBetAmount =
-        entry?.maxBetAmount === undefined ? '' : String(entry.maxBetAmount);
-      return `${key}:${minBetAmount},${maxBetAmount}`;
-    }).join('|');
-  }
-
-  private buildUniformDigitBetAmountLimits(
-    minBetAmount: number,
-    maxBetAmount: number,
-  ): DigitBetAmountLimits {
-    return {
-      smallBig: { minBetAmount, maxBetAmount },
-      oddEven: { minBetAmount, maxBetAmount },
-      double: { minBetAmount, maxBetAmount },
-      triple: { minBetAmount, maxBetAmount },
-      sum: { minBetAmount, maxBetAmount },
-      single: { minBetAmount, maxBetAmount },
-      anyTriple: { minBetAmount, maxBetAmount },
-    };
-  }
-
-  private mergeDigitBetAmountLimits(
-    digitBetAmountLimits: DigitBetAmountLimitsDto,
-    fallback: DigitBetAmountLimits,
-  ): DigitBetAmountLimits {
-    const result = {} as DigitBetAmountLimits;
-
-    for (const key of DIGIT_BET_LIMIT_RULE_KEYS) {
-      const fallbackEntry = fallback[key];
-      result[key] = this.normalizeBetAmountLimitEntry(
-        digitBetAmountLimits[key],
-        fallbackEntry,
-      );
-    }
-
-    return result;
-  }
-
-  private normalizeBetAmountLimitEntry(
-    raw: unknown,
-    fallback: BetAmountLimit,
-  ): BetAmountLimit {
-    if (!this.isRecord(raw)) {
-      return { ...fallback };
-    }
-    return {
-      minBetAmount:
-        raw.minBetAmount === undefined
-          ? fallback.minBetAmount
-          : Number(raw.minBetAmount),
-      maxBetAmount:
-        raw.maxBetAmount === undefined
-          ? fallback.maxBetAmount
-          : Number(raw.maxBetAmount),
-    };
-  }
-
-  private cloneDigitBetAmountLimits(
-    source: DigitBetAmountLimits,
-  ): DigitBetAmountLimits {
-    const result = {} as DigitBetAmountLimits;
-    for (const key of DIGIT_BET_LIMIT_RULE_KEYS) {
-      result[key] = {
-        minBetAmount: source[key].minBetAmount,
-        maxBetAmount: source[key].maxBetAmount,
-      };
-    }
-    return result;
   }
 
   private isBetLimitValidationError(error: unknown): boolean {

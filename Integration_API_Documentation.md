@@ -1,12 +1,12 @@
 # Platform Integration API Documentation
 
 **Version:** 1.3  
-**Last Updated:** March 2, 2026  
+**Last Updated:** March 10, 2026  
 
-**Change Highlights (Standard Spec + Runtime Sync on March 2, 2026):**
+**Change Highlights (Runtime Sync as of March 10, 2026):**
 - Compared and reconciled with `5_6136363283537468543.md` (standard specification).
 - Added a dedicated **Database** section (`Merchant` table key fields + required `merchantId` columns).
-- Added compatibility notes for timestamp window wording and bet-limit response shape.
+- Removed deprecated `Get Bet Limit` / `Set Bet Limit` APIs from the document and aligned runtime currency notes with current implementation.
 - Kept runtime-accurate endpoint/details that extend the standard spec (callback launch session gate, per-rule limits, expanded error-code set).
 
 ---
@@ -30,11 +30,9 @@
    - [All Transfer Out](#6-all-transfer-out)
    - [Callback: LoginPlayer (Merchant Side)](#7-callback-loginplayer-merchant-side)
    - [Callback: UpdateBalance (Merchant Side)](#8-callback-updatebalance-merchant-side)
-   - [Get Bet Limit](#9-get-bet-limit)
-   - [Set Bet Limit](#10-set-bet-limit)
-   - [Get Token Values](#11-get-token-values)
-   - [Set Token Values](#12-set-token-values)
-   - [Launch Session Start (Platform Runtime)](#13-launch-session-start-platform-runtime)
+   - [Get Token Values](#9-get-token-values)
+   - [Set Token Values](#10-set-token-values)
+   - [Launch Session Start (Platform Runtime)](#11-launch-session-start-platform-runtime)
 10. [Data Types](#data-types)
 11. [Code Examples](#code-examples)
 
@@ -44,14 +42,12 @@
 
 ### Information Required from Merchant Before Account Creation
 
-- `currency` code for this merchant.
-- Default bet-limit settings:
-  - Global: `maxBetLimit`, `minBetLimit`.
-  - Per rule: `bigSmall`, `oddEven`, `eachDouble`, `eachTripple`, `sum`, `single`, `anyTripple` with `maxBetLimit` and `minBetLimit`.
+- `currency` code for this merchant. This value is used for newly created player wallets and included in `LoginPlayer` / `UpdateBalance` callback payloads.
 - Callback URLs:
   - `LoginPlayer` callback URL.
   - `UpdateBalance` callback URL.
 - Integration source IP whitelist (all IPs that will call integration APIs).
+- Per-rule launch `betLimits` are supplied in each `Launch Game` request and persisted into merchant config.
 
 ### Information Returned by Game Provider After Account Creation
 
@@ -78,6 +74,11 @@ The following data domains must carry merchant ownership (typically via `merchan
 
 - `User`
 - `Bet`
+- `Transfer`
+- `GameConfig`
+- `WalletTransaction`
+- `PlayerLogin`
+- `MerchantLaunchSession`
 
 ---
 
@@ -92,7 +93,7 @@ This document describes the Integration API for platform partners to integrate t
 - Launch the game with authenticated player sessions
 - Transfer all remaining player balance back to merchant
 - Support merchant callback verification during login and offline settlement
-- Configure per-rule bet limits during Launch Game and manage token values (`Get/Set Bet Limit` are deprecated)
+- Configure per-rule bet limits during Launch Game and manage token values
 
 All API endpoints use **HTTP POST** method and accept/return **JSON** payloads.
 
@@ -275,8 +276,6 @@ All API responses follow this structure:
 | `LaunchGame` | `POST /integration/launch` |
 | `AllTransferOut` | `POST /integration/all-transfer-out` (or partner-provided route) |
 | `LaunchSessionStart` (runtime gate) | `POST /integration/launch/session/start` (Bearer launch JWT) |
-| `GetBetLimit` | `POST /integration/config/bet-limit/get` (deprecated) |
-| `SetBetLimit` | `POST /integration/config/bet-limit` (deprecated) |
 | `GetTokens` | `POST /integration/config/token-values/get` |
 | `SetTokens` | `POST /integration/config/token-values` |
 | `Callback: LoginPlayer` | Merchant callback URL configured in platform settings |
@@ -287,6 +286,9 @@ All API responses follow this structure:
 Creates a new player account in the game system.
 
 **Endpoint:** `POST /integration/account/create`
+
+Runtime note:
+- The created game wallet uses the merchant currency configured in platform admin.
 
 #### Request
 
@@ -342,6 +344,9 @@ hash = SHA256(merchantId + "&" + account + "&" + timestamp + "&" + hashKey)
 Transfer funds into or out of a player's game wallet.
 
 **Endpoint:** `POST /integration/transfer`
+
+Runtime note:
+- Wallet balances and transfer amounts are tracked in the merchant currency configured in platform admin.
 
 #### Request
 
@@ -617,7 +622,7 @@ Generate an authenticated game URL for a player.
 | `account` | string | Yes | Player account identifier |
 | `playerId` | string | Yes | Merchant-side player ID used by callback APIs for merchant verification |
 | `accessToken` | string | Yes | Merchant-side access token used by callback APIs for merchant verification |
-| `betLimits` | object | Yes | Per-rule limit object with `minBetLimit` + `maxBetLimit` for all 7 rule groups. See [Launch betLimits Object](#launch-betlimits-object-platform-2026-02-25) |
+| `betLimits` | object | Yes | Per-rule limit object with `minBetLimit` + `maxBetLimit` for all 7 rule groups. All 7 groups are required. See [Launch betLimits Object](#launch-betlimits-object-platform-2026-02-25) |
 | `timestamp` | integer | Yes | Unix timestamp in seconds |
 | `hash` | string | Yes | Request signature |
 
@@ -629,9 +634,10 @@ hash = SHA256(merchantId + "&" + account + "&" + timestamp + "&" + hashKey)
 Launch uses this signature regardless of provided `betLimits`.
 
 Runtime notes:
-- Launch is callback-only. `playerId`, `accessToken`, and merchant callback URLs are required.
+- Launch is callback-only. `playerId`, `accessToken`, and merchant callback URLs are required for a successful launch response.
 - The game client must call `POST /integration/launch/session/start` with the launch JWT before entering game socket flow.
 - `betLimits` is validated per rule during launch (`minBetLimit >= 0`, `maxBetLimit >= 0`, `maxBetLimit >= minBetLimit`) and persisted into merchant config for subsequent rounds.
+- `betLimits` persistence happens before callback field / callback configuration checks complete. A failed launch can still update the merchant's active bet-limit config.
 - Runtime derives global `minBetAmount` / `maxBetAmount` from provided per-rule limits.
 
 #### Request Example
@@ -758,7 +764,8 @@ Merchant must implement this callback endpoint for platform-initiated login veri
 #### Purpose
 
 - Platform calls this endpoint when a player opens the game.
-- Merchant verifies player identity (`playerId`, `account`, `accessToken`) and currency.
+- Merchant verifies player identity (`playerId`, `account`, `accessToken`).
+- Callback payload also includes the merchant currency configured in platform admin so the customer platform can verify it matches its merchant currency.
 - Merchant then transfers balance into game (typically via `POST /integration/transfer`, `type=0`) and returns success/failure.
 - Platform runtime retries callback on failure (`retryCount + 1` total attempts; default `3`) with per-attempt timeout (default `5000ms`).
 - Merchant callback must return HTTP 2xx and JSON with `success=true`; otherwise launch stays blocked.
@@ -771,7 +778,7 @@ Merchant must implement this callback endpoint for platform-initiated login veri
 | `playerId` | string | Yes | `playerId` originally passed in `Launch Game` |
 | `account` | string | Yes | Player game account |
 | `accessToken` | string | Yes | `accessToken` originally passed in `Launch Game` |
-| `currency` | string | Yes | Merchant-configured currency for validation |
+| `currency` | string | Yes | Merchant currency from platform admin configuration |
 | `timestamp` | integer | Yes | Unix timestamp in seconds |
 | `hash` | string | Yes | Request signature |
 
@@ -779,6 +786,8 @@ Merchant must implement this callback endpoint for platform-initiated login veri
 ```
 hash = SHA256(merchantId + "&" + timestamp + "&" + hashKey)
 ```
+
+`currency` is generated from the platform merchant record. Merchant-signed inbound integration APIs do not currently submit a `currency` field.
 
 #### Response
 
@@ -813,7 +822,7 @@ Merchant must implement this callback endpoint for platform-initiated offline se
 | `playerId` | string | Yes | `playerId` originally passed in `Launch Game` |
 | `account` | string | Yes | Player game account |
 | `accessToken` | string | Yes | `accessToken` originally passed in `Launch Game` |
-| `currency` | string | Yes | Merchant-configured currency for validation |
+| `currency` | string | Yes | Merchant currency from platform admin configuration |
 | `timestamp` | integer | Yes | Unix timestamp in seconds |
 | `hash` | string | Yes | Request signature |
 
@@ -821,6 +830,8 @@ Merchant must implement this callback endpoint for platform-initiated offline se
 ```
 hash = SHA256(merchantId + "&" + timestamp + "&" + hashKey)
 ```
+
+`currency` is generated from the platform merchant record. Merchant-signed inbound integration APIs do not currently submit a `currency` field.
 
 #### Response
 
@@ -834,164 +845,7 @@ hash = SHA256(merchantId + "&" + timestamp + "&" + hashKey)
 
 ---
 
-### 9. Get Bet Limit (Deprecated)
-
-Deprecated. Bet limits are now supplied and validated in `POST /integration/launch` via `betLimits`.
-
-**Endpoint:** `POST /integration/config/bet-limit/get`
-
-#### Request
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `merchantId` | string | Yes | Your merchant ID |
-| `timestamp` | integer | Yes | Unix timestamp in seconds |
-| `hash` | string | Yes | Request signature |
-
-**Signature Parameters (in order):**
-```
-hash = SHA256(merchantId + "&" + timestamp + "&" + hashKey)
-```
-
-#### Request Example
-
-```json
-{
-  "merchantId": "MERCHANT001",
-  "timestamp": 1706886400,
-  "hash": "a1b2c3d4e5f6..."
-}
-```
-
-#### Response
-
-```json
-{
-  "success": true,
-  "errorCode": 0,
-  "errorMessage": "",
-  "data": {
-    "minBetAmount": 0,
-    "maxBetAmount": 1000,
-    "digitBetAmountLimits": {
-      "smallBig": { "minBetAmount": 0, "maxBetAmount": 2000 },
-      "oddEven": { "minBetAmount": 0, "maxBetAmount": 2000 },
-      "double": { "minBetAmount": 0, "maxBetAmount": 800 },
-      "triple": { "minBetAmount": 0, "maxBetAmount": 300 },
-      "sum": { "minBetAmount": 0, "maxBetAmount": 1200 },
-      "single": { "minBetAmount": 0, "maxBetAmount": 1000 },
-      "anyTriple": { "minBetAmount": 0, "maxBetAmount": 500 }
-    }
-  }
-}
-```
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `minBetAmount` | number | Global minimum bet amount |
-| `maxBetAmount` | number | Global maximum bet amount |
-| `digitBetAmountLimits` | object | Per-rule bet limits for SMALL/BIG, ODD/EVEN, DOUBLE, TRIPLE, SUM, SINGLE, ANY_TRIPLE |
-
-Compatibility note:
-- The standard specification may show only global fields (`minBetAmount`, `maxBetAmount`).
-- Runtime responses can include `digitBetAmountLimits` as an extended payload; integrators should safely ignore unknown fields if not used.
-
----
-
-### 10. Set Bet Limit (Deprecated)
-
-Deprecated. Bet limits are now supplied and validated in `POST /integration/launch` via `betLimits`.
-
-**Endpoint:** `POST /integration/config/bet-limit`
-
-#### Request
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `merchantId` | string | Yes | Your merchant ID |
-| `minBetAmount` | number | Yes | Minimum amount a player can bet per round |
-| `maxBetAmount` | number | Yes | Maximum amount a player can bet per round |
-| `digitBetAmountLimits` | object | No | Per-rule min/max bet limits (7 digit rule groups). See [Digit Bet Amount Limits](#digit-bet-amount-limits) |
-| `timestamp` | integer | Yes | Unix timestamp in seconds |
-| `hash` | string | Yes | Request signature |
-
-**Rules:**
-- `minBetAmount` must be less than or equal to the lowest token value.
-- Each rule in `digitBetAmountLimits` must satisfy `minBetAmount >= 0`, `maxBetAmount >= 0`, and `maxBetAmount >= minBetAmount`.
-- Each rule `minBetAmount` must be less than or equal to the lowest token value.
-- If `digitBetAmountLimits` is omitted, all 7 digit-rule limits are set to the same `minBetAmount`/`maxBetAmount` values from the request.
-
-**Signature Parameters (in order, without `digitBetAmountLimits`):**
-```
-hash = SHA256(merchantId + "&" + minBetAmount + "&" + maxBetAmount + "&" + timestamp + "&" + hashKey)
-```
-
-**Signature Parameters (in order, with `digitBetAmountLimits`):**
-```
-hash = SHA256(
-  merchantId + "&" +
-  minBetAmount + "&" +
-  maxBetAmount + "&" +
-  digitBetAmountLimitsToken + "&" +
-  timestamp + "&" +
-  hashKey
-)
-```
-
-Where `digitBetAmountLimitsToken` format is:
-`smallBig:min,max|oddEven:min,max|double:min,max|triple:min,max|sum:min,max|single:min,max|anyTriple:min,max`
-
-#### Request Example
-
-```json
-{
-  "merchantId": "MERCHANT001",
-  "minBetAmount": 0,
-  "maxBetAmount": 1000,
-  "digitBetAmountLimits": {
-    "smallBig": { "minBetAmount": 0, "maxBetAmount": 2000 },
-    "oddEven": { "minBetAmount": 0, "maxBetAmount": 2000 },
-    "double": { "minBetAmount": 0, "maxBetAmount": 800 },
-    "triple": { "minBetAmount": 0, "maxBetAmount": 300 },
-    "sum": { "minBetAmount": 0, "maxBetAmount": 1200 },
-    "single": { "minBetAmount": 0, "maxBetAmount": 1000 },
-    "anyTriple": { "minBetAmount": 0, "maxBetAmount": 500 }
-  },
-  "timestamp": 1706886400,
-  "hash": "a1b2c3d4e5f6..."
-}
-```
-
-#### Response
-
-```json
-{
-  "success": true,
-  "errorCode": 0,
-  "errorMessage": "",
-  "data": {
-    "minBetAmount": 0,
-    "maxBetAmount": 1000,
-    "digitBetAmountLimits": {
-      "smallBig": { "minBetAmount": 0, "maxBetAmount": 2000 },
-      "oddEven": { "minBetAmount": 0, "maxBetAmount": 2000 },
-      "double": { "minBetAmount": 0, "maxBetAmount": 800 },
-      "triple": { "minBetAmount": 0, "maxBetAmount": 300 },
-      "sum": { "minBetAmount": 0, "maxBetAmount": 1200 },
-      "single": { "minBetAmount": 0, "maxBetAmount": 1000 },
-      "anyTriple": { "minBetAmount": 0, "maxBetAmount": 500 }
-    }
-  }
-}
-```
-
-Compatibility note:
-- In standard-spec-only integrations, request/response handling may focus on global `minBetAmount`/`maxBetAmount`.
-- Runtime supports optional per-rule limits via `digitBetAmountLimits`; include it when you need granular control.
-
----
-
-### 11. Get Token Values
+### 9. Get Token Values
 
 Retrieve the 7 token values shown in the betting UI.
 
@@ -1035,7 +889,7 @@ hash = SHA256(merchantId + "&" + timestamp + "&" + hashKey)
 
 ---
 
-### 12. Set Token Values
+### 10. Set Token Values
 
 Customize the 7 token values shown in the betting UI.
 
@@ -1086,13 +940,17 @@ Where `tokenValuesCSV` is the comma-joined string of the 7 values in the request
 
 ---
 
-### 13. Launch Session Start (Platform Runtime)
+### 11. Launch Session Start (Platform Runtime)
 
 Start callback-mode launch verification using the launch JWT from `Launch Game`.
 
 **Endpoint:** `POST /integration/launch/session/start`
 
 > This is a platform runtime endpoint used by the game client after redirect. It is not signed with merchant `hash`.
+
+Runtime notes:
+- `6003` is also returned when the launch JWT is missing callback session metadata.
+- `6006` is used when `UpdateBalance` callback is in progress or when the session has already reached offline callback sent/failed states.
 
 #### Request
 
@@ -1150,29 +1008,6 @@ Example:
   "sum": { "minBetLimit": 0, "maxBetLimit": 5000 },
   "single": { "minBetLimit": 0, "maxBetLimit": 6000 },
   "anyTripple": { "minBetLimit": 0, "maxBetLimit": 7000 }
-}
-```
-
-### Digit Bet Amount Limits
-
-`digitBetAmountLimits` uses these 7 rule groups:
-
-| Key | Winning Bet Rule |
-|-----|------------------|
-| `smallBig` | SMALL / BIG |
-| `oddEven` | ODD / EVEN |
-| `double` | Each DOUBLE |
-| `triple` | Each TRIPLE |
-| `sum` | SUM |
-| `single` | SINGLE |
-| `anyTriple` | ANY_TRIPLE |
-
-Each key contains:
-
-```json
-{
-  "minBetAmount": 0,
-  "maxBetAmount": 1000
 }
 ```
 

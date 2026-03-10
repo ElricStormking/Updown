@@ -41,11 +41,13 @@ export class WalletService {
       return wallet;
     }
 
+    const currency = await this.resolveMerchantCurrency(userId, client);
+
     return client.wallet.create({
       data: {
         userId,
         balance: new Prisma.Decimal(0),
-        currency: 'USDT',
+        currency,
       },
     });
   }
@@ -127,5 +129,23 @@ export class WalletService {
       },
     });
     return updated;
+  }
+
+  private async resolveMerchantCurrency(
+    userId: string,
+    client: Prisma.TransactionClient | PrismaService,
+  ): Promise<string> {
+    const user = await client.user.findUnique({
+      where: { id: userId },
+      select: {
+        merchant: {
+          select: { currency: true },
+        },
+      },
+    });
+    if (!user?.merchant?.currency) {
+      throw new NotFoundException('User not found');
+    }
+    return user.merchant.currency;
   }
 }

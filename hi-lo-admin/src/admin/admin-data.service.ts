@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { isIP } from 'node:net';
-import { Prisma, UserStatus } from '@prisma/client';
+import { LaunchSessionStatus, Prisma, UserStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   QueryRoundsDto,
@@ -211,7 +211,10 @@ export class AdminDataService {
 
     const users = await this.prisma.user.findMany({
       where,
-      include: { wallet: { select: { balance: true, currency: true } } },
+      include: {
+        wallet: { select: { balance: true, currency: true } },
+        merchant: { select: { currency: true } },
+      },
       orderBy: { createdAt: 'desc' },
       skip,
       take,
@@ -225,7 +228,7 @@ export class AdminDataService {
       merchantAccount: u.merchantAccount,
       status: u.status,
       balance: u.wallet ? Number(u.wallet.balance) : 0,
-      currency: u.wallet?.currency || 'USDT',
+      currency: u.wallet?.currency ?? u.merchant?.currency ?? 'USDT',
       createdAt: u.createdAt.toISOString(),
     }));
 
@@ -244,7 +247,10 @@ export class AdminDataService {
     const updated = await this.prisma.user.update({
       where: { id: playerId },
       data: { status },
-      include: { wallet: { select: { balance: true, currency: true } } },
+      include: {
+        wallet: { select: { balance: true, currency: true } },
+        merchant: { select: { currency: true } },
+      },
     });
     return {
       id: updated.id,
@@ -253,7 +259,7 @@ export class AdminDataService {
       merchantAccount: updated.merchantAccount,
       status: updated.status,
       balance: updated.wallet ? Number(updated.wallet.balance) : 0,
-      currency: updated.wallet?.currency || 'USDT',
+      currency: updated.wallet?.currency ?? updated.merchant?.currency ?? 'USDT',
       createdAt: updated.createdAt.toISOString(),
     };
   }
@@ -488,13 +494,16 @@ export class AdminDataService {
         ? undefined
         : normalizeAndValidateIpWhitelist(dto.integrationAllowedIps);
     this.validateMerchantCallbackConfig(next);
+    const nextCurrency =
+      dto.currency !== undefined ? dto.currency.trim() || 'USDT' : undefined;
+    const shouldPropagateCurrency =
+      nextCurrency !== undefined && nextCurrency !== existing.currency;
 
     const data: Prisma.MerchantUpdateInput = {};
     if (dto.name !== undefined) data.name = dto.name;
     if (dto.hashKey !== undefined) data.hashKey = dto.hashKey;
     if (dto.isActive !== undefined) data.isActive = dto.isActive;
-    if (dto.currency !== undefined)
-      data.currency = dto.currency.trim() || 'USDT';
+    if (nextCurrency !== undefined) data.currency = nextCurrency;
     if (dto.callbackEnabled !== undefined)
       data.callbackEnabled = dto.callbackEnabled;
     if (dto.loginPlayerCallbackUrl !== undefined)
@@ -505,9 +514,45 @@ export class AdminDataService {
       data.integrationAllowedIps = integrationAllowedIps;
     }
 
-    const merchant = await this.prisma.merchant.update({
-      where: { id },
-      data,
+    const merchant = await this.prisma.$transaction(async (tx) => {
+      const updatedMerchant = await tx.merchant.update({
+        where: { id },
+        data,
+      });
+
+      if (shouldPropagateCurrency) {
+        const userIds = (
+          await tx.user.findMany({
+            where: { merchantId: existing.merchantId },
+            select: { id: true },
+          })
+        ).map((user) => user.id);
+
+        if (userIds.length) {
+          await tx.wallet.updateMany({
+            where: {
+              userId: {
+                in: userIds,
+              },
+            },
+            data: {
+              currency: updatedMerchant.currency,
+            },
+          });
+        }
+
+        await tx.merchantLaunchSession.updateMany({
+          where: {
+            merchantId: existing.merchantId,
+            status: LaunchSessionStatus.ACTIVE,
+          },
+          data: {
+            currency: updatedMerchant.currency,
+          },
+        });
+      }
+
+      return updatedMerchant;
     });
     return {
       id: merchant.id,
