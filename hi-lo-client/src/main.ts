@@ -134,6 +134,7 @@ const DEFAULT_TOKEN_VALUES = [10, 50, 100, 150, 200, 300, 500];
 const COMPLETE_PHASE_DURATION_MS = 10000;
 const CONFIG_REFRESH_RETRY_DELAYS_MS = [0, 900, 2200];
 let lastConfigRefreshRoundId: number | null = null;
+let playerDataRefreshRequestId = 0;
 const delay = (ms: number) =>
   new Promise<void>((resolve) => window.setTimeout(resolve, ms));
 const normalizeTokenValues = (values?: number[]) => {
@@ -788,18 +789,19 @@ function clampAmount(amount: number, digitType?: DigitBetType) {
 
 async function refreshPlayerData() {
   if (!state.token) return;
+  const requestId = ++playerDataRefreshRequestId;
+  const token = state.token;
   const [walletRes, betsRes, roundsRes] = await Promise.all([
-    api.fetchWallet(state.token),
-    api.fetchPlayerHistory(state.token, 10),
+    api.fetchWallet(token),
+    api.fetchPlayerHistory(token, 10),
     api.fetchRoundHistory(20),
   ]);
+  if (requestId !== playerDataRefreshRequestId || state.token !== token) {
+    return;
+  }
 
   const latestCompletedRound =
     roundsRes.data.find((round) => Boolean(round.digitResult)) ?? null;
-  const latestDigitResult =
-    latestCompletedRound?.digitResult ?? state.lastDigitResult;
-  const latestDigitSum = latestCompletedRound?.digitSum ?? state.lastDigitSum;
-
   const inferredLastRoundResult = latestCompletedRound
     ? {
         roundId: latestCompletedRound.id,
@@ -822,6 +824,8 @@ async function refreshPlayerData() {
       inferredLastRoundResult.roundId >= state.lastRoundResult.roundId)
       ? inferredLastRoundResult
       : state.lastRoundResult;
+  const latestDigitResult = lastRoundResult?.digitResult ?? state.lastDigitResult;
+  const latestDigitSum = lastRoundResult?.digitSum ?? state.lastDigitSum;
 
   const summaryRoundId = lastRoundResult?.roundId;
   const summaryBets =

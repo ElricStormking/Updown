@@ -46,6 +46,51 @@ const formatMultiplierRatio = (value: number) => {
   return `1:${asStr}`;
 };
 
+const PRICE_ROUNDING_PRECISION = 8;
+
+const roundPriceToCents = (price: number): number => {
+  if (!Number.isFinite(price)) {
+    throw new Error('Price must be finite');
+  }
+
+  const sign = price < 0 ? -1 : 1;
+  const [integerPartRaw, fractionPartRaw = ''] = Math.abs(price)
+    .toFixed(PRICE_ROUNDING_PRECISION)
+    .split('.');
+  const fractionPart = fractionPartRaw.padEnd(PRICE_ROUNDING_PRECISION, '0');
+  const baseCents =
+    Number(integerPartRaw) * 100 + Number(fractionPart.slice(0, 2));
+  const shouldRoundUp = Number(fractionPart[2] ?? '0') >= 5;
+
+  return sign * (baseCents + (shouldRoundUp ? 1 : 0));
+};
+
+const getRoundedPricePresentation = (price: number) => {
+  const cents = roundPriceToCents(price);
+  const sign = cents < 0 ? '-' : '';
+  const absoluteCents = Math.abs(cents);
+  const integerPart = String(Math.floor(absoluteCents / 100));
+  const fractionPart = String(absoluteCents % 100).padStart(2, '0');
+  const prefix = `${sign}${integerPart.slice(0, -1)}`;
+  const highlight = `${integerPart.slice(-1) || '0'}.${fractionPart}`;
+  const digitResult = String(((cents % 1000) + 1000) % 1000).padStart(3, '0');
+
+  return {
+    display: `${sign}${integerPart}.${fractionPart}`,
+    prefix,
+    highlight,
+    digitResult,
+  };
+};
+
+const formatRoundedPrice = (price: number | null | undefined) => {
+  if (typeof price !== 'number' || !Number.isFinite(price)) {
+    return null;
+  }
+
+  return getRoundedPricePresentation(price).display;
+};
+
 const DEFAULT_SUM_PAYOUTS: Record<number, number> = {
   2: 70,
   3: 40,
@@ -458,8 +503,10 @@ export class HiLoScene extends Phaser.Scene {
       this.syncSelectedToken(nextState.selectedTokenValue);
       this.syncTokenPlacements(nextState.tokenPlacements);
       this.syncActiveSelections(nextState.digitSelections, nextState.tokenPlacements);
-      this.syncDigitResult(nextState.lastDigitResult);
-      this.syncDigitSum(nextState.lastDigitSum, nextState.lastDigitResult);
+      if (!this.round || this.round.status === 'COMPLETED') {
+        this.syncDigitResult(nextState.lastDigitResult);
+        this.syncDigitSum(nextState.lastDigitSum, nextState.lastDigitResult);
+      }
       this.syncBalance(nextState.walletBalance);
     });
 
@@ -2714,11 +2761,7 @@ export class HiLoScene extends Phaser.Scene {
 
   private syncLiveDigitsFromPrice(price: number) {
     if (!Number.isFinite(price)) return;
-    const priceStr = price.toFixed(2);
-    const [intPart, decPart = '00'] = priceStr.split('.');
-    const lastDigit = intPart.slice(-1) || '0';
-    const decimals = decPart.padEnd(2, '0').slice(0, 2);
-    this.setRoundDigitText(`${lastDigit}${decimals}`);
+    this.setRoundDigitText(getRoundedPricePresentation(price).digitResult);
   }
 
   private syncBalance(balance: number) {
@@ -2882,27 +2925,21 @@ export class HiLoScene extends Phaser.Scene {
       this.syncLiveDigitsFromPrice(update.price);
     }
 
-    // Split price into parts: prefix, last 3 digits (1 before decimal + 2 after decimal)
-    // Example: "75649.99" -> "7564" + "9.99"
-    const priceStr = update.price.toFixed(2);
-    const [intPart, decPart] = priceStr.split('.');
-    const lastDigit = intPart.slice(-1); // Last digit before decimal
-    const prefix = intPart.slice(0, -1); // All digits except last one
-    const highlight = `${lastDigit}.${decPart}`; // e.g., "9.99"
-    
+    const priceDisplay = getRoundedPricePresentation(update.price);
+
     // Update text content
-    this.priceTextGlow?.setText(prefix);
-    this.priceText?.setText(prefix);
-    this.priceTextHighlightGlow?.setText(highlight);
-    this.priceTextHighlight?.setText(highlight);
+    this.priceTextGlow?.setText(priceDisplay.prefix);
+    this.priceText?.setText(priceDisplay.prefix);
+    this.priceTextHighlightGlow?.setText(priceDisplay.highlight);
+    this.priceTextHighlight?.setText(priceDisplay.highlight);
     this.priceTextDecimal?.setText('');
-    
+
     // Position the text elements to form continuous price display
     const centerX = 540;
     const prefixWidth = this.priceText?.width ?? 0;
     const highlightWidth = this.priceTextHighlight?.width ?? 0;
     const totalWidth = prefixWidth + highlightWidth;
-    
+
     const startX = centerX - totalWidth / 2;
     // Slight overlap prevents any seam between the split text segments.
     const joinX = startX + prefixWidth - 1;
@@ -3132,7 +3169,7 @@ export class HiLoScene extends Phaser.Scene {
     this.syncDigitSum(normalizedDigitSum, normalizedDigitResult);
     this.setRoundState(this.round);
     this.scheduleResultOverlay('SKIPPED', payload);
-    this.playResultBoxTotalAnimation();
+    this.playResultBoxTotalAnimation(normalizedDigitResult, normalizedDigitSum);
   }
 
   private clearWinnerHighlights() {
@@ -4549,7 +4586,7 @@ export class HiLoScene extends Phaser.Scene {
       this.resultTitleWinSprite = undefined;
     }
 
-    const final = payload.finalPrice?.toFixed(2) ?? '--';
+    const final = formatRoundedPrice(payload.finalPrice) ?? '--';
 
     const statsText = this.add.text(
       0,
@@ -4825,7 +4862,10 @@ export class HiLoScene extends Phaser.Scene {
     }
   }
 
-  private playResultBoxTotalAnimation() {
+  private playResultBoxTotalAnimation(
+    digitResult?: string | null,
+    digitSum?: number | null,
+  ) {
     if (!this.textures.exists(RESULT_BOX_TOTAL_TEXTURE_KEY)) return;
     this.ensureBoxTotalAnimation();
     this.clearResultBoxTotalEffect(false);
@@ -4863,12 +4903,30 @@ export class HiLoScene extends Phaser.Scene {
       container.add(arrow);
     }
 
-    const digitValues = [
-      this.roundDigitsLeftText?.text ?? '-',
-      this.roundDigitsCenterText?.text ?? '-',
-      this.roundDigitsRightText?.text ?? '-',
-    ];
-    const sumValue = this.lastSumTriangleValue ?? this.sumTriangleText?.text ?? '--';
+    const resolvedDigitResult =
+      digitResult && /^\d{3}$/.test(digitResult)
+        ? digitResult
+        : [
+            this.roundDigitsLeftText?.text ?? '-',
+            this.roundDigitsCenterText?.text ?? '-',
+            this.roundDigitsRightText?.text ?? '-',
+          ].join('');
+    const digitValues =
+      resolvedDigitResult && /^\d{3}$/.test(resolvedDigitResult)
+        ? resolvedDigitResult.split('')
+        : ['-', '-', '-'];
+    const resolvedDigitSum =
+      typeof digitSum === 'number' && Number.isFinite(digitSum)
+        ? digitSum
+        : resolvedDigitResult && /^\d{3}$/.test(resolvedDigitResult)
+          ? resolvedDigitResult
+              .split('')
+              .reduce((sum, value) => sum + Number(value), 0)
+          : null;
+    const sumValue =
+      resolvedDigitSum !== null
+        ? String(resolvedDigitSum)
+        : this.lastSumTriangleValue ?? this.sumTriangleText?.text ?? '--';
 
     const topGlowStyle: Phaser.Types.GameObjects.Text.TextStyle = {
       fontFamily: "'Orbitron', 'Rajdhani', sans-serif",

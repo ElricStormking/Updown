@@ -5,8 +5,37 @@ export type DigitOutcome = {
   isTriple: boolean;
 };
 
+const PRICE_ROUNDING_PRECISION = 8;
+
+export const roundPriceToCents = (price: number): number => {
+  if (!Number.isFinite(price)) {
+    throw new Error('Price must be finite');
+  }
+
+  const sign = price < 0 ? -1 : 1;
+  const [integerPartRaw, fractionPartRaw = ''] = Math.abs(price)
+    .toFixed(PRICE_ROUNDING_PRECISION)
+    .split('.');
+  const fractionPart = fractionPartRaw.padEnd(PRICE_ROUNDING_PRECISION, '0');
+  const baseCents =
+    Number(integerPartRaw) * 100 + Number(fractionPart.slice(0, 2));
+  const shouldRoundUp = Number(fractionPart[2] ?? '0') >= 5;
+
+  return sign * (baseCents + (shouldRoundUp ? 1 : 0));
+};
+
+export const formatRoundedPrice = (price: number): string => {
+  const cents = roundPriceToCents(price);
+  const sign = cents < 0 ? '-' : '';
+  const absoluteCents = Math.abs(cents);
+  const integerPart = Math.floor(absoluteCents / 100);
+  const fractionPart = String(absoluteCents % 100).padStart(2, '0');
+
+  return `${sign}${integerPart}.${fractionPart}`;
+};
+
 export const getDigitOutcome = (price: number): DigitOutcome => {
-  const cents = Math.round(price * 100);
+  const cents = roundPriceToCents(price);
   const lastThree = ((cents % 1000) + 1000) % 1000;
   const digits = lastThree.toString().padStart(3, '0');
   const counts: Record<string, number> = {
