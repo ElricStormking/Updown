@@ -80,6 +80,13 @@ export interface SettlementStats {
   balanceUpdates: Array<{ userId: string; balance: number }>;
 }
 
+export interface FinalizedRoundSnapshot {
+  finalPrice: number | null;
+  winningSide: BetSide | null;
+  digitResult: string | null;
+  digitSum: number | null;
+}
+
 @Injectable()
 export class BetsService {
   private readonly logger = new Logger(BetsService.name);
@@ -399,6 +406,7 @@ export class BetsService {
     digitOutcome: DigitOutcome | null,
     digitBonusSlots: DigitBonusSlot[] = [],
     digitBonusFactor: number | null = null,
+    finalizedRound?: FinalizedRoundSnapshot,
   ): Promise<SettlementStats> {
     const round = await this.prisma.round.findUnique({
       where: { id: roundId },
@@ -413,6 +421,9 @@ export class BetsService {
     });
 
     if (!bets.length) {
+      if (finalizedRound) {
+        await this.persistFinalizedRound(roundId, finalizedRound);
+      }
       return {
         totalBets: 0,
         winners: 0,
@@ -513,6 +524,22 @@ export class BetsService {
           await this.markLoss(tx, bet.id);
         }
       }
+
+      if (finalizedRound) {
+        await tx.round.update({
+          where: { id: roundId },
+          data: {
+            status: RoundStatus.COMPLETED,
+            finalPrice:
+              finalizedRound.finalPrice !== null
+                ? new Prisma.Decimal(finalizedRound.finalPrice)
+                : null,
+            winningSide: finalizedRound.winningSide,
+            digitResult: finalizedRound.digitResult,
+            digitSum: finalizedRound.digitSum,
+          },
+        });
+      }
     }, {
       maxWait: INTERACTIVE_TX_MAX_WAIT_MS,
       timeout: INTERACTIVE_TX_TIMEOUT_MS,
@@ -536,6 +563,25 @@ export class BetsService {
       participants,
       balanceUpdates,
     };
+  }
+
+  private async persistFinalizedRound(
+    roundId: number,
+    finalizedRound: FinalizedRoundSnapshot,
+  ) {
+    await this.prisma.round.update({
+      where: { id: roundId },
+      data: {
+        status: RoundStatus.COMPLETED,
+        finalPrice:
+          finalizedRound.finalPrice !== null
+            ? new Prisma.Decimal(finalizedRound.finalPrice)
+            : null,
+        winningSide: finalizedRound.winningSide,
+        digitResult: finalizedRound.digitResult,
+        digitSum: finalizedRound.digitSum,
+      },
+    });
   }
 
   private async processRefund(

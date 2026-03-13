@@ -19,7 +19,10 @@ import { RedisService } from '../redis/redis.service';
 import { CacheKeys } from '../common/constants/cache-keys';
 import { RoundState } from './interfaces/round-state.interface';
 import { RoundEvent } from './interfaces/round-event.interface';
-import { BetsService } from '../bets/bets.service';
+import {
+  BetsService,
+  type FinalizedRoundSnapshot,
+} from '../bets/bets.service';
 import { AppConfig } from '../config/configuration';
 import { getDigitOutcome } from './digit-bet.utils';
 import {
@@ -34,9 +37,14 @@ import { GameConfigService } from '../config/game-config.service';
 import { GameConfigSnapshot } from '../config/game-config.defaults';
 
 const COMPLETE_PHASE_DURATION_MS = 10_000;
+const FINALIZATION_RETRY_DELAY_MS = 1_500;
 
 type RoundConfigSnapshot = GameConfigSnapshot & {
   merchantSnapshots?: Record<string, GameConfigSnapshot>;
+};
+
+type PendingRoundFinalization = FinalizedRoundSnapshot & {
+  roundId: number;
 };
 
 @Injectable()
@@ -52,6 +60,7 @@ export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
   private nextRoundTimer?: NodeJS.Timeout;
   private startRoundRetryTimer?: NodeJS.Timeout;
   private currentRound?: RoundState;
+  private pendingRoundFinalization?: PendingRoundFinalization;
   private disposed = false;
   private isStartingRound = false;
   private isLockingRound = false;
@@ -113,6 +122,7 @@ export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
     }
     this.isStartingRound = true;
     try {
+      await this.clearPendingRoundFinalization();
       const now = Date.now();
       const config = await this.gameConfigService.getActiveConfig();
       const merchantSnapshots =
@@ -319,71 +329,36 @@ export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
     ) {
       return;
     }
+    const roundId = this.currentRound.id;
+    this.resultTimer = undefined;
     this.isFinalizingRound = true;
 
     try {
-      const finalPrice = await this.fetchLatestPrice();
-      const locked = this.currentRound.lockedPrice ?? finalPrice;
+      const finalization = await this.resolvePendingRoundFinalization(
+        this.currentRound,
+      );
       const digitOutcome =
-        finalPrice !== null ? getDigitOutcome(finalPrice) : null;
-      const digitResult = digitOutcome?.digits ?? null;
-      const digitSum = digitOutcome?.sum ?? null;
-      let winningSide: BetSide | null = null;
-      if (locked !== null && finalPrice !== null) {
-        if (finalPrice > locked) {
-          winningSide = BetSide.UP;
-        } else if (finalPrice < locked) {
-          winningSide = BetSide.DOWN;
-        }
-      }
-
-      let stats;
-      try {
-        stats = await this.betsService.settleRound(
-          this.currentRound.id,
-          winningSide,
-          digitOutcome,
-          this.currentRound.digitBonus?.slots ?? [],
-          this.currentRound.digitBonus?.factor ?? null,
-        );
-        await this.prisma.round.update({
-          where: { id: this.currentRound.id },
-          data: {
-            status: RoundStatus.COMPLETED,
-            finalPrice:
-              finalPrice !== null ? new Prisma.Decimal(finalPrice) : null,
-            winningSide,
-            digitResult,
-            digitSum,
-          },
-        });
-      } catch (error) {
-        this.logger.error(
-          `Failed to finalize round ${this.currentRound.id}`,
-          error,
-        );
-      }
-
-      if (!stats) {
-        stats = {
-          totalBets: 0,
-          winners: 0,
-          refunded: 0,
-          totalVolume: 0,
-          participants: [],
-          balanceUpdates: [],
-        };
-      }
+        finalization.finalPrice !== null
+          ? getDigitOutcome(finalization.finalPrice)
+          : null;
+      const stats = await this.betsService.settleRound(
+        roundId,
+        finalization.winningSide,
+        digitOutcome,
+        this.currentRound.digitBonus?.slots ?? [],
+        this.currentRound.digitBonus?.factor ?? null,
+        finalization,
+      );
 
       this.eventsSubject.next({
         type: 'round:result',
         payload: {
-          roundId: this.currentRound.id,
+          roundId,
           lockedPrice: this.currentRound.lockedPrice ?? null,
-          finalPrice,
-          digitResult,
-          digitSum,
-          winningSide,
+          finalPrice: finalization.finalPrice,
+          digitResult: finalization.digitResult,
+          digitSum: finalization.digitSum,
+          winningSide: finalization.winningSide,
           stats,
         },
       });
@@ -391,7 +366,11 @@ export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
       this.currentRound = undefined;
       const displayDelay = COMPLETE_PHASE_DURATION_MS;
       this.currentConfig = undefined;
-      await this.redis.del(CacheKeys.activeRoundState);
+      await this.redis.del(
+        CacheKeys.activeRoundState,
+        CacheKeys.activeRoundFinalization,
+      );
+      this.pendingRoundFinalization = undefined;
 
       if (this.nextRoundTimer) {
         clearTimeout(this.nextRoundTimer);
@@ -399,6 +378,13 @@ export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
       this.nextRoundTimer = setTimeout(() => {
         void this.startNewRound();
       }, displayDelay);
+    } catch (error) {
+      this.logger.error(
+        `Failed to finalize round ${roundId}`,
+        error,
+      );
+      await this.cacheRoundState();
+      this.scheduleFinalizeRoundRetry();
     } finally {
       this.isFinalizingRound = false;
     }
@@ -438,9 +424,89 @@ export class RoundEngineService implements OnModuleInit, OnModuleDestroy {
     }, Math.max(0, delayMs));
   }
 
+  private scheduleFinalizeRoundRetry(delayMs = FINALIZATION_RETRY_DELAY_MS) {
+    if (
+      this.disposed ||
+      this.resultTimer ||
+      !this.currentRound ||
+      this.currentRound.status !== RoundStatus.RESULT_PENDING
+    ) {
+      return;
+    }
+
+    this.resultTimer = setTimeout(() => {
+      this.resultTimer = undefined;
+      void this.finishCurrentRound();
+    }, Math.max(0, delayMs));
+  }
+
   private async fetchLatestPrice(): Promise<number | null> {
     const latest = await this.binancePrice.getLatestPrice();
     return latest?.price ?? null;
+  }
+
+  private async resolvePendingRoundFinalization(
+    round: RoundState,
+  ): Promise<PendingRoundFinalization> {
+    const cached = await this.getPendingRoundFinalization(round.id);
+    if (cached) {
+      return cached;
+    }
+
+    const finalPrice = await this.fetchLatestPrice();
+    const locked = round.lockedPrice ?? finalPrice;
+    const digitOutcome =
+      finalPrice !== null ? getDigitOutcome(finalPrice) : null;
+    let winningSide: BetSide | null = null;
+    if (locked !== null && finalPrice !== null) {
+      if (finalPrice > locked) {
+        winningSide = BetSide.UP;
+      } else if (finalPrice < locked) {
+        winningSide = BetSide.DOWN;
+      }
+    }
+
+    const finalization: PendingRoundFinalization = {
+      roundId: round.id,
+      finalPrice,
+      digitResult: digitOutcome?.digits ?? null,
+      digitSum: digitOutcome?.sum ?? null,
+      winningSide,
+    };
+    this.pendingRoundFinalization = finalization;
+    await this.redis.setJson(
+      CacheKeys.activeRoundFinalization,
+      finalization,
+      this.roundStateTtlMs,
+    );
+    return finalization;
+  }
+
+  private async getPendingRoundFinalization(
+    roundId: number,
+  ): Promise<PendingRoundFinalization | null> {
+    if (this.pendingRoundFinalization?.roundId === roundId) {
+      return this.pendingRoundFinalization;
+    }
+
+    const cached = await this.redis.getJson<PendingRoundFinalization>(
+      CacheKeys.activeRoundFinalization,
+    );
+    if (!cached) {
+      return null;
+    }
+    if (cached.roundId !== roundId) {
+      await this.clearPendingRoundFinalization();
+      return null;
+    }
+
+    this.pendingRoundFinalization = cached;
+    return cached;
+  }
+
+  private async clearPendingRoundFinalization() {
+    this.pendingRoundFinalization = undefined;
+    await this.redis.del(CacheKeys.activeRoundFinalization);
   }
 
   private async cacheRoundState() {
