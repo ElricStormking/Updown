@@ -4419,7 +4419,7 @@ export class HiLoScene extends Phaser.Scene {
     cardBackGlow.fillRoundedRect(left - 20, top - 20, cardWidth + 40, cardHeight + 40, radius + 20);
 
     const cardBg = this.add.graphics();
-    cardBg.fillGradientStyle(0x0b1622, 0x0b1622, 0x10263b, 0x10263b, 0.96);
+    cardBg.fillGradientStyle(0x030507, 0x030507, 0x081018, 0x081018, 0.985);
     cardBg.fillRoundedRect(left, top, cardWidth, cardHeight, radius);
     cardBg.lineStyle(5, outcomeColor, 0.96);
     cardBg.strokeRoundedRect(left, top, cardWidth, cardHeight, radius);
@@ -4428,14 +4428,14 @@ export class HiLoScene extends Phaser.Scene {
 
     const chromaTint = this.add.graphics();
     chromaTint.fillGradientStyle(
-      sciFiCyan,
-      sciFiMagenta,
-      0x122742,
-      0x122742,
-      0.1,
-      0.1,
-      0.02,
-      0.02,
+      0x0b1620,
+      0x120c1d,
+      0x05080d,
+      0x05080d,
+      0.04,
+      0.04,
+      0.012,
+      0.012,
     );
     chromaTint.fillRoundedRect(left + 8, top + 8, cardWidth - 16, cardHeight - 16, radius - 8);
 
