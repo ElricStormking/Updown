@@ -162,7 +162,18 @@ const getDefaultSuggestWinPct = (
   }
 };
 
-const buildDefaultSlotPayoutMeta = () => {
+const getBonusWeightSum = (entry?: DigitBonusRatioEntry) => {
+  if (!entry) return 0;
+  return entry.weights.reduce((sum, weight) => {
+    const next = Number(weight);
+    return Number.isFinite(next) && next > 0 ? sum + next : sum;
+  }, 0);
+};
+
+const buildDefaultSlotPayoutMeta = (
+  digitBonusRatios: DigitBonusRatios,
+  bonusSlotChanceTotal = DEFAULT_BONUS_SLOT_CHANCE_TOTAL,
+) => {
   const meta: Record<
     string,
     {
@@ -174,22 +185,27 @@ const buildDefaultSlotPayoutMeta = () => {
     }
   > = {};
   getAllDigitBetSlots().forEach((slot) => {
+    const slotKey = buildDigitBonusKey(slot);
     const suggestWinPct = getDefaultSuggestWinPct(
       slot.digitType,
       slot.selection,
     );
-    meta[buildDigitBonusKey(slot)] = {
+    const bonusWeightSum = getBonusWeightSum(digitBonusRatios[slotKey]);
+    meta[slotKey] = {
       suggestWinPct,
       suggestWinPctDouble: 0,
       suggestWinPctTriple: 0,
       rtpFoolProofPct: 0,
-      totalCounts: 100000,
+      totalCounts: Math.max(bonusSlotChanceTotal - bonusWeightSum, 0),
     };
   });
   return meta;
 };
 
-export const buildDefaultDigitPayouts = (): DigitPayouts => ({
+export const buildDefaultDigitPayouts = (
+  digitBonusRatios: DigitBonusRatios = buildDefaultDigitBonusRatios(),
+  bonusSlotChanceTotal = DEFAULT_BONUS_SLOT_CHANCE_TOTAL,
+): DigitPayouts => ({
   smallBigOddEven: DIGIT_PAYOUTS.smallBigOddEven,
   anyTriple: DIGIT_PAYOUTS.anyTriple,
   double: DIGIT_PAYOUTS.double,
@@ -201,7 +217,10 @@ export const buildDefaultDigitPayouts = (): DigitPayouts => ({
   },
   sum: buildSumPayouts(),
   bySlot: buildDefaultSlotPayouts(),
-  bySlotMeta: buildDefaultSlotPayoutMeta(),
+  bySlotMeta: buildDefaultSlotPayoutMeta(
+    digitBonusRatios,
+    bonusSlotChanceTotal,
+  ),
 });
 
 export const buildDefaultDigitBonusRatios = (): DigitBonusRatios => {
@@ -363,25 +382,33 @@ export const buildDefaultDigitBonusRatios = (): DigitBonusRatios => {
   return ratios;
 };
 
-export const buildDefaultGameConfig = (): GameConfigSnapshot => ({
-  configVersion: 'default',
-  bettingDurationMs: Number(gameConfig.bettingDurationMs),
-  resultDurationMs: Number(gameConfig.resultDurationMs),
-  resultDisplayDurationMs: Number(gameConfig.resultDisplayDurationMs),
-  minBetAmount: Number(gameConfig.minBetAmount),
-  maxBetAmount: Number(gameConfig.maxBetAmount),
-  digitBetAmountLimits: buildDefaultDigitBetAmountLimits(
-    Number(gameConfig.minBetAmount),
-    Number(gameConfig.maxBetAmount),
-  ),
-  tokenValues: Array.isArray(gameConfig.tokenValues)
-    ? gameConfig.tokenValues.slice()
-    : [10, 50, 100, 150, 200, 300, 500],
-  payoutMultiplierUp: Number(gameConfig.payoutMultiplierUp),
-  payoutMultiplierDown: Number(gameConfig.payoutMultiplierDown),
-  priceSnapshotInterval: Number(gameConfig.priceSnapshotInterval),
-  bonusModeEnabled: Boolean(gameConfig.digitBonus?.enabled),
-  bonusSlotChanceTotal: DEFAULT_BONUS_SLOT_CHANCE_TOTAL,
-  digitPayouts: buildDefaultDigitPayouts(),
-  digitBonusRatios: buildDefaultDigitBonusRatios(),
-});
+export const buildDefaultGameConfig = (): GameConfigSnapshot => {
+  const bonusSlotChanceTotal = DEFAULT_BONUS_SLOT_CHANCE_TOTAL;
+  const digitBonusRatios = buildDefaultDigitBonusRatios();
+
+  return {
+    configVersion: 'default',
+    bettingDurationMs: Number(gameConfig.bettingDurationMs),
+    resultDurationMs: Number(gameConfig.resultDurationMs),
+    resultDisplayDurationMs: Number(gameConfig.resultDisplayDurationMs),
+    minBetAmount: Number(gameConfig.minBetAmount),
+    maxBetAmount: Number(gameConfig.maxBetAmount),
+    digitBetAmountLimits: buildDefaultDigitBetAmountLimits(
+      Number(gameConfig.minBetAmount),
+      Number(gameConfig.maxBetAmount),
+    ),
+    tokenValues: Array.isArray(gameConfig.tokenValues)
+      ? gameConfig.tokenValues.slice()
+      : [10, 50, 100, 150, 200, 300, 500],
+    payoutMultiplierUp: Number(gameConfig.payoutMultiplierUp),
+    payoutMultiplierDown: Number(gameConfig.payoutMultiplierDown),
+    priceSnapshotInterval: Number(gameConfig.priceSnapshotInterval),
+    bonusModeEnabled: Boolean(gameConfig.digitBonus?.enabled),
+    bonusSlotChanceTotal,
+    digitPayouts: buildDefaultDigitPayouts(
+      digitBonusRatios,
+      bonusSlotChanceTotal,
+    ),
+    digitBonusRatios,
+  };
+};

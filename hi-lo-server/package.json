@@ -23,7 +23,8 @@
     "prisma:migrate:dev": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
     "db:seed": "prisma db seed",
-    "audit:null-merchant-users": "ts-node --project tsconfig.json Test-scripts/audit-null-merchant-users.ts"
+    "audit:null-merchant-users": "ts-node --project tsconfig.json Test-scripts/audit-null-merchant-users.ts",
+    "report:bonus-rtp": "ts-node --project tsconfig.json Test-scripts/export-bonus-rtp-report.ts"
   },
   "dependencies": {
     "@nestjs/axios": "^4.0.1",

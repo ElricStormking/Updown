@@ -7,4 +7,5 @@ Thumbs.db
 *.tmp
 .env*
 prisma/dev.db
+Test-scripts/logs/bonus-rtp-report/
 
