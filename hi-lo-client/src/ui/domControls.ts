@@ -71,8 +71,21 @@ let bettingHistoryPrevBtn: HTMLButtonElement | null = null;
 let bettingHistoryNextBtn: HTMLButtonElement | null = null;
 let bettingHistoryPageLabelEl: HTMLSpanElement | null = null;
 let bettingHistoryListEl: HTMLDivElement | null = null;
+let statusAlertBackdropEl: HTMLDivElement | null = null;
+let statusAlertCloseBtn: HTMLButtonElement | null = null;
+let statusAlertActionBtn: HTMLButtonElement | null = null;
+let statusAlertTitleEl: HTMLDivElement | null = null;
+let statusAlertMessageEl: HTMLParagraphElement | null = null;
 let authFormLocked = false;
 let menuButtonArmed = false;
+let statusAlertLastFocusEl: HTMLElement | null = null;
+let statusAlertAutoDismissTimer: ReturnType<typeof setTimeout> | null = null;
+let statusAlertAutoDismissActive = false;
+let statusAlertLockedOpen = false;
+let statusAlertDismissAllowed = true;
+let statusAlertActionHandler: (() => void) | null = null;
+
+const DEFAULT_STATUS_ALERT_ACTION_LABEL = 'OK';
 
 // Track if user has passed through the fullscreen gate (mobile only)
 let fullscreenGatePassed = false;
@@ -97,6 +110,167 @@ const isMobileViewport = () => {
     (hasCoarsePointer && hasNoHover) ||
     (hasTouch && narrowViewport)
   );
+};
+
+const isBetLimitStatusMessage = (message: string) =>
+  /betting limit/i.test(message);
+
+const isRoundWaitStatusMessage = (message: string) =>
+  /authenticated\.\s*waiting for round updates|waiting for (next )?round/i.test(
+    message,
+  );
+
+const STATUS_ALERT_AUTO_DISMISS_MS = 2600;
+
+const shouldUseStatusAlert = (message: string, isError: boolean) =>
+  isRoundWaitStatusMessage(message) ||
+  (isError &&
+    isMobileViewport() &&
+    (message.trim().length > 26 || isBetLimitStatusMessage(message)));
+
+const getStatusAlertTitle = (message: string, isError: boolean) => {
+  if (isBetLimitStatusMessage(message)) {
+    return 'Bet Limit Warning';
+  }
+  if (isRoundWaitStatusMessage(message)) {
+    return 'Please Wait';
+  }
+  return isError ? 'Warning' : 'Notice';
+};
+
+const getStatusAlertSceneLabel = (message: string, isError: boolean) => {
+  if (isBetLimitStatusMessage(message)) {
+    return 'BET LIMIT';
+  }
+  if (isRoundWaitStatusMessage(message)) {
+    return 'WAITING';
+  }
+  return isError ? 'WARNING' : 'NOTICE';
+};
+
+const clearStatusAlertAutoDismiss = () => {
+  if (statusAlertAutoDismissTimer) {
+    clearTimeout(statusAlertAutoDismissTimer);
+    statusAlertAutoDismissTimer = null;
+  }
+};
+
+const resetStatusAlertModalState = () => {
+  statusAlertAutoDismissActive = false;
+  statusAlertLockedOpen = false;
+  statusAlertDismissAllowed = true;
+  statusAlertActionHandler = null;
+  statusAlertBackdropEl?.classList.remove('is-locked');
+  if (statusAlertActionBtn) {
+    statusAlertActionBtn.textContent = DEFAULT_STATUS_ALERT_ACTION_LABEL;
+  }
+};
+
+const setStatusAlertModalOpen = (open: boolean) => {
+  if (!statusAlertBackdropEl || typeof document === 'undefined') return;
+
+  if (open) {
+    const active = document.activeElement;
+    statusAlertLastFocusEl = active instanceof HTMLElement ? active : null;
+  } else {
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && statusAlertBackdropEl.contains(active)) {
+      active.blur();
+    }
+  }
+
+  statusAlertBackdropEl.classList.toggle('is-open', open);
+  statusAlertBackdropEl.setAttribute('aria-hidden', open ? 'false' : 'true');
+
+  if (open) {
+    requestAnimationFrame(() => {
+      if (!statusAlertAutoDismissActive) {
+        statusAlertActionBtn?.focus();
+      }
+    });
+    return;
+  }
+
+  clearStatusAlertAutoDismiss();
+  if (statusAlertLastFocusEl && document.contains(statusAlertLastFocusEl)) {
+    statusAlertLastFocusEl.focus();
+  }
+  resetStatusAlertModalState();
+};
+
+const showStatusAlert = (message: string, isError: boolean) => {
+  statusAlertLockedOpen = false;
+  statusAlertDismissAllowed = true;
+  statusAlertActionHandler = null;
+  statusAlertAutoDismissActive = isRoundWaitStatusMessage(message);
+  statusAlertBackdropEl?.classList.toggle(
+    'is-auto-dismiss',
+    statusAlertAutoDismissActive,
+  );
+  statusAlertBackdropEl?.classList.remove('is-locked');
+  if (statusAlertActionBtn) {
+    statusAlertActionBtn.textContent = DEFAULT_STATUS_ALERT_ACTION_LABEL;
+  }
+  if (statusAlertTitleEl) {
+    statusAlertTitleEl.textContent = getStatusAlertTitle(message, isError);
+  }
+  if (statusAlertMessageEl) {
+    statusAlertMessageEl.textContent = message;
+  }
+  setStatusAlertModalOpen(true);
+  clearStatusAlertAutoDismiss();
+  if (statusAlertAutoDismissActive) {
+    statusAlertAutoDismissTimer = setTimeout(() => {
+      statusAlertAutoDismissTimer = null;
+      setStatusAlertModalOpen(false);
+    }, STATUS_ALERT_AUTO_DISMISS_MS);
+  }
+};
+
+export const showSessionExpiredAlert = (
+  message: string,
+  onConfirm: () => void,
+  options?: {
+    title?: string;
+    actionLabel?: string;
+    sceneLabel?: string;
+  },
+) => {
+  clearStatusAlertAutoDismiss();
+  statusAlertAutoDismissActive = false;
+  statusAlertLockedOpen = true;
+  statusAlertDismissAllowed = false;
+  statusAlertActionHandler = onConfirm;
+  statusAlertBackdropEl?.classList.add('is-locked');
+  if (statusAlertTitleEl) {
+    statusAlertTitleEl.textContent = options?.title?.trim() || 'Session Expired';
+  }
+  if (statusAlertMessageEl) {
+    statusAlertMessageEl.textContent = message;
+  }
+  if (statusAlertActionBtn) {
+    statusAlertActionBtn.textContent =
+      options?.actionLabel?.trim() || 'Confirm';
+  }
+  if (statusEl) {
+    statusEl.textContent = message;
+    statusEl.classList.add('error');
+  }
+  if (authStatusEl) {
+    authStatusEl.textContent = message;
+    authStatusEl.classList.add('error');
+  }
+  setStatusAlertModalOpen(true);
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(
+      new CustomEvent('app:status', {
+        detail: {
+          message: options?.sceneLabel?.trim() || 'SESSION EXPIRED',
+          isError: true,
+        },
+      }),
+    );
+  }
 };
 
 const tokenStackByKey = new Map<string, HTMLElement>();
@@ -593,6 +767,38 @@ export const initControls = (handlers: ControlHandlers) => {
         </div>
       </div>
     </div>
+    <div class="status-alert-modal-backdrop" id="status-alert-modal-backdrop" aria-hidden="true">
+      <div
+        class="status-alert-modal"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="status-alert-title"
+        aria-describedby="status-alert-message"
+      >
+        <button
+          type="button"
+          class="status-alert-modal-close"
+          id="status-alert-modal-close"
+          aria-label="Close warning"
+          title="Close"
+        >
+          X
+        </button>
+        <div class="status-alert-modal-signal" aria-hidden="true">
+          <span class="status-alert-modal-signal-core"></span>
+        </div>
+        <div class="status-alert-modal-eyebrow">System Notice</div>
+        <div class="status-alert-modal-title" id="status-alert-title">Warning</div>
+        <p class="status-alert-modal-message" id="status-alert-message"></p>
+        <button
+          type="button"
+          class="status-alert-modal-action"
+          id="status-alert-modal-action"
+        >
+          OK
+        </button>
+      </div>
+    </div>
     </div>
   `;
 
@@ -652,6 +858,11 @@ export const initControls = (handlers: ControlHandlers) => {
   bettingHistoryNextBtn = root.querySelector('#betting-history-next');
   bettingHistoryPageLabelEl = root.querySelector('#betting-history-page-label');
   bettingHistoryListEl = root.querySelector('#betting-history-list');
+  statusAlertBackdropEl = root.querySelector('#status-alert-modal-backdrop');
+  statusAlertCloseBtn = root.querySelector('#status-alert-modal-close');
+  statusAlertActionBtn = root.querySelector('#status-alert-modal-action');
+  statusAlertTitleEl = root.querySelector('#status-alert-title');
+  statusAlertMessageEl = root.querySelector('#status-alert-message');
   digitTableEl = root.querySelector('#digit-bet-table');
   digitResultEl = root.querySelector('#digit-result');
   digitResultDigits = Array.from(
@@ -836,7 +1047,7 @@ export const initControls = (handlers: ControlHandlers) => {
       (e) => {
         if (!isMobileViewport() || !state.token || isFullscreenActive()) return;
         const target = e.target as Element | null;
-        if (target?.closest('#token-bar-floating, .stats-dock, .menu-modal, .settings-modal, .stats-modal, .chart-modal, .betting-history-modal')) return;
+        if (target?.closest('#token-bar-floating, .stats-dock, .menu-modal, .menu-modal-backdrop, .settings-modal, .settings-modal-backdrop, .stats-modal, .stats-modal-backdrop, .chart-modal, .chart-modal-backdrop, .betting-history-modal, .betting-history-modal-backdrop, .status-alert-modal, .status-alert-modal-backdrop')) return;
         void requestFullscreen();
       },
       { passive: true },
@@ -1091,6 +1302,24 @@ export const initControls = (handlers: ControlHandlers) => {
       setBettingHistoryModalOpen(false);
     }
   });
+  statusAlertCloseBtn?.addEventListener('click', () => {
+    if (!statusAlertDismissAllowed) return;
+    setStatusAlertModalOpen(false);
+  });
+  statusAlertActionBtn?.addEventListener('click', () => {
+    const action = statusAlertActionHandler;
+    if (action) {
+      action();
+      return;
+    }
+    setStatusAlertModalOpen(false);
+  });
+  statusAlertBackdropEl?.addEventListener('click', (event) => {
+    if (!statusAlertDismissAllowed) return;
+    if (event.target === statusAlertBackdropEl) {
+      setStatusAlertModalOpen(false);
+    }
+  });
   bettingHistoryPrevBtn?.addEventListener('click', async () => {
     const nextPage = Math.max(0, state.betHistoryPage - 1);
     if (nextPage === state.betHistoryPage) return;
@@ -1216,6 +1445,18 @@ export const initControls = (handlers: ControlHandlers) => {
 };
 
 export const setStatus = (message: string, isError = false) => {
+  if (statusAlertLockedOpen) {
+    if (statusEl) {
+      statusEl.textContent = message;
+      statusEl.classList.toggle('error', isError);
+    }
+    if (authStatusEl) {
+      authStatusEl.textContent = message;
+      authStatusEl.classList.toggle('error', isError);
+    }
+    return;
+  }
+  const useStatusAlert = shouldUseStatusAlert(message, isError);
   if (statusEl) {
     statusEl.textContent = message;
     statusEl.classList.toggle('error', isError);
@@ -1224,9 +1465,19 @@ export const setStatus = (message: string, isError = false) => {
     authStatusEl.textContent = message;
     authStatusEl.classList.toggle('error', isError);
   }
+  if (useStatusAlert) {
+    showStatusAlert(message, isError);
+  } else {
+    setStatusAlertModalOpen(false);
+  }
   if (typeof window !== 'undefined') {
+    const sceneMessage = useStatusAlert
+      ? getStatusAlertSceneLabel(message, isError)
+      : message;
     window.dispatchEvent(
-      new CustomEvent('app:status', { detail: { message, isError } }),
+      new CustomEvent('app:status', {
+        detail: { message: sceneMessage, isError },
+      }),
     );
   }
 };

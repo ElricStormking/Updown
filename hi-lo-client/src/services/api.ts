@@ -15,8 +15,10 @@ const hasWindow = typeof window !== 'undefined';
 const TOKEN_REFRESH_HEADER = 'x-access-token';
 
 type AccessTokenRefreshListener = (accessToken: string) => void;
+type AuthFailureListener = (error: unknown) => void;
 
 let accessTokenRefreshListener: AccessTokenRefreshListener | undefined;
+let authFailureListener: AuthFailureListener | undefined;
 
 const trimTrailingSlash = (value: string) => value.replace(/\/+$/, '');
 
@@ -71,11 +73,27 @@ const emitAccessTokenRefreshIfPresent = (headers: unknown) => {
   }
 };
 
+const isAuthFailureResponse = (error: unknown) => {
+  if (!axios.isAxiosError(error)) {
+    return false;
+  }
+  const status = error.response?.status;
+  return status === 401 || status === 403;
+};
+
 const attachAccessTokenRefreshInterceptor = (client: AxiosInstance) => {
-  client.interceptors.response.use((response) => {
-    emitAccessTokenRefreshIfPresent(response.headers);
-    return response;
-  });
+  client.interceptors.response.use(
+    (response) => {
+      emitAccessTokenRefreshIfPresent(response.headers);
+      return response;
+    },
+    (error) => {
+      if (isAuthFailureResponse(error)) {
+        authFailureListener?.(error);
+      }
+      return Promise.reject(error);
+    },
+  );
 };
 
 attachAccessTokenRefreshInterceptor(gameClient);
@@ -90,6 +108,10 @@ export const setAccessTokenRefreshListener = (
   listener?: AccessTokenRefreshListener,
 ) => {
   accessTokenRefreshListener = listener;
+};
+
+export const setAuthFailureListener = (listener?: AuthFailureListener) => {
+  authFailureListener = listener;
 };
 
 export const api = {

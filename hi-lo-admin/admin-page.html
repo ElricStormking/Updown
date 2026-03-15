@@ -1322,8 +1322,13 @@
       const tokenKey = 'adminToken';
       const tokenRefreshHeader = 'x-access-token';
       const adminInfoKey = 'adminInfo';
+      const sessionIdleLogoutMs = 60 * 60 * 1000;
+      const sessionRefreshThrottleMs = 5 * 60 * 1000;
       let token = localStorage.getItem(tokenKey) || '';
       let currentAdmin = null;
+      let idleLogoutTimer = null;
+      let lastTokenRefreshAt = 0;
+      let keepaliveInFlight = false;
       const $ = (sel) => document.querySelector(sel);
       const $$ = (sel) => document.querySelectorAll(sel);
       const loginSection = $('#login-section');
@@ -1499,6 +1504,63 @@
         } else {
           el.classList.remove('error');
         }
+      };
+
+      const clearIdleLogoutTimer = () => {
+        if (!idleLogoutTimer) return;
+        clearTimeout(idleLogoutTimer);
+        idleLogoutTimer = null;
+      };
+
+      const scheduleIdleLogout = () => {
+        clearIdleLogoutTimer();
+        if (!token) return;
+        idleLogoutTimer = setTimeout(() => {
+          handleAuthFailure('Session expired due to inactivity. Please log in again.');
+        }, sessionIdleLogoutMs);
+      };
+
+      const clearAuthSession = (message, isError = true) => {
+        clearIdleLogoutTimer();
+        keepaliveInFlight = false;
+        lastTokenRefreshAt = 0;
+        token = '';
+        localStorage.removeItem(tokenKey);
+        saveAdminInfo(null);
+        setAuthState(false);
+        setStatus(
+          loginStatus,
+          message || 'Session expired. Please log in again.',
+          isError,
+        );
+      };
+
+      const shouldRefreshAdminToken = () =>
+        Boolean(token) &&
+        !keepaliveInFlight &&
+        (Date.now() - lastTokenRefreshAt >= sessionRefreshThrottleMs);
+
+      const refreshAdminSessionIfNeeded = async () => {
+        if (!shouldRefreshAdminToken()) return;
+        keepaliveInFlight = true;
+        try {
+          const me = await apiFetch('/admin/auth/me');
+          if (me?.user) {
+            saveAdminInfo(me.user);
+          }
+        } catch (error) {
+          if (!(error instanceof Error) || !/session expired|invalid|expired/i.test(error.message || '')) {
+            console.warn('Admin session keepalive failed', error);
+          }
+        } finally {
+          keepaliveInFlight = false;
+        }
+      };
+
+      const markAdminActivity = () => {
+        if (!token) return;
+        scheduleIdleLogout();
+        void refreshAdminSessionIfNeeded();
       };
 
       const buildBonusRtpExceededMessage = (count) => {
@@ -1813,9 +1875,11 @@
         if (mainContent) mainContent.classList.toggle('hidden', !authed);
         if (logoutBtn) logoutBtn.classList.toggle('hidden', !authed);
         if (authed) {
+          scheduleIdleLogout();
           scheduleBonusRatioScrollbarUpdate();
           applyAdminPermissions();
         } else {
+          clearIdleLogoutTimer();
           document.body.classList.remove('admin-limited');
           closeMerchantAdminModal();
           closeMerchantEditModal();
@@ -1823,6 +1887,16 @@
           void refreshBootstrapStatus();
         }
       };
+
+      ['pointerdown', 'keydown', 'input', 'change', 'focusin', 'touchstart', 'wheel'].forEach((eventName) => {
+        document.addEventListener(
+          eventName,
+          () => {
+            markAdminActivity();
+          },
+          { passive: eventName === 'touchstart' || eventName === 'wheel' },
+        );
+      });
 
       // Tab handling
       const tabs = $('#tabs');
@@ -2634,7 +2708,9 @@
           typeof nextToken === 'string' ? nextToken.trim() : '';
         if (!normalized) return;
         token = normalized;
+        lastTokenRefreshAt = Date.now();
         localStorage.setItem(tokenKey, normalized);
+        scheduleIdleLogout();
       };
 
       const syncAuthTokenFromResponse = (response) => {
@@ -2647,11 +2723,7 @@
       };
 
       const handleAuthFailure = (message) => {
-        token = '';
-        localStorage.removeItem(tokenKey);
-        saveAdminInfo(null);
-        setAuthState(false);
-        setStatus(loginStatus, message || 'Session expired. Please log in again.', true);
+        clearAuthSession(message || 'Session expired. Please log in again.', true);
       };
 
       const apiFetch = async (path, options) => {
@@ -3876,10 +3948,7 @@
       });
 
       logoutBtn.addEventListener('click', () => {
-        token = '';
-        localStorage.removeItem(tokenKey);
-        saveAdminInfo(null);
-        setAuthState(false);
+        clearAuthSession('Logged out.', false);
       });
 
       initDefaults();
@@ -3891,6 +3960,7 @@
       }
       setAuthState(Boolean(token));
       if (token) {
+        scheduleIdleLogout();
         const hydrateAdminProfile = async () => {
           if (currentAdmin) return;
           try {

@@ -2,11 +2,25 @@ import Phaser from 'phaser';
 import axios from 'axios';
 import './style.css';
 import { HiLoScene } from './scenes/HiLoScene';
-import { initControls, setAuthFormLocked, setStatus } from './ui/domControls';
+import {
+  initControls,
+  setAuthFormLocked,
+  setStatus,
+  showSessionExpiredAlert,
+} from './ui/domControls';
 import type { BetSide, DigitBetType } from './types';
-import { api, setAccessTokenRefreshListener } from './services/api';
+import {
+  api,
+  setAccessTokenRefreshListener,
+  setAuthFailureListener,
+} from './services/api';
 import { authenticateGameSocket, createGameSocket } from './services/socket';
-import { state, updateState, type TokenPlacement } from './state/gameState';
+import {
+  state,
+  subscribe,
+  updateState,
+  type TokenPlacement,
+} from './state/gameState';
 import {
   initTradingViewWidget,
   pushPriceUpdate,
@@ -20,6 +34,7 @@ type LaunchTokenPayload = {
   sub?: string;
   account?: string;
   merchantId?: string;
+  exp?: number;
   type?: 'user' | 'admin' | string;
 };
 
@@ -48,20 +63,6 @@ const getMerchantId = () =>
   readMerchantIdFromStorage() ||
   '';
 
-let latestAccessToken = '';
-const rememberAccessToken = (accessToken: string) => {
-  const nextToken = accessToken.trim();
-  if (!nextToken) {
-    return;
-  }
-  latestAccessToken = nextToken;
-  if (state.token !== nextToken) {
-    updateState({ token: nextToken });
-  }
-};
-const resolveAccessToken = (fallbackToken: string) =>
-  latestAccessToken.trim() || fallbackToken;
-
 const decodeJwtPayload = (token: string): LaunchTokenPayload | null => {
   const parts = token.split('.');
   if (parts.length < 2) return null;
@@ -73,6 +74,48 @@ const decodeJwtPayload = (token: string): LaunchTokenPayload | null => {
     return null;
   }
 };
+
+const getTokenSubject = (token: string) => {
+  const subject = decodeJwtPayload(token)?.sub;
+  return typeof subject === 'string' ? subject.trim() : '';
+};
+
+const getTokenExpiryTimeMs = (token: string) => {
+  const exp = decodeJwtPayload(token)?.exp;
+  if (typeof exp !== 'number' || !Number.isFinite(exp) || exp <= 0) {
+    return null;
+  }
+  return exp * 1000;
+};
+
+let latestAccessToken = '';
+let pendingPlayerTokenSubject = '';
+let lastPlayerSessionExpiryMessage = '';
+
+const rememberAccessToken = (accessToken: string) => {
+  const nextToken = accessToken.trim();
+  if (!nextToken) {
+    return;
+  }
+
+  const tokenSubject = getTokenSubject(nextToken);
+  const currentUserId = state.user?.id?.trim() ?? '';
+  const expectedSubject = currentUserId || pendingPlayerTokenSubject;
+  if (expectedSubject && tokenSubject && tokenSubject !== expectedSubject) {
+    return;
+  }
+  if (!currentUserId && !pendingPlayerTokenSubject && !state.token) {
+    return;
+  }
+
+  latestAccessToken = nextToken;
+  if (state.token !== nextToken) {
+    updateState({ token: nextToken });
+  }
+};
+
+const resolveAccessToken = (fallbackToken: string) =>
+  latestAccessToken.trim() || fallbackToken;
 
 const clearLaunchTokenFromUrl = () => {
   if (typeof window === 'undefined') return;
@@ -133,6 +176,22 @@ const game = new Phaser.Game({
 const DEFAULT_TOKEN_VALUES = [10, 50, 100, 150, 200, 300, 500];
 const COMPLETE_PHASE_DURATION_MS = 10000;
 const CONFIG_REFRESH_RETRY_DELAYS_MS = [0, 900, 2200];
+const PLAYER_IDLE_TIMEOUT_MS = 15 * 60 * 1000;
+const PLAYER_IDLE_LOGOUT_MESSAGE =
+  'Your session expired after 15 minutes of inactivity. This window will close shortly. Tap Confirm to continue.';
+const PLAYER_TOKEN_EXPIRED_MESSAGE =
+  'Your session has expired. This window will close shortly. Tap Confirm to continue.';
+const INVALID_LAUNCH_LINK_MESSAGE =
+  'This launch link is invalid or no longer available. This window will close shortly. Tap Confirm to continue.';
+const PLAYER_ACTIVITY_EVENTS = [
+  'pointerdown',
+  'keydown',
+  'input',
+  'change',
+  'focusin',
+  'touchstart',
+  'wheel',
+] as const;
 let lastConfigRefreshRoundId: number | null = null;
 let playerDataRefreshRequestId = 0;
 const delay = (ms: number) =>
@@ -362,6 +421,364 @@ const socket = createGameSocket(
 );
 setAccessTokenRefreshListener(rememberAccessToken);
 
+let lastPlayerActivityAt = 0;
+let playerIdleTimer: ReturnType<typeof setTimeout> | null = null;
+let playerJwtExpiryTimer: ReturnType<typeof setTimeout> | null = null;
+let playerIdleTrackingBound = false;
+let previousPlayerToken = state.token;
+let playerSessionClosePending = false;
+
+const clearPlayerIdleTimer = () => {
+  if (playerIdleTimer) {
+    clearTimeout(playerIdleTimer);
+    playerIdleTimer = null;
+  }
+};
+
+const clearPlayerJwtExpiryTimer = () => {
+  if (playerJwtExpiryTimer) {
+    clearTimeout(playerJwtExpiryTimer);
+    playerJwtExpiryTimer = null;
+  }
+};
+
+const hasPlayerSessionTimedOut = () =>
+  Boolean(state.token) &&
+  lastPlayerActivityAt > 0 &&
+  Date.now() - lastPlayerActivityAt >= PLAYER_IDLE_TIMEOUT_MS;
+
+const clearPlayerSession = (statusMessage?: string) => {
+  lastConfigRefreshRoundId = null;
+  playerDataRefreshRequestId += 1;
+  latestAccessToken = '';
+  pendingPlayerTokenSubject = '';
+  clearPlayerIdleTimer();
+  clearPlayerJwtExpiryTimer();
+  socket.disconnect();
+  scene.clearPlayerBets();
+  scene.setBalance(0);
+  setPriceFreeze(false);
+  setLockedPrice(null);
+  updateState({
+    token: undefined,
+    user: undefined,
+    config: undefined,
+    serverWalletBalance: 0,
+    walletBalance: 0,
+    tokenPlacements: {},
+    betHistory: [],
+    betHistoryPage: 0,
+    betHistoryPageHasNext: false,
+    betHistoryPageItems: [],
+    roundHistory: [],
+    currentRound: undefined,
+    digitSelections: [],
+    lastRoundResult: null,
+    lastRoundStake: 0,
+    lastRoundPayout: 0,
+    lastRoundBets: [],
+    lastDigitResult: null,
+    lastDigitSum: null,
+  });
+  setAuthFormLocked(false);
+  if (statusMessage) {
+    setStatus(statusMessage, true);
+  }
+};
+
+const closePlayerLaunchWindow = () => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  try {
+    window.close();
+  } catch {
+    // Ignore close failures and continue with fallbacks.
+  }
+  if (window.closed) {
+    return;
+  }
+  try {
+    window.open('', '_self');
+    window.close();
+  } catch {
+    // Ignore close failures and continue with fallbacks.
+  }
+  if (!window.closed) {
+    window.location.replace('about:blank');
+  }
+};
+
+const beginForcedWindowCloseFlow = (
+  message: string,
+  options?: {
+    title?: string;
+    sceneLabel?: string;
+    lockAuthForm?: boolean;
+    clearLaunchTokenFromAddress?: boolean;
+  },
+) => {
+  if (playerSessionClosePending) {
+    return false;
+  }
+  playerSessionClosePending = true;
+  lastPlayerSessionExpiryMessage = message;
+  clearPlayerSession();
+  if (options?.clearLaunchTokenFromAddress) {
+    clearLaunchTokenFromUrl();
+  }
+  setAuthFormLocked(Boolean(options?.lockAuthForm));
+  showSessionExpiredAlert(message, closePlayerLaunchWindow, {
+    title: options?.title,
+    sceneLabel: options?.sceneLabel,
+    actionLabel: 'Confirm',
+  });
+  return true;
+};
+
+const beginPlayerSessionExpiryFlow = (message: string) => {
+  return beginForcedWindowCloseFlow(message, {
+    title: 'Session Expired',
+    sceneLabel: 'SESSION EXPIRED',
+  });
+};
+
+const closeWindowForInvalidLaunch = (message = INVALID_LAUNCH_LINK_MESSAGE) => {
+  return beginForcedWindowCloseFlow(message, {
+    title: 'Invalid Launch Link',
+    sceneLabel: 'INVALID LINK',
+    lockAuthForm: true,
+    clearLaunchTokenFromAddress: true,
+  });
+};
+
+const formatInvalidLaunchMessage = (message?: string) => {
+  const normalized = message?.trim();
+  if (!normalized) {
+    return INVALID_LAUNCH_LINK_MESSAGE;
+  }
+  return `${normalized} This window will close shortly. Tap Confirm to continue.`;
+};
+
+const expirePlayerSessionForInactivity = () => {
+  if (!state.token) {
+    return false;
+  }
+  return beginPlayerSessionExpiryFlow(PLAYER_IDLE_LOGOUT_MESSAGE);
+};
+
+const expirePlayerSessionForJwtExpiry = (message = PLAYER_TOKEN_EXPIRED_MESSAGE) => {
+  if (!state.token) {
+    return false;
+  }
+  return beginPlayerSessionExpiryFlow(message);
+};
+
+const schedulePlayerIdleTimeout = () => {
+  clearPlayerIdleTimer();
+  if (typeof window === 'undefined' || !state.token || lastPlayerActivityAt <= 0) {
+    return;
+  }
+  const remainingMs = Math.max(
+    0,
+    PLAYER_IDLE_TIMEOUT_MS - (Date.now() - lastPlayerActivityAt),
+  );
+  playerIdleTimer = window.setTimeout(() => {
+    playerIdleTimer = null;
+    if (hasPlayerSessionTimedOut()) {
+      expirePlayerSessionForInactivity();
+      return;
+    }
+    schedulePlayerIdleTimeout();
+  }, remainingMs);
+};
+
+const schedulePlayerJwtExpiryTimeout = (token?: string) => {
+  clearPlayerJwtExpiryTimer();
+  if (
+    typeof window === 'undefined' ||
+    !token ||
+    playerSessionClosePending
+  ) {
+    return;
+  }
+  const expiresAtMs = getTokenExpiryTimeMs(token);
+  if (!expiresAtMs) {
+    return;
+  }
+  const remainingMs = expiresAtMs - Date.now();
+  if (remainingMs <= 0) {
+    expirePlayerSessionForJwtExpiry();
+    return;
+  }
+  playerJwtExpiryTimer = window.setTimeout(() => {
+    playerJwtExpiryTimer = null;
+    expirePlayerSessionForJwtExpiry();
+  }, remainingMs);
+};
+
+const notePlayerActivity = () => {
+  if (!state.token) {
+    return;
+  }
+  lastPlayerActivityAt = Date.now();
+  schedulePlayerIdleTimeout();
+};
+
+const handlePlayerActivity = () => {
+  notePlayerActivity();
+};
+
+const handlePlayerVisibilityResume = () => {
+  if (!state.token) {
+    return;
+  }
+  if (
+    typeof document !== 'undefined' &&
+    document.visibilityState === 'hidden'
+  ) {
+    return;
+  }
+  if (hasPlayerSessionTimedOut()) {
+    expirePlayerSessionForInactivity();
+    return;
+  }
+  schedulePlayerIdleTimeout();
+};
+
+const bindPlayerIdleTracking = () => {
+  if (
+    playerIdleTrackingBound ||
+    typeof document === 'undefined' ||
+    typeof window === 'undefined'
+  ) {
+    return;
+  }
+  playerIdleTrackingBound = true;
+  PLAYER_ACTIVITY_EVENTS.forEach((eventName) => {
+    document.addEventListener(eventName, handlePlayerActivity, true);
+  });
+  document.addEventListener('visibilitychange', handlePlayerVisibilityResume);
+  window.addEventListener('focus', handlePlayerVisibilityResume);
+};
+
+const unbindPlayerIdleTracking = () => {
+  if (
+    !playerIdleTrackingBound ||
+    typeof document === 'undefined' ||
+    typeof window === 'undefined'
+  ) {
+    return;
+  }
+  playerIdleTrackingBound = false;
+  PLAYER_ACTIVITY_EVENTS.forEach((eventName) => {
+    document.removeEventListener(eventName, handlePlayerActivity, true);
+  });
+  document.removeEventListener(
+    'visibilitychange',
+    handlePlayerVisibilityResume,
+  );
+  window.removeEventListener('focus', handlePlayerVisibilityResume);
+};
+
+const syncPlayerSessionTracking = () => {
+  const hasToken = Boolean(state.token);
+  const hadToken = Boolean(previousPlayerToken);
+  const tokenChanged = state.token !== previousPlayerToken;
+  if (hasToken) {
+    pendingPlayerTokenSubject = state.user?.id?.trim() || pendingPlayerTokenSubject;
+    if (!hadToken) {
+      lastPlayerSessionExpiryMessage = '';
+      playerSessionClosePending = false;
+      bindPlayerIdleTracking();
+      notePlayerActivity();
+    }
+    if (tokenChanged) {
+      schedulePlayerJwtExpiryTimeout(state.token);
+    }
+  } else if (hadToken) {
+    lastPlayerActivityAt = 0;
+    clearPlayerIdleTimer();
+    clearPlayerJwtExpiryTimer();
+    unbindPlayerIdleTracking();
+  }
+  previousPlayerToken = state.token;
+};
+
+const requireActivePlayerSession = () => {
+  if (playerSessionClosePending) {
+    throw new Error(
+      lastPlayerSessionExpiryMessage || PLAYER_TOKEN_EXPIRED_MESSAGE,
+    );
+  }
+  if (!state.token) {
+    throw new Error(
+      lastPlayerSessionExpiryMessage || 'You must login first.',
+    );
+  }
+  if (!hasPlayerSessionTimedOut()) {
+    return;
+  }
+  expirePlayerSessionForInactivity();
+  throw new Error(PLAYER_IDLE_LOGOUT_MESSAGE);
+};
+
+subscribe(() => {
+  syncPlayerSessionTracking();
+});
+
+const extractAuthErrorMessages = (error: unknown) => {
+  if (!axios.isAxiosError(error)) {
+    return [] as string[];
+  }
+  const data = error.response?.data as
+    | { message?: unknown; errorMessage?: unknown }
+    | undefined;
+  const values = [data?.message, data?.errorMessage];
+  return values.flatMap((value) => {
+    if (typeof value === 'string' && value.trim()) {
+      return [value.trim()];
+    }
+    if (Array.isArray(value)) {
+      return value.filter(
+        (item): item is string => typeof item === 'string' && item.trim().length > 0,
+      );
+    }
+    return [];
+  });
+};
+
+const isPlayerSessionExpiryError = (error: unknown) => {
+  if (!axios.isAxiosError(error)) {
+    return false;
+  }
+  const status = error.response?.status;
+  if (status !== 401 && status !== 403) {
+    return false;
+  }
+  const normalized = extractAuthErrorMessages(error)
+    .join(' ')
+    .toLowerCase();
+  if (
+    normalized.includes('disabled') ||
+    normalized.includes('blacklist') ||
+    normalized.includes('launch session')
+  ) {
+    return false;
+  }
+  return true;
+};
+
+setAuthFailureListener((error) => {
+  if (!state.token || playerSessionClosePending) {
+    return;
+  }
+  if (!isPlayerSessionExpiryError(error)) {
+    return;
+  }
+  expirePlayerSessionForJwtExpiry();
+});
+
 void bootstrapLaunchAuthFromUrl();
 
 const buildHiLoBetKey = (side: BetSide) => `HILO|${side}`;
@@ -424,12 +841,15 @@ async function bootstrapLaunchAuthFromUrl() {
   let launchToken = (new URLSearchParams(window.location.search).get('accessToken') ?? '').trim();
   if (!launchToken) {
     latestAccessToken = '';
+    pendingPlayerTokenSubject = '';
     setAuthFormLocked(false);
     return;
   }
   latestAccessToken = launchToken;
 
   const decoded = decodeJwtPayload(launchToken);
+  pendingPlayerTokenSubject =
+    typeof decoded?.sub === 'string' ? decoded.sub.trim() : '';
   const merchantId =
     (new URLSearchParams(window.location.search).get('merchantId') ?? '').trim() ||
     (decoded?.merchantId ?? '').trim() ||
@@ -437,8 +857,11 @@ async function bootstrapLaunchAuthFromUrl() {
 
   if (!merchantId) {
     socket.disconnect();
-    setAuthFormLocked(true);
-    setStatus('Launch token missing merchant ID. Please request a new launch URL.', true);
+    closeWindowForInvalidLaunch(
+      formatInvalidLaunchMessage(
+        'Launch token missing merchant ID. Please request a new launch URL.',
+      ),
+    );
     return;
   }
 
@@ -451,23 +874,15 @@ async function bootstrapLaunchAuthFromUrl() {
         launchSession.code,
         launchSession.message,
       );
-      updateState({
-        token: undefined,
-        user: undefined,
-        merchantId,
-        tokenPlacements: {},
-      });
-      latestAccessToken = '';
-      socket.disconnect();
-      setAuthFormLocked(lockLaunchUrl);
       const blockedReason = launchSession.message?.trim();
-      setStatus(
-        lockLaunchUrl
-          ? 'Launch URL disabled because this player account is blacklisted.'
-          : blockedReason
-            ? `Launch blocked: ${blockedReason}`
-            : `Launch blocked (code ${launchSession.code}).`,
-        true,
+      closeWindowForInvalidLaunch(
+        formatInvalidLaunchMessage(
+          lockLaunchUrl
+            ? 'Launch URL disabled because this player account is blacklisted.'
+            : blockedReason
+              ? `Launch blocked: ${blockedReason}`
+              : `Launch blocked (code ${launchSession.code}).`,
+        ),
       );
       return;
     }
@@ -478,6 +893,7 @@ async function bootstrapLaunchAuthFromUrl() {
       api.fetchWallet(launchToken),
     ]);
     launchToken = resolveAccessToken(launchToken);
+    const launchUserId = getTokenSubject(launchToken);
     const serverWalletBalance = Number(wallet.balance);
     const nextPlacements: Record<string, TokenPlacement> = {};
     const tokenValues = normalizeTokenValues(config?.tokenValues);
@@ -489,7 +905,7 @@ async function bootstrapLaunchAuthFromUrl() {
     updateState({
       token: launchToken,
       user: {
-        id: typeof decoded?.sub === 'string' ? decoded.sub : '',
+        id: launchUserId || (typeof decoded?.sub === 'string' ? decoded.sub : ''),
         account:
           typeof decoded?.account === 'string' && decoded.account.trim()
             ? decoded.account
@@ -505,6 +921,7 @@ async function bootstrapLaunchAuthFromUrl() {
       selectedTokenValue,
       tokenPlacements: nextPlacements,
     });
+    pendingPlayerTokenSubject = launchUserId || pendingPlayerTokenSubject;
     persistMerchantId(merchantId);
     scene.setResultDisplayDuration(COMPLETE_PHASE_DURATION_MS);
 
@@ -515,20 +932,13 @@ async function bootstrapLaunchAuthFromUrl() {
     setStatus('Authenticated. Waiting for round updates.');
   } catch (error) {
     const lockLaunchUrl = shouldLockAuthForLaunchError(error);
-    updateState({
-      token: undefined,
-      user: undefined,
-      tokenPlacements: {},
-    });
-    latestAccessToken = '';
     socket.disconnect();
-    clearLaunchTokenFromUrl();
-    setAuthFormLocked(lockLaunchUrl);
-    setStatus(
-      lockLaunchUrl
-        ? 'Launch URL disabled because this player account is blacklisted.'
-        : extractLaunchErrorMessage(error),
-      true,
+    closeWindowForInvalidLaunch(
+      formatInvalidLaunchMessage(
+        lockLaunchUrl
+          ? 'Launch URL disabled because this player account is blacklisted.'
+          : extractLaunchErrorMessage(error),
+      ),
     );
   }
 }
@@ -538,11 +948,14 @@ async function handleLogin(credentials: { account: string; password: string; mer
   const { data: auth } = await api.login(credentials.account, credentials.password);
   let accessToken = auth.accessToken;
   latestAccessToken = accessToken;
+  pendingPlayerTokenSubject = auth.user.id.trim();
   const { data: config } = await api.fetchGameConfig(
     accessToken,
     credentials.merchantId.trim(),
   );
   accessToken = resolveAccessToken(accessToken);
+  pendingPlayerTokenSubject =
+    getTokenSubject(accessToken) || auth.user.id.trim();
   const merchantId =
     auth.user?.merchantId?.trim() ||
     credentials.merchantId.trim() ||
@@ -570,6 +983,8 @@ async function handleLogin(credentials: { account: string; password: string; mer
       {},
     ),
   });
+  pendingPlayerTokenSubject =
+    getTokenSubject(accessToken) || auth.user.id.trim();
   persistMerchantId(merchantId);
   scene.setResultDisplayDuration(COMPLETE_PHASE_DURATION_MS);
 
@@ -579,6 +994,10 @@ async function handleLogin(credentials: { account: string; password: string; mer
 
 async function refreshConfig(): Promise<boolean> {
   if (!state.token) return false;
+  if (hasPlayerSessionTimedOut()) {
+    expirePlayerSessionForInactivity();
+    return false;
+  }
   try {
     const { data: config } = await api.fetchGameConfig(
       state.token,
@@ -601,14 +1020,20 @@ async function refreshConfig(): Promise<boolean> {
 async function refreshConfigForRoundStart(roundId: number) {
   let refreshedAtLeastOnce = false;
   for (let attempt = 0; attempt < CONFIG_REFRESH_RETRY_DELAYS_MS.length; attempt += 1) {
+    if (!state.token) {
+      return;
+    }
     const waitMs = CONFIG_REFRESH_RETRY_DELAYS_MS[attempt] ?? 0;
     if (waitMs > 0) {
       await delay(waitMs);
     }
     const refreshed = await refreshConfig();
+    if (!state.token) {
+      return;
+    }
     if (refreshed) refreshedAtLeastOnce = true;
   }
-  if (!refreshedAtLeastOnce) {
+  if (!refreshedAtLeastOnce && state.token) {
     setStatus(
       `Failed to sync config for round ${roundId}. Using previous payout values.`,
       true,
@@ -624,8 +1049,12 @@ async function handlePlaceDigitBet(selection: {
   digitType: DigitBetType;
   selection?: string;
 }) {
-  if (!state.token) {
-    throw new Error('You must login first.');
+  requireActivePlayerSession();
+  const token = state.token;
+  if (!token) {
+    throw new Error(
+      lastPlayerSessionExpiryMessage || 'You must login first.',
+    );
   }
   if (!state.currentRound) {
     throw new Error('Waiting for next round to begin.');
@@ -651,7 +1080,7 @@ async function handlePlaceDigitBet(selection: {
   }
 
   try {
-    const response = await api.placeBet(state.token, {
+    const response = await api.placeBet(token, {
       roundId: state.currentRound.id,
       amount,
       betType: 'DIGIT',
@@ -688,8 +1117,12 @@ async function handlePlaceDigitBet(selection: {
 }
 
 async function handleClearTokens() {
-  if (!state.token) {
-    throw new Error('You must login first.');
+  requireActivePlayerSession();
+  const token = state.token;
+  if (!token) {
+    throw new Error(
+      lastPlayerSessionExpiryMessage || 'You must login first.',
+    );
   }
   if (!state.currentRound) {
     throw new Error('Waiting for next round to begin.');
@@ -702,7 +1135,7 @@ async function handleClearTokens() {
   }
 
   const roundId = state.currentRound.id;
-  const res = await api.clearRoundBets(state.token, roundId);
+  const res = await api.clearRoundBets(token, roundId);
   const serverWalletBalance = Number(res.data.walletBalance);
   const nextPlacements: Record<string, TokenPlacement> = {};
 
@@ -789,6 +1222,10 @@ function clampAmount(amount: number, digitType?: DigitBetType) {
 
 async function refreshPlayerData() {
   if (!state.token) return;
+  if (hasPlayerSessionTimedOut()) {
+    expirePlayerSessionForInactivity();
+    return;
+  }
   const requestId = ++playerDataRefreshRequestId;
   const token = state.token;
   const [walletRes, betsRes, roundsRes] = await Promise.all([
