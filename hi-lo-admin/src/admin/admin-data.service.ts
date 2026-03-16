@@ -77,6 +77,56 @@ const normalizeAndValidateIpWhitelist = (input?: string[] | null) => {
 export class AdminDataService {
   constructor(private readonly prisma: PrismaService) {}
 
+  private async resolveBetPlayerUserIds(input: {
+    playerQuery: string;
+  }) {
+    const where: Prisma.UserWhereInput = {
+      OR: [
+        { id: input.playerQuery },
+        {
+          email: {
+            contains: input.playerQuery,
+            mode: 'insensitive',
+          },
+        },
+        {
+          merchantAccount: {
+            contains: input.playerQuery,
+            mode: 'insensitive',
+          },
+        },
+        {
+          launchSessions: {
+            some: {
+              account: {
+                contains: input.playerQuery,
+                mode: 'insensitive',
+              },
+            },
+          },
+        },
+        {
+          launchSessions: {
+            some: {
+              playerId: {
+                contains: input.playerQuery,
+                mode: 'insensitive',
+              },
+            },
+          },
+        },
+      ],
+    };
+
+    const users = await this.prisma.user.findMany({
+      where,
+      select: { id: true },
+      take: 200,
+    });
+
+    return users.map((user) => user.id);
+  }
+
   // Rounds
   async queryRounds(dto: QueryRoundsDto) {
     const { page = 0, limit = 20, start, end, roundId, status } = dto;
@@ -134,6 +184,7 @@ export class AdminDataService {
       betId,
       merchantId,
       playerId,
+      player,
       roundId,
       betType,
       result,
@@ -145,10 +196,20 @@ export class AdminDataService {
       : null;
 
     const where: Prisma.BetWhereInput = {};
-    if (betId) where.id = betId;
+    if (betId) where.id = { contains: betId, mode: 'insensitive' };
     if (merchantScope) where.merchantId = merchantScope;
-    else if (merchantId) where.merchantId = merchantId;
-    if (playerId) where.userId = playerId;
+    else if (merchantId)
+      where.merchantId = { contains: merchantId, mode: 'insensitive' };
+    const playerQuery = player?.trim() || playerId?.trim();
+    if (playerQuery) {
+      const matchedUserIds = await this.resolveBetPlayerUserIds({
+        playerQuery,
+      });
+      if (!matchedUserIds.length) {
+        return { page, limit, hasNext: false, items: [] };
+      }
+      where.userId = { in: matchedUserIds };
+    }
     if (roundId !== undefined) where.roundId = roundId;
     if (betType) where.betType = betType;
     if (result) where.result = result;

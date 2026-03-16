@@ -1086,7 +1086,7 @@
               <label>Bet ID<input id="bets-id" type="text" /></label>
               <label>Round<input id="bets-round" type="number" /></label>
               <label>Merchant<input id="bets-merchant" type="text" /></label>
-              <label>Player<input id="bets-player" type="text" /></label>
+              <label>Player<input id="bets-player" type="text" placeholder="account, email, or ID" /></label>
               <label>Result<select id="bets-result"><option value="">All</option><option value="WIN">Win</option><option value="LOSE">Lose</option><option value="PENDING">Pending</option><option value="REFUND">Refund</option></select></label>
               <label>Start<input id="bets-start" type="date" /></label>
               <label>End<input id="bets-end" type="date" /></label>
@@ -2030,7 +2030,7 @@
           const merchant = $('#bets-merchant')?.value; const player = $('#bets-player')?.value;
           const result = $('#bets-result')?.value; const start = $('#bets-start')?.value; const end = $('#bets-end')?.value;
           if (betId) params.set('betId', betId); if (roundId) params.set('roundId', roundId);
-          if (merchant) params.set('merchantId', merchant); if (player) params.set('playerId', player);
+          if (merchant) params.set('merchantId', merchant); if (player) params.set('player', player);
           if (result) params.set('result', result); if (start) params.set('start', start); if (end) params.set('end', end);
           const data = await apiFetch('/admin/bets?' + params);
           $('#bets-table-body').innerHTML = data.items.length ? data.items.map(b => '<tr><td title="'+b.id+'">'+b.id.slice(0,8)+'...</td><td>'+b.roundId+'</td><td>'+(b.playerAccount||b.playerId)+'</td><td>'+b.betType+'</td><td>'+(b.digitType||b.side||'--')+' '+(b.selection||'')+'</td><td>'+formatNum(b.amount)+'</td><td>'+b.odds+'</td><td>'+formatNum(b.payout)+'</td><td><span class="badge '+(b.result==='WIN'?'success':b.result==='LOSE'?'error':'info')+'">'+b.result+'</span></td><td>'+formatDate(b.createdAt)+'</td></tr>').join('') : '<tr><td colspan="10">No data</td></tr>';

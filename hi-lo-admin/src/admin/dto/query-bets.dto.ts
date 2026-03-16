@@ -17,6 +17,10 @@ export class QueryBetsDto extends DateRangeQueryDto {
   playerId?: string;
 
   @IsOptional()
+  @IsString()
+  player?: string;
+
+  @IsOptional()
   @Type(() => Number)
   @IsInt()
   roundId?: number;
