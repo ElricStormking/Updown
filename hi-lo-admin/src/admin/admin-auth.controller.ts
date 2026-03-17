@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { Throttle } from '@nestjs/throttler';
 import type { AppConfig } from '../config/configuration';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AdminGuard } from '../auth/guards/admin.guard';
@@ -26,6 +27,12 @@ export class AdminAuthController {
     private readonly configService: ConfigService<AppConfig>,
   ) {}
 
+  @Throttle({
+    default: {
+      ttl: 60_000,
+      limit: 5,
+    },
+  })
   @Post('login')
   async login(@Body() dto: AdminLoginDto) {
     const admin = await this.accountsService.validateAdminLogin(
@@ -102,8 +109,8 @@ export class AdminAuthController {
       type: 'admin',
       merchantId: admin.merchantId,
     };
-    const authConfig = this.configService.get<AppConfig['auth']>('auth');
-    const expiresInRaw = authConfig?.jwtExpiresIn ?? '1h';
+    const authConfig = this.getAuthConfig();
+    const expiresInRaw = authConfig.jwtExpiresIn ?? '1h';
     const accessToken = await this.jwtService.signAsync(payload, {
       expiresIn: expiresInRaw as any,
     });
@@ -117,6 +124,10 @@ export class AdminAuthController {
         isSuperAdmin: admin.merchantId === 'hotcoregm',
       },
     };
+  }
+
+  private getAuthConfig(): AppConfig['auth'] {
+    return this.configService.getOrThrow('auth', { infer: true });
   }
 
   private async registerBootstrap(dto: AdminRegisterDto) {
@@ -157,9 +168,7 @@ export class AdminAuthController {
   }
 
   private async resolveRequesterAdmin(token: string) {
-    const secret =
-      this.configService.get<AppConfig['auth']>('auth')?.jwtSecret ??
-      'change-me';
+    const secret = this.getAuthConfig().jwtSecret;
 
     let payload: JwtPayload;
     try {

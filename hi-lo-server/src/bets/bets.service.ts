@@ -92,8 +92,6 @@ export class BetsService {
   private readonly logger = new Logger(BetsService.name);
 
   private redisOk: boolean | null = null;
-  private readonly slipMemory = new Map<string, BetSlipStored>();
-  private readonly slipUsersMemory = new Map<number, Set<string>>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -1009,13 +1007,20 @@ export class BetsService {
     }
   }
 
-  private async isRedisOk() {
-    if (this.redisOk !== null) {
-      return this.redisOk;
+  private async requireRedis(): Promise<void> {
+    if (this.redisOk === true) return;
+    if (this.redisOk === false) {
+      throw new BadRequestException(
+        'Betting is temporarily unavailable (cache offline)',
+      );
     }
     const probe = await this.redis.set('probe:bets-slip', '1', 1000);
     this.redisOk = probe === 'OK';
-    return this.redisOk;
+    if (!this.redisOk) {
+      throw new BadRequestException(
+        'Betting is temporarily unavailable (cache offline)',
+      );
+    }
   }
 
   private getSlipKey(userId: string, roundId: number) {
@@ -1048,78 +1053,57 @@ export class BetsService {
     userId: string,
     roundId: number,
   ): Promise<BetSlipStored | null> {
+    await this.requireRedis();
     const key = this.getSlipKey(userId, roundId);
-    if (await this.isRedisOk()) {
-      return await this.redis.getJson<BetSlipStored>(key);
-    }
-    return this.slipMemory.get(key) ?? null;
+    return await this.redis.getJson<BetSlipStored>(key);
   }
 
   private async setSlip(slip: BetSlipStored, ttlMs: number) {
+    await this.requireRedis();
     const key = this.getSlipKey(slip.userId, slip.roundId);
-    if (await this.isRedisOk()) {
-      await this.redis.setJson(key, slip, ttlMs);
-      return;
-    }
-    this.slipMemory.set(key, slip);
+    await this.redis.setJson(key, slip, ttlMs);
   }
 
   private async getSlipUsers(roundId: number) {
+    await this.requireRedis();
     const key = this.getSlipUsersKey(roundId);
-    if (await this.isRedisOk()) {
-      return (await this.redis.getJson<string[]>(key)) ?? [];
-    }
-    return Array.from(this.slipUsersMemory.get(roundId) ?? []);
+    return (await this.redis.getJson<string[]>(key)) ?? [];
   }
 
   private async addSlipUser(roundId: number, userId: string, ttlMs: number) {
+    await this.requireRedis();
     const key = this.getSlipUsersKey(roundId);
-    if (await this.isRedisOk()) {
-      const existing = (await this.redis.getJson<string[]>(key)) ?? [];
-      if (!existing.includes(userId)) {
-        existing.push(userId);
-        await this.redis.setJson(key, existing, ttlMs);
-      }
-      return;
+    const existing = (await this.redis.getJson<string[]>(key)) ?? [];
+    if (!existing.includes(userId)) {
+      existing.push(userId);
+      await this.redis.setJson(key, existing, ttlMs);
     }
-    const set = this.slipUsersMemory.get(roundId) ?? new Set<string>();
-    set.add(userId);
-    this.slipUsersMemory.set(roundId, set);
   }
 
   private async clearSlipUsers(roundId: number) {
+    await this.requireRedis();
     const key = this.getSlipUsersKey(roundId);
-    if (await this.isRedisOk()) {
-      await this.redis.del(key);
-      return;
-    }
-    this.slipUsersMemory.delete(roundId);
+    await this.redis.del(key);
   }
 
   private async clearSlip(userId: string, roundId: number) {
+    await this.requireRedis();
     const key = this.getSlipKey(userId, roundId);
     const slip = await this.getSlip(userId, roundId);
     const cleared = slip ? Object.keys(slip.items ?? {}).length : 0;
-    if (await this.isRedisOk()) {
-      await this.redis.del(key);
-      return cleared;
-    }
-    this.slipMemory.delete(key);
+    await this.redis.del(key);
     return cleared;
   }
 
   private async hasCommittedRound(committedKey: string) {
-    if (await this.isRedisOk()) {
-      const value = await this.redis.get(committedKey);
-      return value === '1';
-    }
-    return false;
+    await this.requireRedis();
+    const value = await this.redis.get(committedKey);
+    return value === '1';
   }
 
   private async markCommittedRound(committedKey: string, ttlMs: number) {
-    if (await this.isRedisOk()) {
-      await this.redis.set(committedKey, '1', ttlMs);
-    }
+    await this.requireRedis();
+    await this.redis.set(committedKey, '1', ttlMs);
   }
 
   private async addToSlipOrThrow(

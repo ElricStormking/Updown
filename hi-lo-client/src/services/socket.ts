@@ -30,6 +30,8 @@ const WS_URL = trimTrailingSlash(
     (isLocalBrowserHost() ? 'http://localhost:4001' : resolveGatewayOrigin()),
 );
 
+export type ConnectionStatus = 'connected' | 'disconnected' | 'reconnecting';
+
 export interface GameSocketCallbacks {
   onPrice(update: PriceUpdate): void;
   onRoundStart(payload: RoundStatePayload): void;
@@ -39,6 +41,7 @@ export interface GameSocketCallbacks {
   onBalance(balance: number): void;
   onBetPlaced(): void;
   onToken(accessToken: string): void;
+  onConnectionStatus?(status: ConnectionStatus): void;
 }
 
 export const createGameSocket = (
@@ -48,13 +51,45 @@ export const createGameSocket = (
   const socket: Socket = io(`${WS_URL}/game`, {
     withCredentials: true,
     autoConnect: false,
+    reconnection: true,
+    reconnectionDelay: 1_000,
+    reconnectionDelayMax: 10_000,
+    reconnectionAttempts: Infinity,
   });
 
   socket.on('connect', () => {
+    callbacks.onConnectionStatus?.('connected');
     const token = getToken?.();
     if (token) {
       socket.emit('client:ready', { token });
     }
+  });
+
+  socket.on('disconnect', (reason) => {
+    callbacks.onConnectionStatus?.('disconnected');
+    if (reason === 'io server disconnect') {
+      socket.connect();
+    }
+  });
+
+  socket.io.on('reconnect_attempt', () => {
+    callbacks.onConnectionStatus?.('reconnecting');
+  });
+
+  socket.io.on('reconnect', () => {
+    callbacks.onConnectionStatus?.('connected');
+    const token = getToken?.();
+    if (token) {
+      socket.emit('client:ready', { token });
+    }
+  });
+
+  socket.io.on('reconnect_failed', () => {
+    callbacks.onConnectionStatus?.('disconnected');
+  });
+
+  socket.on('connect_error', () => {
+    callbacks.onConnectionStatus?.('reconnecting');
   });
 
   socket.on('price:update', callbacks.onPrice);

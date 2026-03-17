@@ -648,8 +648,7 @@ export class IntegrationService {
 
       const expiresIn =
         this.configService.get<string>('auth.jwtExpiresIn') ?? '1h';
-      const secret =
-        this.configService.get<string>('auth.jwtSecret') ?? 'change-me';
+      const secret = this.configService.getOrThrow<string>('auth.jwtSecret');
 
       const accessToken = await this.jwtService.signAsync(payload, {
         secret,

@@ -647,6 +647,11 @@
       select { padding: 0.55rem 0.7rem; border-radius: var(--radius-sm); border: 1px solid var(--border); font-size: 0.95rem; background: #0b1320; color: var(--text); }
       select:focus { outline: none; border-color: rgba(56, 189, 248, 0.7); }
       .table-wrapper { overflow-x: auto; }
+      .id-cell {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 0.78rem;
+        white-space: nowrap;
+      }
       .pagination { display: flex; gap: 0.5rem; align-items: center; margin-top: 1rem; justify-content: flex-end; }
       .pagination button { padding: 0.4rem 0.8rem; font-size: 0.85rem; }
       .pagination span { color: var(--muted); font-size: 0.85rem; }
@@ -2033,7 +2038,7 @@
           if (merchant) params.set('merchantId', merchant); if (player) params.set('player', player);
           if (result) params.set('result', result); if (start) params.set('start', start); if (end) params.set('end', end);
           const data = await apiFetch('/admin/bets?' + params);
-          $('#bets-table-body').innerHTML = data.items.length ? data.items.map(b => '<tr><td title="'+b.id+'">'+b.id.slice(0,8)+'...</td><td>'+b.roundId+'</td><td>'+(b.playerAccount||b.playerId)+'</td><td>'+b.betType+'</td><td>'+(b.digitType||b.side||'--')+' '+(b.selection||'')+'</td><td>'+formatNum(b.amount)+'</td><td>'+b.odds+'</td><td>'+formatNum(b.payout)+'</td><td><span class="badge '+(b.result==='WIN'?'success':b.result==='LOSE'?'error':'info')+'">'+b.result+'</span></td><td>'+formatDate(b.createdAt)+'</td></tr>').join('') : '<tr><td colspan="10">No data</td></tr>';
+          $('#bets-table-body').innerHTML = data.items.length ? data.items.map(b => '<tr><td class="id-cell" title="'+b.id+'">'+b.id+'</td><td>'+b.roundId+'</td><td>'+(b.playerAccount||b.playerId)+'</td><td>'+b.betType+'</td><td>'+(b.digitType||b.side||'--')+' '+(b.selection||'')+'</td><td>'+formatNum(b.amount)+'</td><td>'+b.odds+'</td><td>'+formatNum(b.payout)+'</td><td><span class="badge '+(b.result==='WIN'?'success':b.result==='LOSE'?'error':'info')+'">'+b.result+'</span></td><td>'+formatDate(b.createdAt)+'</td></tr>').join('') : '<tr><td colspan="10">No data</td></tr>';
           renderPagination('bets', data, loadBets);
           setStatus(statusEl, '');
         } catch (err) { setStatus(statusEl, err.message, true); }

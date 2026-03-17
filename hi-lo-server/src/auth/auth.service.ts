@@ -94,7 +94,7 @@ export class AuthService {
       this.configService.get<string>('auth.jwtExpiresIn') ?? '1h';
     const expiresIn = expiresInRaw as any;
     const accessToken = await this.jwtService.signAsync(payload, {
-      secret: this.configService.get<string>('auth.jwtSecret') ?? 'change-me',
+      secret: this.configService.getOrThrow<string>('auth.jwtSecret'),
       expiresIn,
     });
     const adminAccounts =

@@ -416,6 +416,13 @@ const socket = createGameSocket(
     },
     onBetPlaced: () => setStatus('Bet accepted via socket!'),
     onToken: rememberAccessToken,
+    onConnectionStatus: (status) => {
+      if (status === 'reconnecting') {
+        setStatus('Connection lost. Reconnecting...', true);
+      } else if (status === 'connected') {
+        setStatus('Connected.');
+      }
+    },
   },
   () => state.token,
 );

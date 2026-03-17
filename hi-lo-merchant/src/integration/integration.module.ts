@@ -20,7 +20,7 @@ import { LaunchSessionOfflineService } from './launch-session-offline.service';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
-        secret: configService.get<string>('auth.jwtSecret') ?? 'change-me',
+        secret: configService.getOrThrow<string>('auth.jwtSecret'),
         signOptions: {
           expiresIn: (configService.get<string>('auth.jwtExpiresIn') ??
             '1h') as any,
