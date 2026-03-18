@@ -113,7 +113,7 @@ const isMobileViewport = () => {
 };
 
 const isBetLimitStatusMessage = (message: string) =>
-  /betting limit/i.test(message);
+  /betting limit|bet amount must be between/i.test(message);
 
 const isRoundWaitStatusMessage = (message: string) =>
   /authenticated\.\s*waiting for round updates|waiting for (next )?round/i.test(
@@ -125,8 +125,8 @@ const STATUS_ALERT_AUTO_DISMISS_MS = 2600;
 const shouldUseStatusAlert = (message: string, isError: boolean) =>
   isRoundWaitStatusMessage(message) ||
   (isError &&
-    isMobileViewport() &&
-    (message.trim().length > 26 || isBetLimitStatusMessage(message)));
+    (isBetLimitStatusMessage(message) ||
+      (isMobileViewport() && message.trim().length > 26)));
 
 const getStatusAlertTitle = (message: string, isError: boolean) => {
   if (isBetLimitStatusMessage(message)) {
