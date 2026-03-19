@@ -4,6 +4,7 @@ import {
   LaunchSessionStatus,
   MerchantLaunchSession,
   Prisma,
+  RoundStatus,
 } from '@prisma/client';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
@@ -239,6 +240,22 @@ export class LaunchSessionService {
         offlineStatus: LaunchSessionOfflineStatus.CALLBACK_FAILED,
       },
     });
+  }
+
+  async hasPendingRoundSettlement(userId: string): Promise<boolean> {
+    const pendingBet = await this.prisma.bet.findFirst({
+      where: {
+        userId,
+        round: {
+          status: RoundStatus.RESULT_PENDING,
+        },
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    return Boolean(pendingBet);
   }
 
   async closeActiveSessionsByAccount(

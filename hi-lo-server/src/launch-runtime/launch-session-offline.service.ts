@@ -118,6 +118,12 @@ export class LaunchSessionOfflineService {
       return;
     }
 
+    if (
+      await this.launchSessionService.hasPendingRoundSettlement(current.userId)
+    ) {
+      return;
+    }
+
     if (current.offlineStatus === LaunchSessionOfflineStatus.ONLINE) {
       await this.launchSessionService.markOfflinePending(current.id);
       current = await this.prisma.merchantLaunchSession.findUnique({

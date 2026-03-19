@@ -620,6 +620,7 @@ merchantId, account, timestamp
   "errorCode": 0,
   "errorMessage": "",
   "data": {
+    "transferAmount": 150,
     "balance": 0
   }
 }
@@ -627,6 +628,7 @@ merchantId, account, timestamp
 
 | Field | Type | Description |
 |-------|------|-------------|
+| `transferAmount` | number | Amount transferred out to the platform from the game wallet |
 | `balance` | number | Remaining balance after transfer-out completes |
 
 ---
@@ -792,6 +794,7 @@ Platform calls this callback when merchant-side balance settlement is required.
 - Verify that `currency` matches the merchant currency expected by your platform
 - Settle the player's remaining balance out of the game
 - The recommended settlement API is `POST /integration/all-transfer-out`
+- The callback is sent after the offline grace period and only after any `RESULT_PENDING` round involving that player has settled
 
 #### Request
 

@@ -620,6 +620,7 @@ merchantId, account, timestamp
   "errorCode": 0,
   "errorMessage": "",
   "data": {
+    "transferAmount": 150,
     "balance": 0
   }
 }
@@ -627,6 +628,7 @@ merchantId, account, timestamp
 
 | 欄位 | 型別 | 說明 |
 |------|------|------|
+| `transferAmount` | number | 從遊戲錢包轉出回商戶平台的金額 |
 | `balance` | number | 全部轉出完成後的剩餘餘額 |
 
 ---

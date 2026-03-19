@@ -22,5 +22,6 @@ export class AllTransferOutDto {
 }
 
 export class AllTransferOutResponseData {
+  transferAmount: number;
   balance: number;
 }

@@ -741,6 +741,7 @@ hash = SHA256(merchantId + "&" + account + "&" + timestamp + "&" + hashKey)
   "errorCode": 0,
   "errorMessage": "",
   "data": {
+    "transferAmount": 150,
     "balance": 0
   }
 }
@@ -748,6 +749,7 @@ hash = SHA256(merchantId + "&" + account + "&" + timestamp + "&" + hashKey)
 
 | Field | Type | Description |
 |-------|------|-------------|
+| `transferAmount` | number | Amount transferred out from the game wallet back to merchant side |
 | `balance` | number | Remaining game-side balance after all funds are transferred out |
 
 Runtime note:
@@ -812,7 +814,7 @@ Merchant must implement this callback endpoint for platform-initiated offline se
 - Platform calls this endpoint after player offline detection.
 - Merchant verifies callback payload and triggers balance settlement back to merchant side.
 - Merchant should call either `AllTransferOut` (preferred) or `Transfer` (`type=1`) based on platform contract, then return callback status.
-- Callback is sent after offline grace period (default `30000ms`) and retried on failure (`retryCount + 1` total attempts; default `3`).
+- Callback is sent after offline grace period (default `30000ms`) and only after any `RESULT_PENDING` round involving that player has settled. It is retried on failure (`retryCount + 1` total attempts; default `3`).
 
 #### Request
 

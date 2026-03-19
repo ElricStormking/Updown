@@ -328,7 +328,10 @@ export class IntegrationService {
           },
         });
 
-        return walletAfter;
+        return {
+          walletAfter,
+          transferAmount: amountDecimal,
+        };
       });
 
       await this.launchSessionService.closeActiveSessionsByAccount(
@@ -337,7 +340,8 @@ export class IntegrationService {
       );
 
       return IntegrationResponseDto.success({
-        balance: Number(result.balance),
+        transferAmount: Number(result.transferAmount),
+        balance: Number(result.walletAfter.balance),
       });
     } catch (error) {
       this.logger.error('Failed to process all-transfer-out', error);

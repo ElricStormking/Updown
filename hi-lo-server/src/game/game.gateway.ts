@@ -394,6 +394,12 @@ export class GameGateway
       return;
     }
 
+    if (
+      await this.launchSessionService.hasPendingRoundSettlement(session.userId)
+    ) {
+      return;
+    }
+
     const offlineGraceMs =
       this.configService.get<number>('integration.offlineGraceMs') ?? 30000;
     const cutoff = new Date(Date.now() - offlineGraceMs);
