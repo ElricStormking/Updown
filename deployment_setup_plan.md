@@ -177,14 +177,19 @@ Use explicit production keys instead of a vague placeholder list:
 ```dotenv
 NODE_ENV=production
 
-REGISTRY=registry.example.com/projectupdown
+REGISTRY=ghcr.io/elricstormking/updown
 TAG=latest
+
+POSTGRES_DB=hi_lo_game
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=replace-with-a-strong-db-password
 
 API_PORT=4001
 ADMIN_API_PORT=4002
 MERCHANT_API_PORT=4003
 
-DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/hi_lo_game?schema=public
+# Keep DATABASE_URL in sync with POSTGRES_* values above.
+DATABASE_URL=postgresql://postgres:replace-with-a-strong-db-password@postgres:5432/hi_lo_game?schema=public
 REDIS_URL=redis://redis:6379
 
 JWT_SECRET=replace-with-a-long-random-secret
@@ -253,13 +258,15 @@ Prisma migration ownership belongs to the deployment host, not GitHub Actions.
 
 ### Cold-start / deploy sequence
 
-1. `docker compose -f docker-compose.infra.yml -f docker-compose.services.yml pull`
-2. `docker compose -f docker-compose.infra.yml -f docker-compose.services.yml up -d postgres redis`
+1. `docker compose --env-file .env.production -f docker-compose.infra.yml -f docker-compose.services.yml pull`
+2. `docker compose --env-file .env.production -f docker-compose.infra.yml -f docker-compose.services.yml up -d postgres redis`
 3. Wait for PostgreSQL and Redis healthchecks to pass
-4. `docker compose -f docker-compose.infra.yml -f docker-compose.services.yml run --rm migrate`
-5. `docker compose -f docker-compose.infra.yml -f docker-compose.services.yml up -d hi-lo-server hi-lo-client hi-lo-admin hi-lo-merchant`
-6. Wait for application healthchecks to pass
-7. `docker compose -f docker-compose.infra.yml -f docker-compose.services.yml up -d nginx`
+4. `docker compose --env-file .env.production -f docker-compose.infra.yml -f docker-compose.services.yml rm -sf migrate`
+5. `docker compose --env-file .env.production -f docker-compose.infra.yml -f docker-compose.services.yml up -d migrate`
+6. Wait until `migrate` exits successfully
+7. `docker compose --env-file .env.production -f docker-compose.infra.yml -f docker-compose.services.yml up -d hi-lo-server hi-lo-client hi-lo-admin hi-lo-merchant`
+8. Wait for application healthchecks to pass
+9. `docker compose --env-file .env.production -f docker-compose.infra.yml -f docker-compose.services.yml up -d nginx`
 
 This is a **minimal-downtime restart** flow. Single-replica Docker Compose is not a true zero-downtime deployment model.
 
@@ -272,14 +279,14 @@ This is a **minimal-downtime restart** flow. Single-replica Docker Compose is no
 Triggered on push to `main` or manual dispatch:
 
 1. Checkout repo
-2. Log in to the Docker registry
+2. Log in to GitHub Container Registry
 3. Build all four application images from the repo root:
    - `hi-lo-server`
    - `hi-lo-client`
    - `hi-lo-admin`
    - `hi-lo-merchant`
-4. Tag images as `${REGISTRY}/hi-lo-<service>:${GITHUB_SHA}` and `:latest`
-5. Push images to the registry
+4. Tag images as `ghcr.io/<owner>/updown/hi-lo-<service>:${GITHUB_SHA}` and `:latest`
+5. Push images to GitHub Container Registry
 
 GitHub Actions must **not** connect to customer PostgreSQL or run `prisma migrate deploy` against production infrastructure.
 
@@ -328,17 +335,19 @@ Run the following from the deployment directory on the target server:
 
 ```bash
 docker login <your-registry>
-docker compose -f docker-compose.infra.yml -f docker-compose.services.yml pull
-docker compose -f docker-compose.infra.yml -f docker-compose.services.yml up -d postgres redis
-docker compose -f docker-compose.infra.yml -f docker-compose.services.yml run --rm migrate
-docker compose -f docker-compose.infra.yml -f docker-compose.services.yml up -d hi-lo-server hi-lo-client hi-lo-admin hi-lo-merchant
-docker compose -f docker-compose.infra.yml -f docker-compose.services.yml up -d nginx
-docker compose -f docker-compose.infra.yml -f docker-compose.services.yml ps
+docker compose --env-file .env.production -f docker-compose.infra.yml -f docker-compose.services.yml pull
+docker compose --env-file .env.production -f docker-compose.infra.yml -f docker-compose.services.yml up -d postgres redis
+docker compose --env-file .env.production -f docker-compose.infra.yml -f docker-compose.services.yml rm -sf migrate
+docker compose --env-file .env.production -f docker-compose.infra.yml -f docker-compose.services.yml up -d migrate
+docker compose --env-file .env.production -f docker-compose.infra.yml -f docker-compose.services.yml up -d hi-lo-server hi-lo-client hi-lo-admin hi-lo-merchant
+docker compose --env-file .env.production -f docker-compose.infra.yml -f docker-compose.services.yml up -d nginx
+docker compose --env-file .env.production -f docker-compose.infra.yml -f docker-compose.services.yml ps
 ```
 
 Operational notes:
 
 - Wait for PostgreSQL and Redis healthchecks to pass before running `migrate`
+- Wait until the `migrate` container exits with code `0` before starting the app services
 - Wait for application healthchecks to pass before starting or reloading Nginx
 - If HTTPS terminates at this server, place certificates where `gateway/nginx.prod.conf` expects them before starting the gateway
 
@@ -357,10 +366,10 @@ After the stack is up, verify:
 For a manual update on the same server:
 
 1. Change `TAG` in `.env.production` to the new release tag
-2. Run `docker compose -f docker-compose.infra.yml -f docker-compose.services.yml pull`
+2. Run `docker compose --env-file .env.production -f docker-compose.infra.yml -f docker-compose.services.yml pull`
 3. Re-run the same start order:
    - infra
-   - `migrate`
+   - remove and re-run `migrate`
    - app services
    - Nginx
 

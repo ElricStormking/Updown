@@ -1,0 +1,17 @@
+.git
+.github
+.cursor
+.tmp
+.env
+.env.*
+!.env.production.example
+**/node_modules
+**/dist
+**/coverage
+*.log
+*.md
+*.pdf
+*.docx
+CI_CD_setup_Graph.png
+CI_CD_setupt.png
+

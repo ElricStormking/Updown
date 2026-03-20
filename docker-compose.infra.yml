@@ -1,0 +1,71 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    env_file:
+      - ./.env.production
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-hi_lo_game}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - hi-lo-net
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-hi_lo_game}",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    networks:
+      - hi-lo-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    depends_on:
+      hi-lo-client:
+        condition: service_healthy
+      hi-lo-server:
+        condition: service_healthy
+      hi-lo-admin:
+        condition: service_healthy
+      hi-lo-merchant:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "4000:80"
+    volumes:
+      - ./gateway/nginx.prod.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - hi-lo-net
+
+networks:
+  hi-lo-net:
+    name: hi-lo-net
+    driver: bridge
+
+volumes:
+  pgdata:
+    name: hi-lo-pgdata
+  redisdata:
+    name: hi-lo-redisdata
+

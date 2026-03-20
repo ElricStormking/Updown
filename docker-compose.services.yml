@@ -1,0 +1,119 @@
+services:
+  migrate:
+    image: ${REGISTRY}/hi-lo-server:${TAG}
+    restart: "no"
+    env_file:
+      - ./.env.production
+    command: ["npx", "prisma", "migrate", "deploy"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - hi-lo-net
+
+  hi-lo-server:
+    image: ${REGISTRY}/hi-lo-server:${TAG}
+    restart: unless-stopped
+    env_file:
+      - ./.env.production
+    expose:
+      - "4001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - hi-lo-net
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:4001/health').then((res) => { if (!res.ok) process.exit(1); }).catch(() => process.exit(1));",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  hi-lo-client:
+    image: ${REGISTRY}/hi-lo-client:${TAG}
+    restart: unless-stopped
+    expose:
+      - "3000"
+    networks:
+      - hi-lo-net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  hi-lo-admin:
+    image: ${REGISTRY}/hi-lo-admin:${TAG}
+    restart: unless-stopped
+    env_file:
+      - ./.env.production
+    environment:
+      GAME_SERVER_URL: http://hi-lo-server:4001
+    expose:
+      - "4002"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      hi-lo-server:
+        condition: service_healthy
+    networks:
+      - hi-lo-net
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:4002/health').then((res) => { if (!res.ok) process.exit(1); }).catch(() => process.exit(1));",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  hi-lo-merchant:
+    image: ${REGISTRY}/hi-lo-merchant:${TAG}
+    restart: unless-stopped
+    env_file:
+      - ./.env.production
+    expose:
+      - "4003"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - hi-lo-net
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:4003/health').then((res) => { if (!res.ok) process.exit(1); }).catch(() => process.exit(1));",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+networks:
+  hi-lo-net:
+    name: hi-lo-net
+    driver: bridge
+
